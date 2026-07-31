@@ -1,0 +1,637 @@
+{
+  "added_settings": [
+    "cuac_cache_fresh_milliseconds",
+    "cuac_cache_mode",
+    "cuac_cache_stale_milliseconds"
+  ],
+  "added_types": [],
+  "authority_inputs": [
+    "explicit_named_cuac_credential"
+  ],
+  "connector_package": {
+    "api_version": "cuac/v1",
+    "package_root": "explicit_absolute_local_directory",
+    "publication": "atomic_all_or_nothing",
+    "reload": "retained_canonical_root",
+    "repository_package": {
+      "connector": "github",
+      "package_digest": "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c",
+      "package_version": "1.0.0",
+      "relation_count": 4
+    }
+  },
+  "diagnostics": {
+    "authenticated_secret_missing": "[cuac][bind] connector=github relation=authenticated_user: required named argument secret is missing",
+    "graphql_errors": "[cuac][remote_protocol] connector=github relation=viewer_repository_metrics field=errors: remote protocol response reported application errors",
+    "graphql_secret_missing": "[cuac][bind] connector=github relation=viewer_repository_metrics: required named argument secret is missing",
+    "oversized_token": "[cuac][resource] field=header_bytes: credential exceeds the 8192-byte request-field limit",
+    "provider_failure": "[cuac][authentication] connector=github relation=authenticated_user field=credential_provider: credential provider resolution failed [class=credential_provider rows_exposed=0]",
+    "repository_secret_missing": "[cuac][bind] connector=github relation=authenticated_repositories: required named argument secret is missing"
+  },
+  "duckdb": [
+    "v1.5.4",
+    "08e34c447b"
+  ],
+  "explain_fields": [
+    "relation",
+    "remote_predicate",
+    "remote_accuracy",
+    "residual_predicate",
+    "residual_owner",
+    "classification"
+  ],
+  "extension": [
+    "cuac",
+    "0.1.0"
+  ],
+  "generated_functions": [
+    {
+      "name": "github_authenticated_repositories",
+      "named_parameters": {
+        "secret": "VARCHAR"
+      },
+      "relation": "authenticated_repositories",
+      "schema": [
+        [
+          "id",
+          "BIGINT"
+        ],
+        [
+          "full_name",
+          "VARCHAR"
+        ],
+        [
+          "private",
+          "BOOLEAN"
+        ],
+        [
+          "fork",
+          "BOOLEAN"
+        ],
+        [
+          "archived",
+          "BOOLEAN"
+        ],
+        [
+          "visibility",
+          "VARCHAR"
+        ]
+      ]
+    },
+    {
+      "name": "github_authenticated_user",
+      "named_parameters": {
+        "secret": "VARCHAR"
+      },
+      "relation": "authenticated_user",
+      "schema": [
+        [
+          "id",
+          "BIGINT"
+        ],
+        [
+          "login",
+          "VARCHAR"
+        ],
+        [
+          "site_admin",
+          "BOOLEAN"
+        ]
+      ]
+    },
+    {
+      "name": "github_duckdb_login_search_page",
+      "named_parameters": {},
+      "relation": "duckdb_login_search_page",
+      "schema": [
+        [
+          "id",
+          "BIGINT"
+        ],
+        [
+          "login",
+          "VARCHAR"
+        ],
+        [
+          "site_admin",
+          "BOOLEAN"
+        ]
+      ]
+    },
+    {
+      "name": "github_viewer_repository_metrics",
+      "named_parameters": {
+        "secret": "VARCHAR"
+      },
+      "relation": "viewer_repository_metrics",
+      "schema": [
+        [
+          "id",
+          "VARCHAR"
+        ],
+        [
+          "full_name",
+          "VARCHAR"
+        ],
+        [
+          "owner_login",
+          "VARCHAR"
+        ],
+        [
+          "stars",
+          "BIGINT"
+        ],
+        [
+          "primary_language",
+          "VARCHAR"
+        ],
+        [
+          "private",
+          "BOOLEAN"
+        ],
+        [
+          "archived",
+          "BOOLEAN"
+        ],
+        [
+          "updated_at",
+          "VARCHAR"
+        ]
+      ]
+    }
+  ],
+  "management_functions": [
+    {
+      "name": "cuac_load_connector",
+      "named_parameters": {
+        "package_root": "VARCHAR"
+      },
+      "result": [
+        [
+          "connector",
+          "VARCHAR"
+        ],
+        [
+          "package_version",
+          "VARCHAR"
+        ],
+        [
+          "spec_version",
+          "VARCHAR"
+        ],
+        [
+          "package_digest",
+          "VARCHAR"
+        ],
+        [
+          "relation_count",
+          "UBIGINT"
+        ],
+        [
+          "changed",
+          "BOOLEAN"
+        ]
+      ]
+    },
+    {
+      "name": "cuac_reload_connector",
+      "named_parameters": {
+        "connector": "VARCHAR"
+      },
+      "result": [
+        [
+          "connector",
+          "VARCHAR"
+        ],
+        [
+          "package_version",
+          "VARCHAR"
+        ],
+        [
+          "spec_version",
+          "VARCHAR"
+        ],
+        [
+          "package_digest",
+          "VARCHAR"
+        ],
+        [
+          "relation_count",
+          "UBIGINT"
+        ],
+        [
+          "changed",
+          "BOOLEAN"
+        ]
+      ]
+    },
+    {
+      "name": "cuac_loaded_connectors",
+      "named_parameters": {},
+      "result": [
+        [
+          "connector",
+          "VARCHAR"
+        ],
+        [
+          "package_version",
+          "VARCHAR"
+        ],
+        [
+          "spec_version",
+          "VARCHAR"
+        ],
+        [
+          "package_digest",
+          "VARCHAR"
+        ],
+        [
+          "relation_count",
+          "UBIGINT"
+        ]
+      ]
+    },
+    {
+      "name": "cuac_loaded_relations",
+      "named_parameters": {},
+      "result": [
+        [
+          "connector",
+          "VARCHAR"
+        ],
+        [
+          "relation",
+          "VARCHAR"
+        ],
+        [
+          "sql_name",
+          "VARCHAR"
+        ],
+        [
+          "package_version",
+          "VARCHAR"
+        ]
+      ]
+    },
+    {
+      "name": "cuac_relation_arguments",
+      "named_parameters": {},
+      "result": [
+        [
+          "connector",
+          "VARCHAR"
+        ],
+        [
+          "relation",
+          "VARCHAR"
+        ],
+        [
+          "argument",
+          "VARCHAR"
+        ],
+        [
+          "duckdb_type",
+          "VARCHAR"
+        ],
+        [
+          "nullable",
+          "BOOLEAN"
+        ],
+        [
+          "has_default",
+          "BOOLEAN"
+        ],
+        [
+          "default_value",
+          "VARCHAR"
+        ],
+        [
+          "argument_origin",
+          "VARCHAR"
+        ]
+      ]
+    }
+  ],
+  "protocols": {
+    "graphql": {
+      "arbitrary_documents": false,
+      "canonical_document_digest": "9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85",
+      "canonical_document_identity": "GITHUB_VIEWER_REPOSITORY_METRICS_V1",
+      "endpoint": "https://api.github.com:443/graphql",
+      "generated_selections": false,
+      "introspection": false,
+      "operation_kind": "query",
+      "partial_data": "fail_on_any_error"
+    },
+    "rest": {
+      "enabled": true
+    }
+  },
+  "relational_ownership": {
+    "filter": "duckdb",
+    "limit": "duckdb",
+    "offset": "duckdb",
+    "ordering": "duckdb"
+  },
+  "relations": [
+    {
+      "cardinality": {
+        "maximum": 3,
+        "minimum": 0
+      },
+      "connector": "github",
+      "domain": "single_fixed_github_search_response_page",
+      "duckdb_visible_not_null": false,
+      "name": "duckdb_login_search_page",
+      "public_row_identity": "not_guaranteed",
+      "public_row_order": "not_guaranteed",
+      "required_values": true,
+      "schema": [
+        [
+          "id",
+          "BIGINT"
+        ],
+        [
+          "login",
+          "VARCHAR"
+        ],
+        [
+          "site_admin",
+          "BOOLEAN"
+        ]
+      ],
+      "secret": "rejected"
+    },
+    {
+      "cardinality": {
+        "maximum": 1,
+        "minimum": 1
+      },
+      "connector": "github",
+      "domain": "successful_authenticated_github_user_response",
+      "duckdb_visible_not_null": false,
+      "name": "authenticated_user",
+      "public_row_identity": "current_secret_principal",
+      "public_row_order": "single_row",
+      "required_values": true,
+      "schema": [
+        [
+          "id",
+          "BIGINT"
+        ],
+        [
+          "login",
+          "VARCHAR"
+        ],
+        [
+          "site_admin",
+          "BOOLEAN"
+        ]
+      ],
+      "secret": "required_explicit_name"
+    },
+    {
+      "cardinality": {
+        "maximum": 3200,
+        "minimum": 0
+      },
+      "connector": "github",
+      "consistency": "mutable_no_snapshot",
+      "domain": "bounded_duplicate_preserving_authenticated_repository_page_sequence",
+      "duckdb_visible_not_null": false,
+      "name": "authenticated_repositories",
+      "pagination": {
+        "caller_inputs": false,
+        "maximum_pages": 32,
+        "page_size": 100,
+        "request_order": "sequential",
+        "resume": false,
+        "retries": 0,
+        "strategy": "link_next",
+        "total": "unknown"
+      },
+      "public_row_identity": "not_deduplicated",
+      "public_row_order": "not_guaranteed",
+      "required_values": true,
+      "schema": [
+        [
+          "id",
+          "BIGINT"
+        ],
+        [
+          "full_name",
+          "VARCHAR"
+        ],
+        [
+          "private",
+          "BOOLEAN"
+        ],
+        [
+          "fork",
+          "BOOLEAN"
+        ],
+        [
+          "archived",
+          "BOOLEAN"
+        ],
+        [
+          "visibility",
+          "VARCHAR"
+        ]
+      ],
+      "secret": "required_explicit_name"
+    },
+    {
+      "cardinality": {
+        "maximum": 3200,
+        "minimum": 0
+      },
+      "connector": "github",
+      "consistency": "mutable_no_snapshot",
+      "domain": "bounded_duplicate_preserving_authenticated_viewer_repository_connection",
+      "duckdb_visible_not_null": false,
+      "name": "viewer_repository_metrics",
+      "nullability": {
+        "nullable": [
+          "primary_language"
+        ],
+        "required": [
+          "id",
+          "full_name",
+          "owner_login",
+          "stars",
+          "private",
+          "archived",
+          "updated_at"
+        ]
+      },
+      "pagination": {
+        "caller_inputs": false,
+        "maximum_pages": 32,
+        "page_size": 100,
+        "request_order": "sequential",
+        "resume": false,
+        "retries": 0,
+        "strategy": "graphql_cursor",
+        "total": "unknown"
+      },
+      "public_row_identity": "not_deduplicated",
+      "public_row_order": "not_guaranteed",
+      "relational_ownership": {
+        "filter": "duckdb",
+        "limit": "duckdb",
+        "offset": "duckdb",
+        "ordering": "duckdb",
+        "projection": "duckdb"
+      },
+      "schema": [
+        [
+          "id",
+          "VARCHAR"
+        ],
+        [
+          "full_name",
+          "VARCHAR"
+        ],
+        [
+          "owner_login",
+          "VARCHAR"
+        ],
+        [
+          "stars",
+          "BIGINT"
+        ],
+        [
+          "primary_language",
+          "VARCHAR"
+        ],
+        [
+          "private",
+          "BOOLEAN"
+        ],
+        [
+          "archived",
+          "BOOLEAN"
+        ],
+        [
+          "updated_at",
+          "VARCHAR"
+        ]
+      ],
+      "secret": "required_explicit_name"
+    }
+  ],
+  "remote_predicate_optimizations": [
+    {
+      "accuracy": "superset",
+      "predicate": {
+        "column": "visibility",
+        "literal": "private",
+        "literal_type": "VARCHAR",
+        "operator": "equals"
+      },
+      "relation": "authenticated_repositories",
+      "remote_input": {
+        "name": "visibility",
+        "placement": "rest_query_parameter",
+        "value": "private"
+      },
+      "residual_owner": "duckdb",
+      "unsupported_behavior": "complete_traversal_with_duckdb_filter"
+    }
+  ],
+  "removed_relations": [],
+  "resource_limits": {
+    "authenticated_repositories": {
+      "decoded_memory_bytes": 2097152,
+      "decompressed_response_bytes_per_page": 8388608,
+      "decompressed_response_bytes_per_scan": 67108864,
+      "maximum_concurrency": 1,
+      "maximum_decoded_records_per_page": 100,
+      "maximum_decoded_records_per_scan": 3200,
+      "maximum_execution_milliseconds": 30000,
+      "maximum_json_nesting": 16,
+      "maximum_output_batch_rows": 64,
+      "maximum_pages": 32,
+      "maximum_request_attempts": 32,
+      "maximum_request_attempts_per_page": 1,
+      "maximum_response_bytes_per_page": 8388608,
+      "maximum_response_bytes_per_scan": 67108864,
+      "maximum_response_header_bytes_per_page": 16384,
+      "maximum_response_header_bytes_per_scan": 524288,
+      "maximum_string_bytes": 512,
+      "terminal_failure": "statement_error_no_successful_partial"
+    },
+    "outbound_project_headers": {
+      "accounting": "name + \": \" + value + \"\\r\\n\"",
+      "maximum_bytes": 16384
+    },
+    "over_limit_rejection": {
+      "category": "resource",
+      "field": "header_bytes",
+      "network_io": "none",
+      "redacted": true
+    },
+    "viewer_repository_metrics": {
+      "decoded_memory_bytes": 2097152,
+      "decompressed_response_bytes_per_page": 8388608,
+      "decompressed_response_bytes_per_scan": 67108864,
+      "maximum_concurrency": 1,
+      "maximum_decoded_records_per_page": 100,
+      "maximum_decoded_records_per_scan": 3200,
+      "maximum_execution_milliseconds": 30000,
+      "maximum_json_nesting": 16,
+      "maximum_output_batch_rows": 64,
+      "maximum_pages": 32,
+      "maximum_request_attempts": 32,
+      "maximum_request_attempts_per_page": 1,
+      "maximum_response_bytes_per_page": 8388608,
+      "maximum_response_bytes_per_scan": 67108864,
+      "maximum_response_header_bytes_per_page": 16384,
+      "maximum_response_header_bytes_per_scan": 524288,
+      "maximum_serialized_request_body_bytes_host": 16384,
+      "maximum_serialized_request_body_bytes_per_page": 8192,
+      "maximum_serialized_request_body_bytes_per_scan": 262144,
+      "maximum_string_bytes": 512,
+      "retained_cursor_bytes": "charged_to_decoded_memory",
+      "terminal_failure": "statement_error_no_successful_partial"
+    }
+  },
+  "secret_type": {
+    "ambiguity": "reject_same_name_across_supported_storages",
+    "config": {
+      "field": "TOKEN",
+      "maximum_bytes": 8192,
+      "nonempty_visible_ascii": true,
+      "redacted": true,
+      "revision": "stable_until_replacement"
+    },
+    "environment": {
+      "field": "VARIABLE",
+      "maximum_name_bytes": 256,
+      "portable_identifier": "[A-Za-z_][A-Za-z0-9_]*",
+      "read": "exactly_once_per_scan_initialization",
+      "redacted": true,
+      "revision": "fresh_per_successful_scan"
+    },
+    "implicit_selection": false,
+    "persistent": {
+      "config_plaintext_at_rest": true,
+      "maximum_index_bytes": 131072,
+      "maximum_live_records": 256,
+      "maximum_record_bytes": 16384,
+      "mutation": "autocommit_only",
+      "storage": "cuac"
+    },
+    "providers": [
+      "config",
+      "environment"
+    ],
+    "scan_snapshot": "opaque_authority_and_revision_retained_for_stream",
+    "storages": [
+      "memory",
+      "cuac"
+    ],
+    "type": "cuac"
+  }
+}

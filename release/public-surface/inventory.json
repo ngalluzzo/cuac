@@ -1,0 +1,651 @@
+{
+  "schema_version": 1,
+  "baseline_release": "0.1.0",
+  "candidate_release": "0.1.0",
+  "planned_through": "0.1.0",
+  "shapes": [
+    {
+      "id": "sha256.7f56579000f648cb72d60450bde502598d85e67900b47d299719870474e0f521",
+      "digest": "7f56579000f648cb72d60450bde502598d85e67900b47d299719870474e0f521",
+      "arguments": [],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "id",
+              "duckdb_type": "BIGINT",
+              "nullable": false
+            },
+            {
+              "name": "login",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "site_admin",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "bind_offline",
+        "immutable_generation_bind",
+        "network_at_execute",
+        "system_main_canonical",
+        "unqualified_shadowable"
+      ]
+    },
+    {
+      "id": "sha256.a61a613e4d2be31cb57b240e4b6d2504486e74803e4a87d048dbb763afd9557c",
+      "digest": "a61a613e4d2be31cb57b240e4b6d2504486e74803e4a87d048dbb763afd9557c",
+      "arguments": [
+        {
+          "name": "secret",
+          "duckdb_type": "VARCHAR",
+          "required": true,
+          "nullable": false,
+          "origin": "query"
+        }
+      ],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "id",
+              "duckdb_type": "BIGINT",
+              "nullable": false
+            },
+            {
+              "name": "login",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "site_admin",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "bind_offline",
+        "immutable_generation_bind",
+        "network_at_execute",
+        "system_main_canonical",
+        "unqualified_shadowable"
+      ]
+    },
+    {
+      "id": "sha256.5d78af990dea05cb5464668bc8d90a59b4d85dc44674ad9562aa1b6bf37d5874",
+      "digest": "5d78af990dea05cb5464668bc8d90a59b4d85dc44674ad9562aa1b6bf37d5874",
+      "arguments": [
+        {
+          "name": "secret",
+          "duckdb_type": "VARCHAR",
+          "required": true,
+          "nullable": false,
+          "origin": "query"
+        }
+      ],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "id",
+              "duckdb_type": "BIGINT",
+              "nullable": false
+            },
+            {
+              "name": "full_name",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "private",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "fork",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "archived",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "visibility",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "bind_offline",
+        "immutable_generation_bind",
+        "network_at_execute",
+        "system_main_canonical",
+        "unqualified_shadowable"
+      ]
+    },
+    {
+      "id": "sha256.62ccdea7f8f2b6ee7fb258db617f7598d2fd63e7797fc8db3177899d8fa4fbf5",
+      "digest": "62ccdea7f8f2b6ee7fb258db617f7598d2fd63e7797fc8db3177899d8fa4fbf5",
+      "arguments": [
+        {
+          "name": "secret",
+          "duckdb_type": "VARCHAR",
+          "required": true,
+          "nullable": false,
+          "origin": "query"
+        }
+      ],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "id",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "full_name",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "owner_login",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "stars",
+              "duckdb_type": "BIGINT",
+              "nullable": false
+            },
+            {
+              "name": "primary_language",
+              "duckdb_type": "VARCHAR",
+              "nullable": true
+            },
+            {
+              "name": "private",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "archived",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "updated_at",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "bind_offline",
+        "immutable_generation_bind",
+        "network_at_execute",
+        "system_main_canonical",
+        "unqualified_shadowable"
+      ]
+    },
+    {
+      "id": "sha256.c3f756ffdfef8466c9e7ebf6921d55347e3e5ed44995c6ac103ba06223d13f5c",
+      "digest": "c3f756ffdfef8466c9e7ebf6921d55347e3e5ed44995c6ac103ba06223d13f5c",
+      "arguments": [
+        {
+          "name": "package_root",
+          "duckdb_type": "VARCHAR",
+          "required": true,
+          "nullable": false,
+          "origin": "query"
+        }
+      ],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "connector",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "spec_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_digest",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "relation_count",
+              "duckdb_type": "UBIGINT",
+              "nullable": false
+            },
+            {
+              "name": "changed",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "autocommit_only",
+        "database_instance_scoped",
+        "effect_once_at_execute",
+        "explicit_local_path",
+        "no_network",
+        "single_invocation_per_statement",
+        "system_main_canonical"
+      ]
+    },
+    {
+      "id": "sha256.34be1cdee166d8983d32942d4c37e75b8740169dd3f3678783fec27dc4fdd081",
+      "digest": "34be1cdee166d8983d32942d4c37e75b8740169dd3f3678783fec27dc4fdd081",
+      "arguments": [
+        {
+          "name": "connector",
+          "duckdb_type": "VARCHAR",
+          "required": true,
+          "nullable": false,
+          "origin": "query"
+        }
+      ],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "connector",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "spec_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_digest",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "relation_count",
+              "duckdb_type": "UBIGINT",
+              "nullable": false
+            },
+            {
+              "name": "changed",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "autocommit_only",
+        "database_instance_scoped",
+        "effect_once_at_execute",
+        "no_network",
+        "recorded_local_path",
+        "single_invocation_per_statement",
+        "snapshot_publication",
+        "system_main_canonical"
+      ]
+    },
+    {
+      "id": "sha256.6bcd2e3075d6002d0f203a5902ecddd71394a3c1aa83221968337435a5d24533",
+      "digest": "6bcd2e3075d6002d0f203a5902ecddd71394a3c1aa83221968337435a5d24533",
+      "arguments": [],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "connector",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "spec_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_digest",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "relation_count",
+              "duckdb_type": "UBIGINT",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "deterministic_order",
+        "no_secret_values",
+        "read_only",
+        "snapshot_aligned",
+        "system_main_canonical"
+      ]
+    },
+    {
+      "id": "sha256.ee4b719cd34c02a3c40148a0a06a0858681a129e8f158c4168e85b948dec5249",
+      "digest": "ee4b719cd34c02a3c40148a0a06a0858681a129e8f158c4168e85b948dec5249",
+      "arguments": [],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "connector",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "relation",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "sql_name",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "package_version",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "deterministic_order",
+        "no_secret_values",
+        "read_only",
+        "snapshot_aligned",
+        "system_main_canonical"
+      ]
+    },
+    {
+      "id": "sha256.780192bb90a961d26791c144ebd4d8bfd3a22552b3d53e123d759117799a277e",
+      "digest": "780192bb90a961d26791c144ebd4d8bfd3a22552b3d53e123d759117799a277e",
+      "arguments": [],
+      "results": [
+        {
+          "selector": "*",
+          "columns": [
+            {
+              "name": "connector",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "relation",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "argument",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "duckdb_type",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "nullable",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "has_default",
+              "duckdb_type": "BOOLEAN",
+              "nullable": false
+            },
+            {
+              "name": "argument_origin",
+              "duckdb_type": "VARCHAR",
+              "nullable": false
+            },
+            {
+              "name": "default_value",
+              "duckdb_type": "VARCHAR",
+              "nullable": true
+            }
+          ]
+        }
+      ],
+      "behaviors": [
+        "deterministic_order",
+        "no_secret_values",
+        "read_only",
+        "snapshot_aligned",
+        "system_main_canonical"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "id": "sql.table_function.system.main.github_duckdb_login_search_page",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "github_duckdb_login_search_page",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.7f56579000f648cb72d60450bde502598d85e67900b47d299719870474e0f521",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.github_authenticated_user",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "github_authenticated_user",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.a61a613e4d2be31cb57b240e4b6d2504486e74803e4a87d048dbb763afd9557c",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.github_authenticated_repositories",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "github_authenticated_repositories",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.5d78af990dea05cb5464668bc8d90a59b4d85dc44674ad9562aa1b6bf37d5874",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.github_viewer_repository_metrics",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "github_viewer_repository_metrics",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.62ccdea7f8f2b6ee7fb258db617f7598d2fd63e7797fc8db3177899d8fa4fbf5",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.cuac_load_connector",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "cuac_load_connector",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.c3f756ffdfef8466c9e7ebf6921d55347e3e5ed44995c6ac103ba06223d13f5c",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.cuac_reload_connector",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "cuac_reload_connector",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.34be1cdee166d8983d32942d4c37e75b8740169dd3f3678783fec27dc4fdd081",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.cuac_loaded_connectors",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "cuac_loaded_connectors",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.6bcd2e3075d6002d0f203a5902ecddd71394a3c1aa83221968337435a5d24533",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.cuac_loaded_relations",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "cuac_loaded_relations",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.ee4b719cd34c02a3c40148a0a06a0858681a129e8f158c4168e85b948dec5249",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    },
+    {
+      "id": "sql.table_function.system.main.cuac_relation_arguments",
+      "owner": "query-experience",
+      "catalog": "system",
+      "schema": "main",
+      "kind": "table_function",
+      "name": "cuac_relation_arguments",
+      "revisions": [
+        {
+          "release": "0.1.0",
+          "state": "active",
+          "classification": "baseline",
+          "shape": "sha256.780192bb90a961d26791c144ebd4d8bfd3a22552b3d53e123d759117799a277e",
+          "rfc": "RFC 0000",
+          "rationale": "Initial CUAC public contract."
+        }
+      ]
+    }
+  ],
+  "release_views": [
+    {
+      "release": "0.1.0",
+      "status": "shipped",
+      "active": [
+        "sql.table_function.system.main.github_duckdb_login_search_page",
+        "sql.table_function.system.main.github_authenticated_user",
+        "sql.table_function.system.main.github_authenticated_repositories",
+        "sql.table_function.system.main.github_viewer_repository_metrics",
+        "sql.table_function.system.main.cuac_load_connector",
+        "sql.table_function.system.main.cuac_reload_connector",
+        "sql.table_function.system.main.cuac_loaded_connectors",
+        "sql.table_function.system.main.cuac_loaded_relations",
+        "sql.table_function.system.main.cuac_relation_arguments"
+      ],
+      "removed": []
+    }
+  ]
+}
