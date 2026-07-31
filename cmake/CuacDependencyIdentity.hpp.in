@@ -1,0 +1,7 @@
+#pragma once
+
+// Generated from the verified build cell. Product initialization rechecks the
+// loaded library so a link or runtime substitution fails closed.
+#define CUAC_REQUIRED_LIBCURL_VERSION "@CUAC_REQUIRED_CURL_VERSION@"
+#define CUAC_REQUIRED_LIBCURL_VERSION_NUM @CUAC_REQUIRED_CURL_VERSION_NUM@
+#define CUAC_REQUIRED_LIBCURL_SSL_BACKEND "@CUAC_REQUIRED_CURL_SSL_BACKEND@"

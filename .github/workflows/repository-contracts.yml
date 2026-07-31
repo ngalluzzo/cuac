@@ -1,0 +1,34 @@
+name: Repository contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  portable-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify container definition
+        run: |
+          python3 -I -B scripts/verify-development-container.py repository containers/development/toolchain.json
+          python3 -I -B test/python/development_container_tests.py
+      - name: Build verified development image
+        run: docker build --file containers/development/Dockerfile --tag "cuac-development:${GITHUB_SHA}" .
+      - name: Run portable product verification
+        run: |
+          docker run --rm --init \
+            --user "$(id -u):$(id -g)" \
+            --env CUAC_DEV_CONTAINER=1 \
+            --env CUAC_DEV_ROOT=/workspaces/cuac/.build/container \
+            --env HOME=/tmp/cuac-home \
+            --volume "${GITHUB_WORKSPACE}:/workspaces/cuac" \
+            --workdir /workspaces/cuac \
+            "cuac-development:${GITHUB_SHA}" \
+            make verify
