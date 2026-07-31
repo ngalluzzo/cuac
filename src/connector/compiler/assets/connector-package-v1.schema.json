@@ -1,0 +1,806 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cuac:connector-package-v1",
+  "title": "cuac/v1 connector semantic source",
+  "description": "Applied after the RFC 0013 YAML failsafe lexical pass; every scalar presented to this schema is decoded text.",
+  "oneOf": [
+    {"$ref": "#/$defs/connector"},
+    {"$ref": "#/$defs/relation"}
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+    },
+    "graphqlName": {
+      "type": "string",
+      "pattern": "^(?!__)[_A-Za-z][_0-9A-Za-z]{0,254}$"
+    },
+    "boolean": {
+      "enum": ["true", "false"]
+    },
+    "positiveInteger": {
+      "type": "string",
+      "maxLength": 20,
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "canonicalInteger": {
+      "type": "string",
+      "pattern": "^-?(?:0|[1-9][0-9]*)$"
+    },
+    "packageVersion": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+    },
+    "host": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"
+    },
+    "port": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+    },
+    "fixedPath": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^/(?:[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)*)?$",
+      "not": {"pattern": "(?:^|/)\\.{1,2}(?:/|$)"}
+    },
+    "extractPath": {
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+    },
+    "collectionPath": {
+      "type": "string",
+      "maxLength": 1027,
+      "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_]*)+\\[\\*\\]$"
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scheme", "host", "port"],
+      "properties": {
+        "scheme": {"const": "https"},
+        "host": {"$ref": "#/$defs/host"},
+        "port": {"$ref": "#/$defs/port"}
+      }
+    },
+    "credential": {
+      "oneOf": [
+        {"$ref": "#/$defs/bearerCredential"},
+        {"$ref": "#/$defs/apiKeyHeaderCredential"},
+        {"$ref": "#/$defs/apiKeyQueryCredential"}
+      ]
+    },
+    "bearerCredential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "secret_field", "placement", "destinations"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"const": "bearer"},
+        "secret_field": {"const": "token"},
+        "placement": {"const": "authorization_header"},
+        "destinations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/origin"}
+        }
+      }
+    },
+    "apiKeyHeaderCredential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "secret_field", "placement", "header_name", "destinations"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"const": "api_key"},
+        "secret_field": {"const": "token"},
+        "placement": {"const": "header"},
+        "header_name": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]{0,62}$"},
+        "destinations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/origin"}
+        }
+      }
+    },
+    "apiKeyQueryCredential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "secret_field", "placement", "query_param", "destinations"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"const": "api_key"},
+        "secret_field": {"const": "token"},
+        "placement": {"const": "query"},
+        "query_param": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "destinations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/origin"}
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origins", "redirects", "private_addresses", "link_local_addresses", "loopback_addresses", "max_response_bytes"],
+      "properties": {
+        "origins": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/origin"}
+        },
+        "redirects": {"const": "deny"},
+        "private_addresses": {"const": "deny"},
+        "link_local_addresses": {"const": "deny"},
+        "loopback_addresses": {"const": "deny"},
+        "max_response_bytes": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api_version", "kind", "id", "version", "extractor_dialect", "network_policy", "relations"],
+      "properties": {
+        "api_version": {"const": "cuac/v1"},
+        "kind": {"const": "connector"},
+        "id": {"$ref": "#/$defs/id"},
+        "version": {"$ref": "#/$defs/packageVersion"},
+        "extractor_dialect": {"const": "cuac/json_path_v1"},
+        "credentials": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/credential"}
+        },
+        "network_policy": {"$ref": "#/$defs/networkPolicy"},
+        "relations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        }
+      }
+    },
+    "column": {
+      "oneOf": [
+        {"$ref": "#/$defs/scalarColumn"},
+        {"$ref": "#/$defs/arrayColumn"}
+      ]
+    },
+    "scalarColumn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "nullable", "extract"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+        "nullable": {"$ref": "#/$defs/boolean"},
+        "extract": {"$ref": "#/$defs/extractPath"}
+      }
+    },
+    "arrayColumn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "element_type", "element_nullable", "nullable", "extract"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "type": {"const": "ARRAY"},
+        "element_type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+        "element_nullable": {"$ref": "#/$defs/boolean"},
+        "nullable": {"$ref": "#/$defs/boolean"},
+        "extract": {"$ref": "#/$defs/extractPath"}
+      }
+    },
+    "nullValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {"kind": {"const": "null"}}
+    },
+    "typedValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {"const": "value"},
+        "value": {"type": "string", "maxLength": 1048576}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "nullable"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+        "nullable": {"$ref": "#/$defs/boolean"},
+        "default": {
+          "oneOf": [
+            {"$ref": "#/$defs/nullValue"},
+            {"$ref": "#/$defs/typedValue"}
+          ]
+        }
+      }
+    },
+    "anonymousAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {"mode": {"const": "anonymous"}}
+    },
+    "credentialAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "credential"],
+      "properties": {
+        "mode": {"const": "credential"},
+        "credential": {"$ref": "#/$defs/id"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_response_bytes_per_page", "max_response_bytes_per_scan", "max_records_per_page", "max_records_per_scan", "max_extracted_string_bytes"],
+      "properties": {
+        "max_response_bytes_per_page": {"$ref": "#/$defs/positiveInteger"},
+        "max_response_bytes_per_scan": {"$ref": "#/$defs/positiveInteger"},
+        "max_records_per_page": {"$ref": "#/$defs/positiveInteger"},
+        "max_records_per_scan": {"$ref": "#/$defs/positiveInteger"},
+        "max_extracted_string_bytes": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+    "requiredInputRef": {
+      "type": "string",
+      "pattern": "^(?:input|conditional)\\.[a-z][a-z0-9_]{0,62}$"
+    },
+    "when": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_inputs"],
+      "properties": {
+        "required_inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/requiredInputRef"}
+        }
+      }
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]{0,62}$"},
+        "value": {"type": "string", "maxLength": 1024}
+      }
+    },
+    "literalQueryField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "literal", "encoding"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "literal": {"type": "string", "maxLength": 1048576},
+        "encoding": {"const": "form_urlencoded"}
+      }
+    },
+    "inputQueryField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "input", "encoding", "omit_when_unbound", "omit_when_null"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "input": {"$ref": "#/$defs/id"},
+        "encoding": {"const": "form_urlencoded"},
+        "omit_when_unbound": {"const": "true"},
+        "omit_when_null": {"const": "true"}
+      }
+    },
+    "conditionalQueryField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "conditional_input", "encoding", "omit_when_unbound"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "conditional_input": {"$ref": "#/$defs/id"},
+        "encoding": {"const": "form_urlencoded"},
+        "omit_when_unbound": {"const": "true"}
+      }
+    },
+    "restRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "method", "origin", "path", "query", "headers"],
+      "properties": {
+        "protocol": {"const": "rest"},
+        "method": {"const": "GET"},
+        "origin": {"$ref": "#/$defs/origin"},
+        "path": {"$ref": "#/$defs/fixedPath"},
+        "query": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "oneOf": [
+              {"$ref": "#/$defs/literalQueryField"},
+              {"$ref": "#/$defs/inputQueryField"},
+              {"$ref": "#/$defs/conditionalQueryField"}
+            ]
+          }
+        },
+        "headers": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"$ref": "#/$defs/header"}
+        }
+      }
+    },
+    "restResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source"],
+          "properties": {"source": {"enum": ["root_object", "root_array"]}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "records"],
+          "properties": {
+            "source": {"const": "terminal_collection"},
+            "records": {"$ref": "#/$defs/collectionPath"}
+          }
+        }
+      ]
+    },
+    "disabledPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy"],
+      "properties": {"strategy": {"const": "disabled"}}
+    },
+    "linkPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "dependency", "consistency", "target_scope", "page_number_parameter", "first_page", "page_increment", "max_pages_per_scan"],
+      "properties": {
+        "strategy": {"const": "link_next"},
+        "dependency": {"const": "sequential"},
+        "consistency": {"const": "mutable"},
+        "target_scope": {"const": "exact_operation_origin_and_path"},
+        "page_size_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "page_size": {"$ref": "#/$defs/positiveInteger"},
+        "page_number_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "first_page": {"$ref": "#/$defs/positiveInteger"},
+        "page_increment": {"$ref": "#/$defs/positiveInteger"},
+        "max_pages_per_scan": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+    "responsePagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "dependency", "consistency", "target_scope", "next_url_path", "page_number_parameter", "first_page", "page_increment", "max_pages_per_scan"],
+      "properties": {
+        "strategy": {"const": "response_next"},
+        "dependency": {"const": "sequential"},
+        "consistency": {"const": "mutable"},
+        "target_scope": {"const": "exact_operation_origin_and_path"},
+        "next_url_path": {"$ref": "#/$defs/extractPath"},
+        "page_size_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "page_size": {"$ref": "#/$defs/positiveInteger"},
+        "page_number_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "first_page": {"$ref": "#/$defs/positiveInteger"},
+        "page_increment": {"$ref": "#/$defs/positiveInteger"},
+        "max_pages_per_scan": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+    "shortPagePagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "dependency", "consistency", "target_scope", "page_size_parameter", "page_size", "page_number_parameter", "first_page", "page_increment", "max_pages_per_scan"],
+      "properties": {
+        "strategy": {"const": "short_page"},
+        "dependency": {"const": "sequential"},
+        "consistency": {"const": "mutable"},
+        "target_scope": {"const": "exact_operation_origin_and_path"},
+        "page_size_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "page_size": {"$ref": "#/$defs/positiveInteger"},
+        "page_number_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "first_page": {"$ref": "#/$defs/positiveInteger"},
+        "page_increment": {"$ref": "#/$defs/positiveInteger"},
+        "max_pages_per_scan": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_attempts_per_step", "max_delay_milliseconds", "max_cumulative_waiting_milliseconds_per_scan"],
+      "properties": {
+        "max_attempts_per_step": {"type": "string", "enum": ["2", "3"]},
+        "max_delay_milliseconds": {"type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]|100)$"},
+        "max_cumulative_waiting_milliseconds_per_scan": {"type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|250)$"}
+      }
+    },
+
+    "rateLimitHeader": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+$",
+      "not": {"const": "date"}
+    },
+    "rateLimitGuidance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header", "format"],
+      "properties": {
+        "header": {"$ref": "#/$defs/rateLimitHeader"},
+        "format": {"enum": ["retry_after", "delta_seconds", "unix_seconds"]}
+      }
+    },
+    "rateLimitHeaderRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header"],
+      "properties": {"header": {"$ref": "#/$defs/rateLimitHeader"}}
+    },
+    "rateLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statuses", "mode", "operation_family", "principal_scope"],
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[45][0-9]{2}$",
+            "not": {"enum": ["401", "403", "407"]}
+          }
+        },
+        "mode": {"enum": ["fail", "wait", "wait_if_deadline_allows"]},
+        "operation_family": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "principal_scope": {"enum": ["credential_authority", "shared"]},
+        "guidance": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/rateLimitGuidance"}
+        },
+        "remaining": {"$ref": "#/$defs/rateLimitHeaderRole"},
+        "remote_bucket": {"$ref": "#/$defs/rateLimitHeaderRole"},
+        "max_attempts_per_step": {"type": "string", "enum": ["2", "3"]},
+        "max_delay_milliseconds": {"type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]{1,3}|[12][0-9]{4}|30000)$"},
+        "max_cumulative_waiting_milliseconds_per_scan": {"type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]{1,3}|[12][0-9]{4}|30000)$"}
+      },
+      "oneOf": [
+        {
+          "properties": {"mode": {"const": "fail"}},
+          "not": {
+            "anyOf": [
+              {"required": ["guidance"]},
+              {"required": ["remaining"]},
+              {"required": ["remote_bucket"]},
+              {"required": ["max_attempts_per_step"]},
+              {"required": ["max_delay_milliseconds"]},
+              {"required": ["max_cumulative_waiting_milliseconds_per_scan"]}
+            ]
+          }
+        },
+        {
+          "properties": {"mode": {"enum": ["wait", "wait_if_deadline_allows"]}},
+          "required": ["guidance", "max_attempts_per_step", "max_delay_milliseconds", "max_cumulative_waiting_milliseconds_per_scan"]
+        }
+      ]
+    },
+
+    "restOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cardinality", "replay_safety", "request", "response", "pagination"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "fallback": {"const": "true"},
+        "when": {"$ref": "#/$defs/when"},
+        "cardinality": {"enum": ["one", "many"]},
+        "replay_safety": {"const": "safe"},
+        "retry": {"$ref": "#/$defs/retry"},
+        "rate_limit": {"$ref": "#/$defs/rateLimit"},
+        "request": {"$ref": "#/$defs/restRequest"},
+        "response": {"$ref": "#/$defs/restResponse"},
+        "pagination": {
+          "oneOf": [
+            {"$ref": "#/$defs/disabledPagination"},
+            {"$ref": "#/$defs/linkPagination"},
+            {"$ref": "#/$defs/responsePagination"},
+            {"$ref": "#/$defs/shortPagePagination"}
+          ]
+        }
+      },
+      "oneOf": [
+        {"properties": {"fallback": {}}, "required": ["fallback"], "not": {"properties": {"when": {}}, "required": ["when"]}},
+        {"properties": {"when": {}}, "required": ["when"], "not": {"properties": {"fallback": {}}, "required": ["fallback"]}}
+      ]
+    },
+    "graphqlLiteral": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["null"],
+          "properties": {"null": {"const": "true"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["boolean"],
+          "properties": {"boolean": {"$ref": "#/$defs/boolean"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["integer"],
+          "properties": {"integer": {"$ref": "#/$defs/canonicalInteger"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["string"],
+          "properties": {"string": {"type": "string", "maxLength": 1048576}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enum"],
+          "properties": {"enum": {"$ref": "#/$defs/graphqlName"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["list"],
+          "properties": {
+            "list": {
+              "type": "array",
+              "maxItems": 4096,
+              "items": {"$ref": "#/$defs/graphqlLiteral"}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["object"],
+          "properties": {
+            "object": {
+              "type": "array",
+              "maxItems": 4096,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "value"],
+                "properties": {
+                  "name": {"$ref": "#/$defs/graphqlName"},
+                  "value": {"$ref": "#/$defs/graphqlLiteral"}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "graphqlQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_name", "root", "fixed_arguments", "selection"],
+      "properties": {
+        "operation_name": {"$ref": "#/$defs/graphqlName"},
+        "root": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/graphqlName"}
+        },
+        "fixed_arguments": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": {"$ref": "#/$defs/graphqlName"},
+              "value": {"$ref": "#/$defs/graphqlLiteral"}
+            }
+          }
+        },
+        "selection": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["column", "field_path"],
+            "properties": {
+              "column": {"$ref": "#/$defs/id"},
+              "field_path": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "items": {"$ref": "#/$defs/graphqlName"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "graphqlPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "dependency", "consistency", "page_size_argument", "page_size_variable", "page_size", "cursor_argument", "cursor_variable", "page_info_field", "has_next_page_field", "end_cursor_field", "max_pages_per_scan", "max_concurrent_pages"],
+      "properties": {
+        "strategy": {"const": "relay_forward"},
+        "dependency": {"const": "sequential"},
+        "consistency": {"const": "mutable"},
+        "page_size_argument": {"$ref": "#/$defs/graphqlName"},
+        "page_size_variable": {"$ref": "#/$defs/graphqlName"},
+        "page_size": {"$ref": "#/$defs/positiveInteger"},
+        "cursor_argument": {"$ref": "#/$defs/graphqlName"},
+        "cursor_variable": {"$ref": "#/$defs/graphqlName"},
+        "page_info_field": {"$ref": "#/$defs/graphqlName"},
+        "has_next_page_field": {"$ref": "#/$defs/graphqlName"},
+        "end_cursor_field": {"$ref": "#/$defs/graphqlName"},
+        "max_pages_per_scan": {"$ref": "#/$defs/positiveInteger"},
+        "max_concurrent_pages": {"const": "1"}
+      }
+    },
+    "graphqlRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "endpoint", "headers", "query", "pagination", "partial_data", "max_document_bytes", "max_serialized_body_bytes_per_request", "max_serialized_body_bytes_per_scan"],
+      "properties": {
+        "protocol": {"const": "graphql"},
+        "endpoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "path"],
+          "properties": {
+            "origin": {"$ref": "#/$defs/origin"},
+            "path": {"$ref": "#/$defs/fixedPath"}
+          }
+        },
+        "headers": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"$ref": "#/$defs/header"}
+        },
+        "query": {"$ref": "#/$defs/graphqlQuery"},
+        "pagination": {"$ref": "#/$defs/graphqlPagination"},
+        "partial_data": {"const": "fail_on_any_error"},
+        "max_document_bytes": {"$ref": "#/$defs/positiveInteger"},
+        "max_serialized_body_bytes_per_request": {"$ref": "#/$defs/positiveInteger"},
+        "max_serialized_body_bytes_per_scan": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+    "graphqlOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cardinality", "replay_safety", "request"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "fallback": {"const": "true"},
+        "when": {"$ref": "#/$defs/when"},
+        "cardinality": {"const": "many"},
+        "replay_safety": {"const": "safe"},
+        "retry": {"$ref": "#/$defs/retry"},
+        "rate_limit": {"$ref": "#/$defs/rateLimit"},
+        "request": {"$ref": "#/$defs/graphqlRequest"}
+      },
+      "oneOf": [
+        {"properties": {"fallback": {}}, "required": ["fallback"], "not": {"properties": {"when": {}}, "required": ["when"]}},
+        {"properties": {"when": {}}, "required": ["when"], "not": {"properties": {"fallback": {}}, "required": ["fallback"]}}
+      ]
+    },
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "column", "operator", "literal", "conditional_input", "operations", "accuracy", "occurrence_fixtures"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "column": {"$ref": "#/$defs/id"},
+        "operator": {"const": "eq"},
+        "literal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+            "value": {"type": "string", "maxLength": 1048576}
+          }
+        },
+        "conditional_input": {"$ref": "#/$defs/id"},
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "accuracy": {"enum": ["exact", "superset"]},
+        "occurrence_fixtures": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["matching", "false_or_null", "duplicates"],
+          "properties": {
+            "matching": {"$ref": "#/$defs/id"},
+            "false_or_null": {"$ref": "#/$defs/id"},
+            "duplicates": {"$ref": "#/$defs/id"}
+          }
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api_version", "kind", "id", "schema", "columns", "auth", "resources", "operations"],
+      "properties": {
+        "api_version": {"const": "cuac/v1"},
+        "kind": {"const": "relation"},
+        "id": {"$ref": "#/$defs/id"},
+        "schema": {"const": "static"},
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {"$ref": "#/$defs/column"}
+        },
+        "inputs": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {"$ref": "#/$defs/input"}
+        },
+        "auth": {
+          "oneOf": [
+            {"$ref": "#/$defs/anonymousAuth"},
+            {"$ref": "#/$defs/credentialAuth"}
+          ]
+        },
+        "resources": {"$ref": "#/$defs/resources"},
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "oneOf": [
+              {"$ref": "#/$defs/restOperation"},
+              {"$ref": "#/$defs/graphqlOperation"}
+            ]
+          }
+        },
+        "predicates": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/predicate"}
+        }
+      }
+    }
+  }
+}
