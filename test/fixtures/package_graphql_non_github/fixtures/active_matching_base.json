@@ -1,0 +1,1 @@
+[{"id":"active-a","active":true,"stats":{"attendance":40},"classification":{"label":"public"}},{"id":"inactive-b","active":false,"stats":{"attendance":15},"classification":{"label":"members"}}]

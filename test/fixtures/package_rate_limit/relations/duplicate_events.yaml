@@ -1,0 +1,67 @@
+api_version: cuac/v1
+kind: relation
+id: duplicate_events
+schema: static
+
+columns:
+  - id: event_id
+    type: VARCHAR
+    nullable: false
+    extract: $.id
+  - id: ordinal
+    type: BIGINT
+    nullable: false
+    extract: $.ordinal
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 1048576
+  max_response_bytes_per_scan: 1048576
+  max_records_per_page: 40
+  max_records_per_scan: 40
+  max_extracted_string_bytes: 512
+
+operations:
+  - id: list_duplicate_events
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    retry:
+      max_attempts_per_step: 3
+      max_delay_milliseconds: 10
+      max_cumulative_waiting_milliseconds_per_scan: 25
+    rate_limit:
+      statuses: [503, 429]
+      mode: wait_if_deadline_allows
+      operation_family: core_requests
+      principal_scope: credential_authority
+      guidance:
+        - header: retry-after
+          format: retry_after
+        - header: x-ratelimit-reset
+          format: unix_seconds
+      remaining:
+        header: x-ratelimit-remaining
+      remote_bucket:
+        header: x-ratelimit-resource
+      max_attempts_per_step: 3
+      max_delay_milliseconds: 30000
+      max_cumulative_waiting_milliseconds_per_scan: 30000
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: api.example.com
+        port: 8443
+      path: /duplicate-events
+      query: []
+      headers:
+        - name: X-Client
+          value: cuac-retry-test
+    response:
+      source: root_array
+    pagination:
+      strategy: disabled

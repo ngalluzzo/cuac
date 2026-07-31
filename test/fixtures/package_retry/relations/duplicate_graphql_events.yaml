@@ -1,0 +1,70 @@
+api_version: cuac/v1
+kind: relation
+id: duplicate_graphql_events
+schema: static
+
+columns:
+  - id: event_id
+    type: VARCHAR
+    nullable: false
+    extract: $.id
+  - id: ordinal
+    type: BIGINT
+    nullable: false
+    extract: $.ordinal
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 1048576
+  max_response_bytes_per_scan: 2097152
+  max_records_per_page: 40
+  max_records_per_scan: 80
+  max_extracted_string_bytes: 512
+
+operations:
+  - id: list_duplicate_graphql_events
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    retry:
+      max_attempts_per_step: 3
+      max_delay_milliseconds: 10
+      max_cumulative_waiting_milliseconds_per_scan: 25
+    request:
+      protocol: graphql
+      endpoint:
+        origin:
+          scheme: https
+          host: api.example.com
+          port: 8443
+        path: /graphql
+      headers:
+        - name: X-Client
+          value: cuac-retry-test
+      query:
+        operation_name: RetryDuplicateEvents
+        root: [events]
+        fixed_arguments: []
+        selection:
+          - {column: event_id, field_path: [id]}
+          - {column: ordinal, field_path: [ordinal]}
+      pagination:
+        strategy: relay_forward
+        dependency: sequential
+        consistency: mutable
+        page_size_argument: first
+        page_size_variable: pageSize
+        page_size: 40
+        cursor_argument: after
+        cursor_variable: cursor
+        page_info_field: pageInfo
+        has_next_page_field: hasNextPage
+        end_cursor_field: endCursor
+        max_pages_per_scan: 2
+        max_concurrent_pages: 1
+      partial_data: fail_on_any_error
+      max_document_bytes: 2048
+      max_serialized_body_bytes_per_request: 4096
+      max_serialized_body_bytes_per_scan: 24576

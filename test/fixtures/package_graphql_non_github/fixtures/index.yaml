@@ -1,0 +1,798 @@
+api_version: cuac/v1
+kind: fixture_index
+package_digest: sha256.dc87d8de80641067c281c5a50d518b0d97f441d2ce448e7321079a061c745710
+
+cases:
+  - id: announcements_base
+    relation: public_announcements
+    operation: list_public_announcements
+    covers:
+      - operation_public_announcements_list_public_announcements_success
+      - auth_public_announcements_list_public_announcements_anonymous
+      - column_public_announcements_announcement_id_success
+      - column_public_announcements_announcement_id_type_mismatch_rejected
+      - column_public_announcements_headline_success
+      - column_public_announcements_headline_type_mismatch_rejected
+      - column_public_announcements_announcement_id_missing_rejected
+      - column_public_announcements_announcement_id_null_rejected
+      - column_public_announcements_headline_missing_rejected
+      - column_public_announcements_headline_null_rejected
+      - column_public_announcements_announcement_id_string_budget_boundary
+      - column_public_announcements_announcement_id_string_budget_one_over_rejected
+      - column_public_announcements_headline_string_budget_boundary
+      - column_public_announcements_headline_string_budget_one_over_rejected
+      - pagination_public_announcements_list_public_announcements_single_page_termination
+      - resource_public_announcements_max_response_bytes_per_page_boundary
+      - resource_public_announcements_max_response_bytes_per_page_one_over_rejected
+      - resource_public_announcements_max_response_bytes_per_scan_boundary
+      - resource_public_announcements_max_response_bytes_per_scan_one_over_rejected
+      - resource_public_announcements_max_records_per_page_boundary
+      - resource_public_announcements_max_records_per_page_one_over_rejected
+      - resource_public_announcements_max_records_per_scan_boundary
+      - resource_public_announcements_max_records_per_scan_one_over_rejected
+      - resource_public_announcements_max_extracted_string_bytes_boundary
+      - resource_public_announcements_max_extracted_string_bytes_one_over_rejected
+      - compiler_cancellation_source_enumeration
+      - compiler_cancellation_source_read
+      - compiler_cancellation_yaml_parse
+      - compiler_cancellation_reference_validation
+      - compiler_cancellation_generation_validation
+      - compiler_cancellation_publication_wait
+      - runtime_cancellation_public_announcements_list_public_announcements_before_request
+      - runtime_cancellation_public_announcements_list_public_announcements_transport
+      - runtime_cancellation_public_announcements_list_public_announcements_decode
+      - runtime_cancellation_public_announcements_list_public_announcements_page_boundary
+      - runtime_cancellation_public_announcements_list_public_announcements_stream_close
+      - source_identity_copied_root
+      - source_identity_byte_change
+      - source_identity_symlink_rejected
+      - source_identity_hardlink_rejected
+      - source_identity_entry_change_rejected
+      - source_identity_unlisted_relation_rejected
+      - source_identity_case_collision_rejected
+      - reload_exact_no_op
+      - reload_compatible_patch
+      - reload_compatible_minor
+      - reload_version_reuse_rejected
+      - reload_downgrade_rejected
+      - reload_incompatible_rejected
+      - diagnostic_cuac_unsupported_spec
+      - diagnostic_cuac_unsupported_dialect
+      - diagnostic_cuac_malformed_yaml
+      - diagnostic_cuac_unknown_field
+      - diagnostic_cuac_missing_field
+      - diagnostic_cuac_duplicate_id
+      - diagnostic_cuac_invalid_reference
+      - diagnostic_cuac_invalid_identifier
+      - diagnostic_cuac_invalid_type
+      - diagnostic_cuac_invalid_extractor
+      - diagnostic_cuac_reserved_input
+      - diagnostic_cuac_unsupported_declaration
+      - diagnostic_cuac_invalid_selector
+      - diagnostic_cuac_invalid_predicate
+      - diagnostic_cuac_invalid_graphql_profile
+      - diagnostic_cuac_policy_widening
+      - diagnostic_cuac_resource_exhausted
+      - diagnostic_cuac_package_identity
+      - diagnostic_cuac_fixture_mismatch
+      - diagnostic_cuac_incompatible_reload
+      - diagnostic_cuac_publication_conflict
+    inputs: []
+    auth: anonymous
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: api.example.com, port: 8443}
+            path: /v1/public-announcements
+            query: []
+            authorization: none
+          response:
+            status: 200
+            headers: []
+            body_file: announcements.json
+            body_digest: sha256.6e9bc2910336943a44b0c46609bc44fc95302e10003e279a9d7322bf900137bf
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {announcement_id: notice-1, headline: "Synthetic maintenance window"}
+      explain: {protocol: rest, pagination: disabled, auth: anonymous}
+
+  - id: regional_graph_unique
+    relation: regional_events
+    operation: regional_event_graph
+    covers:
+      - operation_regional_events_regional_event_graph_success
+      - auth_regional_events_regional_event_graph_bearer_present
+      - input_regional_events_graph_view_bound_value
+      - input_regional_events_graph_view_unbound
+      - input_regional_events_graph_view_bound_null_rejected
+      - selection_regional_events_regional_event_graph_selected
+      - selection_regional_events_highest_rank_tie_rejected
+      - pagination_regional_events_regional_event_graph_first_page
+      - pagination_regional_events_regional_event_graph_multi_page
+      - pagination_regional_events_regional_event_graph_termination
+      - pagination_regional_events_regional_event_graph_cursor_transition
+      - pagination_regional_events_regional_event_graph_missing_cursor_rejected
+      - pagination_regional_events_regional_event_graph_repeated_cursor_rejected
+      - pagination_regional_events_regional_event_graph_max_pages_exhausted
+      - graphql_regional_events_regional_event_graph_document_identity
+      - graphql_regional_events_regional_event_graph_serialized_body_identity
+      - graphql_regional_events_regional_event_graph_errors_rejected
+      - graphql_regional_events_regional_event_graph_response_role_rejected
+      - resource_regional_events_regional_event_graph_max_document_bytes_boundary
+      - resource_regional_events_regional_event_graph_max_document_bytes_one_over_rejected
+      - resource_regional_events_regional_event_graph_max_serialized_body_bytes_per_request_boundary
+      - resource_regional_events_regional_event_graph_max_serialized_body_bytes_per_request_one_over_rejected
+      - resource_regional_events_regional_event_graph_max_serialized_body_bytes_per_scan_boundary
+      - resource_regional_events_regional_event_graph_max_serialized_body_bytes_per_scan_one_over_rejected
+      - runtime_cancellation_regional_events_regional_event_graph_before_request
+      - runtime_cancellation_regional_events_regional_event_graph_transport
+      - runtime_cancellation_regional_events_regional_event_graph_decode
+      - runtime_cancellation_regional_events_regional_event_graph_page_boundary
+      - runtime_cancellation_regional_events_regional_event_graph_stream_close
+    inputs:
+      - {id: region, value: {kind: value, value: "west"}}
+      - {id: graph_view, value: {kind: value, value: true}}
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: graphql
+            method: POST
+            endpoint:
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/graphql-events
+            document_digest: sha256.ca2060e0db0b535bbf4a2b96050127159fb3e953cd52bd17dd8b2ae955464d28
+            variables:
+              - {name: pageSize, type: INT_NON_NULL, value: {kind: value, value: 50}}
+              - {name: cursor, type: STRING_NULLABLE, value: {kind: null}}
+            serialized_body_digest: sha256.ec08165f1d818b8fe75df45a049f4fb146142198ec2742358657e15d13f9696b
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: regional_graph_page_1.json
+            body_digest: sha256.fc37b5e1c7c4f8eac72cf4837c45f4e0cf717722764d8ce61c0523f46c59fd94
+        - request:
+            protocol: graphql
+            method: POST
+            endpoint:
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/graphql-events
+            document_digest: sha256.ca2060e0db0b535bbf4a2b96050127159fb3e953cd52bd17dd8b2ae955464d28
+            variables:
+              - {name: pageSize, type: INT_NON_NULL, value: {kind: value, value: 50}}
+              - {name: cursor, type: STRING_NULLABLE, value: {kind: value, value: "cursor-acme-1"}}
+            serialized_body_digest: sha256.34eaf1089d0986a7313b9a763e459405f6eb49cb5a0c30aa844072f66c4b8fcf
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: regional_graph_page_2.json
+            body_digest: sha256.9244c64d20a15215548b7d5619cab29d4cbe4a9bae0ab001e226984ec3c11252
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {event_id: event-g1, active: true, attendance: 120, category: public}
+        - {event_id: event-g2, active: false, attendance: 25, category: {kind: null}}
+      explain: {protocol: graphql, pagination: relay_forward, operation: regional_event_graph, auth: bearer_capability}
+
+  - id: regional_event_graph_missing_bearer
+    relation: regional_events
+    operation: regional_event_graph
+    covers:
+      - auth_regional_events_regional_event_graph_bearer_missing
+    inputs:
+      - {id: region, value: {kind: value, value: "west"}}
+      - {id: graph_view, value: {kind: value, value: true}}
+    auth: bearer_missing
+    pre_request_failure: {checkpoint: authorization_resolution}
+    expected:
+      runtime_error: {stage: authentication, field: authorization}
+
+  - id: regional_rest_unique
+    relation: regional_events
+    operation: regional_event_rest
+    covers:
+      - operation_regional_events_regional_event_rest_success
+      - auth_regional_events_regional_event_rest_bearer_present
+      - input_regional_events_rest_view_bound_value
+      - input_regional_events_rest_view_unbound
+      - input_regional_events_include_cancelled_default_applied
+      - input_regional_events_minimum_attendance_default_applied
+      - input_regional_events_audience_default_applied
+      - input_regional_events_note_default_applied
+      - input_regional_events_rest_view_bound_null_rejected
+      - selection_regional_events_regional_event_rest_selected
+      - pagination_regional_events_regional_event_rest_first_page
+      - pagination_regional_events_regional_event_rest_multi_page
+      - pagination_regional_events_regional_event_rest_termination
+      - pagination_regional_events_regional_event_rest_encoded_target
+      - pagination_regional_events_regional_event_rest_malformed_target_rejected
+      - pagination_regional_events_regional_event_rest_replayed_target_rejected
+      - pagination_regional_events_regional_event_rest_max_pages_exhausted
+      - runtime_cancellation_regional_events_regional_event_rest_before_request
+      - runtime_cancellation_regional_events_regional_event_rest_transport
+      - runtime_cancellation_regional_events_regional_event_rest_decode
+      - runtime_cancellation_regional_events_regional_event_rest_page_boundary
+      - runtime_cancellation_regional_events_regional_event_rest_stream_close
+    inputs:
+      - {id: region, value: {kind: value, value: "north america/β"}}
+      - {id: rest_view, value: {kind: value, value: true}}
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: api.example.com, port: 8443}
+            path: /v1/regional-events
+            query:
+              - {name: per_page, encoded_value: "50"}
+              - {name: page, encoded_value: "1"}
+              - {name: region, encoded_value: "north+america%2F%CE%B2"}
+              - {name: include_cancelled, encoded_value: "false"}
+              - {name: minimum_attendance, encoded_value: "25"}
+              - {name: audience, encoded_value: public}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers:
+              - {name: Link, value: "<https://api.example.com:8443/v1/regional-events?per_page=50&page=2&region=north+america%2F%CE%B2&include_cancelled=false&minimum_attendance=25&audience=public>; rel=next"}
+            body_file: regional_rest_page_1.json
+            body_digest: sha256.a2e7243127dc39f0f1688e17504bb352a7bcd5d74172247fa6b0172a17c13e51
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: api.example.com, port: 8443}
+            path: /v1/regional-events
+            query:
+              - {name: per_page, encoded_value: "50"}
+              - {name: page, encoded_value: "2"}
+              - {name: region, encoded_value: "north+america%2F%CE%B2"}
+              - {name: include_cancelled, encoded_value: "false"}
+              - {name: minimum_attendance, encoded_value: "25"}
+              - {name: audience, encoded_value: public}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: regional_rest_page_2.json
+            body_digest: sha256.cf21a0a8bacc910ddefe83bc52bb8d8065347edc86bec7588dcc7cac89daa4fd
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {event_id: event-r1, active: true, attendance: 80, category: public}
+        - {event_id: event-r2, active: false, attendance: 25, category: members}
+      explain: {protocol: rest, pagination: link_next, operation: regional_event_rest, auth: bearer_capability}
+
+  - id: regional_event_rest_missing_bearer
+    relation: regional_events
+    operation: regional_event_rest
+    covers:
+      - auth_regional_events_regional_event_rest_bearer_missing
+    inputs:
+      - {id: region, value: {kind: value, value: "west"}}
+      - {id: rest_view, value: {kind: value, value: true}}
+    auth: bearer_missing
+    pre_request_failure: {checkpoint: authorization_resolution}
+    expected:
+      runtime_error: {stage: authentication, field: authorization}
+
+  - id: regional_fallback_defaults
+    relation: regional_events
+    operation: fallback_events
+    covers:
+      - operation_regional_events_fallback_events_success
+      - auth_regional_events_fallback_events_bearer_present
+      - input_regional_events_region_bound_value
+      - input_regional_events_region_unbound
+      - input_regional_events_include_cancelled_bound_value
+      - input_regional_events_include_cancelled_unbound
+      - input_regional_events_minimum_attendance_bound_value
+      - input_regional_events_minimum_attendance_unbound
+      - input_regional_events_audience_bound_value
+      - input_regional_events_audience_unbound
+      - input_regional_events_note_bound_value
+      - input_regional_events_note_unbound
+      - input_regional_events_include_cancelled_bound_null_rejected
+      - input_regional_events_minimum_attendance_bound_null_rejected
+      - column_regional_events_event_id_success
+      - column_regional_events_event_id_type_mismatch_rejected
+      - column_regional_events_active_success
+      - column_regional_events_active_type_mismatch_rejected
+      - column_regional_events_attendance_success
+      - column_regional_events_attendance_type_mismatch_rejected
+      - column_regional_events_category_success
+      - column_regional_events_category_type_mismatch_rejected
+      - column_regional_events_category_null
+      - column_regional_events_event_id_missing_rejected
+      - column_regional_events_event_id_null_rejected
+      - column_regional_events_active_missing_rejected
+      - column_regional_events_active_null_rejected
+      - column_regional_events_attendance_missing_rejected
+      - column_regional_events_attendance_null_rejected
+      - column_regional_events_attendance_minimum
+      - column_regional_events_attendance_maximum
+      - column_regional_events_attendance_underflow_rejected
+      - column_regional_events_attendance_overflow_rejected
+      - column_regional_events_attendance_fraction_rejected
+      - column_regional_events_event_id_string_budget_boundary
+      - column_regional_events_event_id_string_budget_one_over_rejected
+      - column_regional_events_category_string_budget_boundary
+      - column_regional_events_category_string_budget_one_over_rejected
+      - selection_regional_events_fallback_events_selected
+      - selection_regional_events_no_candidate_rejected
+      - selection_regional_events_fallback_selected
+      - pagination_regional_events_fallback_events_first_page
+      - pagination_regional_events_fallback_events_multi_page
+      - pagination_regional_events_fallback_events_termination
+      - pagination_regional_events_fallback_events_encoded_target
+      - pagination_regional_events_fallback_events_malformed_target_rejected
+      - pagination_regional_events_fallback_events_replayed_target_rejected
+      - pagination_regional_events_fallback_events_max_pages_exhausted
+      - resource_regional_events_max_response_bytes_per_page_boundary
+      - resource_regional_events_max_response_bytes_per_page_one_over_rejected
+      - resource_regional_events_max_response_bytes_per_scan_boundary
+      - resource_regional_events_max_response_bytes_per_scan_one_over_rejected
+      - resource_regional_events_max_records_per_page_boundary
+      - resource_regional_events_max_records_per_page_one_over_rejected
+      - resource_regional_events_max_records_per_scan_boundary
+      - resource_regional_events_max_records_per_scan_one_over_rejected
+      - resource_regional_events_max_extracted_string_bytes_boundary
+      - resource_regional_events_max_extracted_string_bytes_one_over_rejected
+      - runtime_cancellation_regional_events_fallback_events_before_request
+      - runtime_cancellation_regional_events_fallback_events_transport
+      - runtime_cancellation_regional_events_fallback_events_decode
+      - runtime_cancellation_regional_events_fallback_events_page_boundary
+      - runtime_cancellation_regional_events_fallback_events_stream_close
+    inputs: []
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: api.example.com, port: 8443}
+            path: /v1/events
+            query:
+              - {name: per_page, encoded_value: "50"}
+              - {name: page, encoded_value: "1"}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers:
+              - {name: Link, value: "<https://api.example.com:8443/v1/events?per_page=50&page=2>; rel=next"}
+            body_file: regional_fallback_page_1.json
+            body_digest: sha256.50b2b9f00ad23f760a15b1ec4a1e1c365f460f000a2df613c96e45440c013c7c
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: api.example.com, port: 8443}
+            path: /v1/events
+            query:
+              - {name: per_page, encoded_value: "50"}
+              - {name: page, encoded_value: "2"}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: regional_fallback_page_2.json
+            body_digest: sha256.3b66399e77d2364dacbba796ad35da95ada51958f0765bd53b6fefd4ba16f750
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {event_id: event-f1, active: true, attendance: 45, category: public}
+        - {event_id: event-f2, active: false, attendance: 12, category: {kind: null}}
+      explain: {protocol: rest, pagination: link_next, operation: fallback_events, auth: bearer_capability}
+
+  - id: fallback_events_missing_bearer
+    relation: regional_events
+    operation: fallback_events
+    covers:
+      - auth_regional_events_fallback_events_bearer_missing
+    inputs: []
+    auth: bearer_missing
+    pre_request_failure: {checkpoint: authorization_resolution}
+    expected:
+      runtime_error: {stage: authentication, field: authorization}
+
+  - id: regional_rest_explicit_null
+    relation: regional_events
+    operation: regional_event_rest
+    covers:
+      - input_regional_events_region_bound_null_omitted
+      - input_regional_events_audience_bound_null_omitted
+      - input_regional_events_note_bound_null_omitted
+    inputs:
+      - {id: rest_view, value: {kind: value, value: true}}
+      - {id: region, value: {kind: null}}
+      - {id: audience, value: {kind: null}}
+      - {id: note, value: {kind: null}}
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: api.example.com, port: 8443}
+            path: /v1/regional-events
+            query:
+              - {name: per_page, encoded_value: "50"}
+              - {name: page, encoded_value: "1"}
+              - {name: include_cancelled, encoded_value: "false"}
+              - {name: minimum_attendance, encoded_value: "25"}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: regional_explicit_null.json
+            body_digest: sha256.083ff3607c50202c324b33a53de2ab6db71d27c03740bf6a6a61db760eea4f4b
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {event_id: event-null, active: true, attendance: 30, category: {kind: null}}
+      explain: {protocol: rest, pagination: link_next, operation: regional_event_rest, auth: bearer_capability}
+
+  - id: active_events_matching
+    relation: regional_events
+    operation: regional_event_rest
+    covers:
+      - predicate_regional_events_active_events_positive
+      - predicate_regional_events_active_events_unavailable_structure_local
+    inputs:
+      - {id: region, value: {kind: value, value: "proof-region"}}
+      - {id: rest_view, value: {kind: value, value: true}}
+    predicate:
+      column: active
+      operator: eq
+      literal: {type: BOOLEAN, value: true}
+    auth: bearer_present
+    proof:
+      base:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/regional-events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: region, encoded_value: proof-region}
+                - {name: include_cancelled, encoded_value: "false"}
+                - {name: minimum_attendance, encoded_value: "25"}
+                - {name: audience, encoded_value: public}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: active_matching_base.json
+              body_digest: sha256.2df6b97e59080386d87fea611866f05f3639d462107731f32ac676a8aa4d942c
+              occurrence_ids: [active_a, inactive_b]
+      restricted:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/regional-events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: region, encoded_value: proof-region}
+                - {name: include_cancelled, encoded_value: "false"}
+                - {name: minimum_attendance, encoded_value: "25"}
+                - {name: audience, encoded_value: public}
+                - {name: active, encoded_value: "true"}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: active_matching_restricted.json
+              body_digest: sha256.027ab5b9cb0b74b1a508febe3b76eaead216dea72959aa9818ebc7d2a84bf036
+              occurrence_ids: [active_a]
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: exact
+      rows:
+        - {event_id: active-a, active: true, attendance: 40, category: public}
+      explain: {conditional_input: active, predicate_owner: duckdb}
+
+  - id: active_events_false_or_null
+    relation: regional_events
+    operation: regional_event_rest
+    covers:
+      - predicate_regional_events_active_events_non_true
+    inputs:
+      - {id: region, value: {kind: value, value: "proof-region"}}
+      - {id: rest_view, value: {kind: value, value: true}}
+    predicate:
+      column: active
+      operator: eq
+      literal: {type: BOOLEAN, value: true}
+    auth: bearer_present
+    proof:
+      base:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/regional-events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: region, encoded_value: proof-region}
+                - {name: include_cancelled, encoded_value: "false"}
+                - {name: minimum_attendance, encoded_value: "25"}
+                - {name: audience, encoded_value: public}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: active_false_or_null_base.json
+              body_digest: sha256.6f9a2ee2bab40c6601132843da5f70bb1a5e170096059a621698aad197e62287
+              occurrence_ids: [inactive_c]
+      restricted:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/regional-events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: region, encoded_value: proof-region}
+                - {name: include_cancelled, encoded_value: "false"}
+                - {name: minimum_attendance, encoded_value: "25"}
+                - {name: audience, encoded_value: public}
+                - {name: active, encoded_value: "true"}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: active_false_or_null_restricted.json
+              body_digest: sha256.37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570
+              occurrence_ids: []
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: exact
+      rows: []
+      explain: {conditional_input: active, predicate_owner: duckdb}
+
+  - id: active_events_duplicates
+    relation: regional_events
+    operation: regional_event_rest
+    covers:
+      - predicate_regional_events_active_events_duplicates
+    inputs:
+      - {id: region, value: {kind: value, value: "proof-region"}}
+      - {id: rest_view, value: {kind: value, value: true}}
+    predicate:
+      column: active
+      operator: eq
+      literal: {type: BOOLEAN, value: true}
+    auth: bearer_present
+    proof:
+      base:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/regional-events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: region, encoded_value: proof-region}
+                - {name: include_cancelled, encoded_value: "false"}
+                - {name: minimum_attendance, encoded_value: "25"}
+                - {name: audience, encoded_value: public}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: active_duplicates_base.json
+              body_digest: sha256.dbbd83938dc302a6878945be273c9199d9e469ba24bad86af51fcd1929656b77
+              occurrence_ids: [active_d1, active_d2]
+      restricted:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/regional-events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: region, encoded_value: proof-region}
+                - {name: include_cancelled, encoded_value: "false"}
+                - {name: minimum_attendance, encoded_value: "25"}
+                - {name: audience, encoded_value: public}
+                - {name: active, encoded_value: "true"}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: active_duplicates_restricted.json
+              body_digest: sha256.dbbd83938dc302a6878945be273c9199d9e469ba24bad86af51fcd1929656b77
+              occurrence_ids: [active_d1, active_d2]
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: exact
+      rows:
+        - {event_id: active-d, active: true, attendance: 60, category: public}
+        - {event_id: active-d, active: true, attendance: 60, category: public}
+      explain: {conditional_input: active, predicate_owner: duckdb}
+
+  - id: public_events_matching
+    relation: regional_events
+    operation: fallback_events
+    covers:
+      - predicate_regional_events_public_events_positive
+      - predicate_regional_events_public_events_unavailable_structure_local
+    inputs: []
+    predicate:
+      column: category
+      operator: eq
+      literal: {type: VARCHAR, value: "public"}
+    auth: bearer_present
+    proof:
+      base:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: public_matching_base.json
+              body_digest: sha256.cbed0296949b43ed7534c80ddc1da4399a8f54638e754bed4577f5bcaa5bbf39
+              occurrence_ids: [public_a, members_b]
+      restricted:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: category, encoded_value: public}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: public_matching_restricted.json
+              body_digest: sha256.49005f7255c3db0c48dd52e9ddfb4db4941aeaaa9be212af0d8ada052bc04898
+              occurrence_ids: [public_a]
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: superset
+      rows:
+        - {event_id: public-a, active: true, attendance: 70, category: public}
+      explain: {conditional_input: public_category, predicate_owner: duckdb}
+
+  - id: public_events_false_or_null
+    relation: regional_events
+    operation: fallback_events
+    covers:
+      - predicate_regional_events_public_events_non_true
+    inputs: []
+    predicate:
+      column: category
+      operator: eq
+      literal: {type: VARCHAR, value: "public"}
+    auth: bearer_present
+    proof:
+      base:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: public_false_or_null_base.json
+              body_digest: sha256.ae28a5c506fb5ea634906fce4e924db8381a2d0a2cff3f77e5ba73ddc36c9829
+              occurrence_ids: [members_c, unknown_d]
+      restricted:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: category, encoded_value: public}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: public_false_or_null_restricted.json
+              body_digest: sha256.ae28a5c506fb5ea634906fce4e924db8381a2d0a2cff3f77e5ba73ddc36c9829
+              occurrence_ids: [members_c, unknown_d]
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: superset
+      rows: []
+      explain: {conditional_input: public_category, predicate_owner: duckdb}
+
+  - id: public_events_duplicates
+    relation: regional_events
+    operation: fallback_events
+    covers:
+      - predicate_regional_events_public_events_duplicates
+    inputs: []
+    predicate:
+      column: category
+      operator: eq
+      literal: {type: VARCHAR, value: "public"}
+    auth: bearer_present
+    proof:
+      base:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: public_duplicates_base.json
+              body_digest: sha256.6e67d9b609e7baa69737d2cb2bd81f418cb476de0ef51d03153a0fc5daf493c3
+              occurrence_ids: [public_e1, public_e2]
+      restricted:
+        pages:
+          - request:
+              protocol: rest
+              method: GET
+              origin: {scheme: https, host: api.example.com, port: 8443}
+              path: /v1/events
+              query:
+                - {name: per_page, encoded_value: "50"}
+                - {name: page, encoded_value: "1"}
+                - {name: category, encoded_value: public}
+              authorization: bearer_capability
+            response:
+              status: 200
+              headers: []
+              body_file: public_duplicates_restricted.json
+              body_digest: sha256.6e67d9b609e7baa69737d2cb2bd81f418cb476de0ef51d03153a0fc5daf493c3
+              occurrence_ids: [public_e1, public_e2]
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: superset
+      rows:
+        - {event_id: public-e, active: true, attendance: 90, category: public}
+        - {event_id: public-e, active: true, attendance: 90, category: public}
+      explain: {conditional_input: public_category, predicate_owner: duckdb}

@@ -1,0 +1,144 @@
+# name: test/sql/cuac.test
+# description: static public SQL and secret contract for 0.1.0
+# group: [cuac]
+
+statement error
+SELECT * FROM cuac_scan(connector := 'github', relation := 'duckdb_login_search_page');
+----
+Catalog Error: Table Function with name cuac_scan does not exist!
+
+require cuac
+
+statement ok
+SET secret_directory = '__TEST_DIR__/cuac_credentials';
+
+query T
+SELECT extension_version
+FROM duckdb_extensions()
+WHERE extension_name = 'cuac';
+----
+0.1.0
+
+# The CUAC baseline excludes the generic dispatcher from the installed API
+# candidate froze. It must remain absent from the installed product; every
+# queryable relation is now a package-generated function (see
+# test/python/artifact_contract.py and
+# test/cpp/query/integration/package_product_contract_tests.cpp for their
+# DESCRIBE/EXPLAIN/PREPARE and bind-diagnostic coverage).
+statement error
+SELECT * FROM cuac_scan(connector := 'github', relation := 'duckdb_login_search_page');
+----
+Catalog Error: Table Function with name cuac_scan does not exist!
+
+query TT
+SELECT type, default_provider
+FROM duckdb_secret_types()
+WHERE type = 'cuac';
+----
+cuac	config
+
+statement ok
+CREATE TEMPORARY SECRET sql_contract (
+    TYPE cuac,
+    PROVIDER config,
+    TOKEN 'sql-contract-sentinel'
+);
+
+query TTTTT
+SELECT type, provider, storage, persistent,
+       secret_string LIKE '%token=redacted%'
+       AND secret_string NOT LIKE '%sql-contract-sentinel%'
+FROM duckdb_secrets()
+WHERE name = 'sql_contract';
+----
+cuac	config	memory	false	true
+
+statement ok
+DROP SECRET sql_contract;
+
+statement ok
+CREATE TEMPORARY SECRET environment_contract (
+    TYPE cuac,
+    PROVIDER environment,
+    VARIABLE 'CUAC_RFC_TRIAL'
+);
+
+query TTTTT
+SELECT type, provider, storage, persistent,
+       secret_string LIKE '%variable=redacted%'
+       AND secret_string NOT LIKE '%CUAC_RFC_TRIAL%'
+FROM duckdb_secrets()
+WHERE name = 'environment_contract';
+----
+cuac	environment	memory	false	true
+
+statement ok
+DROP TEMPORARY SECRET environment_contract;
+
+statement ok
+CREATE PERSISTENT SECRET persistent_contract IN cuac (
+    TYPE cuac,
+    PROVIDER config,
+    TOKEN 'persistent-contract-sentinel'
+);
+
+query TTTTT
+SELECT type, provider, storage, persistent,
+       secret_string LIKE '%token=redacted%'
+       AND secret_string NOT LIKE '%persistent-contract-sentinel%'
+FROM duckdb_secrets()
+WHERE name = 'persistent_contract';
+----
+cuac	config	cuac	true	true
+
+statement ok
+DROP PERSISTENT SECRET persistent_contract;
+
+statement error
+CREATE SECRET implicit_contract (
+    TYPE cuac,
+    PROVIDER config,
+    TOKEN 'rejected'
+);
+----
+Invalid Input Error: [cuac][authentication] use explicit TEMPORARY memory storage or PERSISTENT IN cuac storage
+
+# RFC 0027: three cache settings are registered with correct defaults
+query TT
+SELECT name, value FROM duckdb_settings()
+WHERE name = 'cuac_cache_mode';
+----
+cuac_cache_mode	off
+
+query TT
+SELECT name, value FROM duckdb_settings()
+WHERE name = 'cuac_cache_fresh_milliseconds';
+----
+cuac_cache_fresh_milliseconds	0
+
+query TT
+SELECT name, value FROM duckdb_settings()
+WHERE name = 'cuac_cache_stale_milliseconds';
+----
+cuac_cache_stale_milliseconds	0
+
+statement ok
+SET cuac_cache_mode = 'fresh'
+
+statement ok
+SET cuac_cache_fresh_milliseconds = 60000
+
+statement ok
+SET cuac_cache_mode = 'stale_if_error'
+
+statement ok
+SET cuac_cache_stale_milliseconds = 300000
+
+statement ok
+SET cuac_cache_mode = 'off'
+
+statement ok
+SET cuac_cache_fresh_milliseconds = 0
+
+statement ok
+SET cuac_cache_stale_milliseconds = 0
