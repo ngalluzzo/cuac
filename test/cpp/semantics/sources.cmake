@@ -1,0 +1,47 @@
+# Relational Semantics owns the ScanPlan fixture service consumed by focused
+# Runtime tests. Consumers link this boundary instead of compiling provider
+# internals into their targets.
+set(RELATIONAL_PLAN_TEST_SERVICE_SOURCES
+    test/cpp/semantics/support/scan_plan_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_operation_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_auth_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_response_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_network_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_feature_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_resource_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_repository_test_fixtures.cpp
+    test/cpp/semantics/support/scan_plan_fixture_consumer_probe.cpp)
+set(RELATIONAL_PROTOCOL_REPLACEMENT_TEST_SERVICE_SOURCES
+    test/cpp/semantics/support/protocol_operation_replacement_test_access.cpp)
+set(RELATIONAL_PLAN_PAGINATION_TEST_SERVICE_SOURCES
+    test/cpp/semantics/support/scan_plan_pagination_test_fixtures.cpp)
+set(RELATIONAL_MATERIALIZED_PLAN_TEST_SERVICE_SOURCES
+    test/cpp/semantics/support/permanent_rest_scan_plan_test_fixtures.cpp
+    test/cpp/semantics/support/runtime_rest_predicate_plan_test_fixtures.cpp)
+set(RELATIONAL_PACKAGE_GRAPHQL_PLAN_TEST_SERVICE_SOURCES
+    test/cpp/semantics/support/repository_graphql_scan_plan_test_fixtures.cpp)
+set(RELATIONAL_INPUT_RESOLUTION_OBSERVATION_SERVICE_SOURCES
+    test/cpp/semantics/service/input_resolution_observation_values.cpp
+    test/cpp/semantics/service/input_resolution_observation_service.cpp
+    test/cpp/semantics/service/highest_rank_tie_observation_service.cpp)
+set(RELATIONAL_PREDICATE_PLANNER_TEST_SOURCES
+    test/cpp/semantics/planner/input_resolution_law_tests.cpp
+    test/cpp/semantics/planner/operation_selection_law_tests.cpp
+    test/cpp/semantics/predicate/relational_predicate_tests.cpp
+    test/cpp/semantics/predicate/predicate_composition_law_tests.cpp
+    test/cpp/semantics/plan/permanent_rest_scan_plan_fixture_tests.cpp
+    test/cpp/semantics/planner/package_bound_scan_planner_tests.cpp)
+set(RELATIONAL_PLAN_TEST_CONTRACT_SOURCES
+    test/cpp/semantics/support/scan_plan_test_fixture_test_support.cpp
+    test/cpp/semantics/plan/scan_plan_operation_test_fixture_tests.cpp
+    test/cpp/semantics/plan/scan_plan_auth_test_fixture_tests.cpp
+    test/cpp/semantics/plan/scan_plan_response_test_fixture_tests.cpp
+    test/cpp/semantics/plan/scan_plan_network_test_fixture_tests.cpp
+    test/cpp/semantics/plan/scan_plan_feature_test_fixture_tests.cpp
+    test/cpp/semantics/plan/scan_plan_resource_test_fixture_tests.cpp
+    test/cpp/semantics/plan/scan_plan_rest_query_path_fixture_tests.cpp)
+set(GRAPHQL_SEMANTICS_TEST_SOURCES
+    test/cpp/semantics/plan/graphql_semantics_tests.cpp
+    test/cpp/semantics/plan/graphql_cursor_resource_plan_tests.cpp
+    test/cpp/semantics/plan/graphql_nullability_plan_tests.cpp
+    test/cpp/semantics/planner/package_graphql_planning_tests.cpp)
