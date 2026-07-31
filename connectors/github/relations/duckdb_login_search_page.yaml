@@ -1,0 +1,61 @@
+api_version: cuac/v1
+kind: relation
+id: duckdb_login_search_page
+schema: static
+
+columns:
+  - id: id
+    type: BIGINT
+    nullable: false
+    extract: $.id
+  - id: login
+    type: VARCHAR
+    nullable: false
+    extract: $.login
+  - id: site_admin
+    type: BOOLEAN
+    nullable: false
+    extract: $.site_admin
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 65536
+  max_response_bytes_per_scan: 65536
+  max_records_per_page: 3
+  max_records_per_scan: 3
+  max_extracted_string_bytes: 256
+
+operations:
+  - id: github_search_duckdb_login_page
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: api.github.com
+        port: 443
+      path: /search/users
+      query:
+        - name: q
+          literal: "duckdb in:login"
+          encoding: form_urlencoded
+        - name: per_page
+          literal: "3"
+          encoding: form_urlencoded
+      headers:
+        - name: Accept
+          value: application/vnd.github+json
+        - name: User-Agent
+          value: cuac
+        - name: X-GitHub-Api-Version
+          value: "2022-11-28"
+    response:
+      source: terminal_collection
+      records: $.items[*]
+    pagination:
+      strategy: disabled

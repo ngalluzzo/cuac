@@ -1,0 +1,52 @@
+api_version: cuac/v1
+kind: relation
+id: pilot_episode
+schema: static
+
+columns:
+  - id: id
+    type: BIGINT
+    nullable: false
+    extract: $.id
+  - id: name
+    type: VARCHAR
+    nullable: false
+    extract: $.name
+  - id: air_date
+    type: VARCHAR
+    nullable: false
+    extract: $.air_date
+  - id: episode_code
+    type: VARCHAR
+    nullable: false
+    extract: $.episode
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 8192
+  max_response_bytes_per_scan: 8192
+  max_records_per_page: 1
+  max_records_per_scan: 1
+  max_extracted_string_bytes: 256
+
+operations:
+  - id: fetch_pilot_episode
+    fallback: true
+    cardinality: one
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: rickandmortyapi.com
+        port: 443
+      path: /api/episode/1
+      query: []
+      headers: []
+    response:
+      source: root_object
+    pagination:
+      strategy: disabled

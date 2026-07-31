@@ -1,0 +1,284 @@
+api_version: cuac/v1
+kind: fixture_index
+package_digest: sha256.b04c7488843bc003672445ea10f74461ba915693a51455f899e08bed01cdc301
+
+cases:
+  - id: rickandmorty_pilot_episode_base
+    relation: pilot_episode
+    operation: fetch_pilot_episode
+    covers:
+      - operation_pilot_episode_fetch_pilot_episode_success
+      - auth_pilot_episode_fetch_pilot_episode_anonymous
+      - column_pilot_episode_id_success
+      - column_pilot_episode_id_type_mismatch_rejected
+      - column_pilot_episode_id_missing_rejected
+      - column_pilot_episode_id_null_rejected
+      - column_pilot_episode_id_minimum
+      - column_pilot_episode_id_maximum
+      - column_pilot_episode_id_underflow_rejected
+      - column_pilot_episode_id_overflow_rejected
+      - column_pilot_episode_id_fraction_rejected
+      - column_pilot_episode_name_success
+      - column_pilot_episode_name_type_mismatch_rejected
+      - column_pilot_episode_name_missing_rejected
+      - column_pilot_episode_name_null_rejected
+      - column_pilot_episode_name_string_budget_boundary
+      - column_pilot_episode_name_string_budget_one_over_rejected
+      - column_pilot_episode_air_date_success
+      - column_pilot_episode_air_date_type_mismatch_rejected
+      - column_pilot_episode_air_date_missing_rejected
+      - column_pilot_episode_air_date_null_rejected
+      - column_pilot_episode_air_date_string_budget_boundary
+      - column_pilot_episode_air_date_string_budget_one_over_rejected
+      - column_pilot_episode_episode_code_success
+      - column_pilot_episode_episode_code_type_mismatch_rejected
+      - column_pilot_episode_episode_code_missing_rejected
+      - column_pilot_episode_episode_code_null_rejected
+      - column_pilot_episode_episode_code_string_budget_boundary
+      - column_pilot_episode_episode_code_string_budget_one_over_rejected
+      - pagination_pilot_episode_fetch_pilot_episode_single_page_termination
+      - resource_pilot_episode_max_response_bytes_per_page_boundary
+      - resource_pilot_episode_max_response_bytes_per_page_one_over_rejected
+      - resource_pilot_episode_max_response_bytes_per_scan_boundary
+      - resource_pilot_episode_max_response_bytes_per_scan_one_over_rejected
+      - resource_pilot_episode_max_records_per_page_boundary
+      - resource_pilot_episode_max_records_per_page_one_over_rejected
+      - resource_pilot_episode_max_records_per_scan_boundary
+      - resource_pilot_episode_max_records_per_scan_one_over_rejected
+      - resource_pilot_episode_max_extracted_string_bytes_boundary
+      - resource_pilot_episode_max_extracted_string_bytes_one_over_rejected
+      - compiler_cancellation_source_enumeration
+      - compiler_cancellation_source_read
+      - compiler_cancellation_yaml_parse
+      - compiler_cancellation_reference_validation
+      - compiler_cancellation_generation_validation
+      - compiler_cancellation_publication_wait
+      - runtime_cancellation_pilot_episode_fetch_pilot_episode_before_request
+      - runtime_cancellation_pilot_episode_fetch_pilot_episode_transport
+      - runtime_cancellation_pilot_episode_fetch_pilot_episode_decode
+      - runtime_cancellation_pilot_episode_fetch_pilot_episode_page_boundary
+      - runtime_cancellation_pilot_episode_fetch_pilot_episode_stream_close
+      - source_identity_copied_root
+      - source_identity_byte_change
+      - source_identity_symlink_rejected
+      - source_identity_hardlink_rejected
+      - source_identity_entry_change_rejected
+      - source_identity_unlisted_relation_rejected
+      - source_identity_case_collision_rejected
+      - reload_exact_no_op
+      - reload_compatible_patch
+      - reload_compatible_minor
+      - reload_version_reuse_rejected
+      - reload_downgrade_rejected
+      - reload_incompatible_rejected
+      - diagnostic_cuac_unsupported_spec
+      - diagnostic_cuac_unsupported_dialect
+      - diagnostic_cuac_malformed_yaml
+      - diagnostic_cuac_unknown_field
+      - diagnostic_cuac_missing_field
+      - diagnostic_cuac_duplicate_id
+      - diagnostic_cuac_invalid_reference
+      - diagnostic_cuac_invalid_identifier
+      - diagnostic_cuac_invalid_type
+      - diagnostic_cuac_invalid_extractor
+      - diagnostic_cuac_reserved_input
+      - diagnostic_cuac_unsupported_declaration
+      - diagnostic_cuac_invalid_selector
+      - diagnostic_cuac_invalid_predicate
+      - diagnostic_cuac_invalid_graphql_profile
+      - diagnostic_cuac_policy_widening
+      - diagnostic_cuac_resource_exhausted
+      - diagnostic_cuac_package_identity
+      - diagnostic_cuac_fixture_mismatch
+      - diagnostic_cuac_incompatible_reload
+      - diagnostic_cuac_publication_conflict
+    inputs: []
+    auth: anonymous
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: rickandmortyapi.com, port: 443}
+            path: /api/episode/1
+            query: []
+            authorization: none
+          response:
+            status: 200
+            headers: []
+            body_file: pilot_episode.json
+            body_digest: sha256.58b639f0cf9494ddee4f3288d664d4ffc985275f383fb1312d3b0cb5912ee6c0
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {id: 1, name: Pilot, air_date: "December 2, 2013", episode_code: S01E01}
+      explain: {protocol: rest, pagination: disabled, auth: anonymous}
+
+  - id: rickandmorty_character_search_status_alive
+    relation: character_search
+    operation: search_characters
+    covers:
+      - operation_character_search_search_characters_success
+      - auth_character_search_search_characters_anonymous
+      - column_character_search_id_success
+      - column_character_search_id_type_mismatch_rejected
+      - column_character_search_id_missing_rejected
+      - column_character_search_id_null_rejected
+      - column_character_search_id_minimum
+      - column_character_search_id_maximum
+      - column_character_search_id_underflow_rejected
+      - column_character_search_id_overflow_rejected
+      - column_character_search_id_fraction_rejected
+      - column_character_search_name_success
+      - column_character_search_name_type_mismatch_rejected
+      - column_character_search_name_missing_rejected
+      - column_character_search_name_null_rejected
+      - column_character_search_name_string_budget_boundary
+      - column_character_search_name_string_budget_one_over_rejected
+      - column_character_search_status_success
+      - column_character_search_status_type_mismatch_rejected
+      - column_character_search_status_missing_rejected
+      - column_character_search_status_null_rejected
+      - column_character_search_status_string_budget_boundary
+      - column_character_search_status_string_budget_one_over_rejected
+      - column_character_search_species_success
+      - column_character_search_species_type_mismatch_rejected
+      - column_character_search_species_missing_rejected
+      - column_character_search_species_null_rejected
+      - column_character_search_species_string_budget_boundary
+      - column_character_search_species_string_budget_one_over_rejected
+      - column_character_search_origin_name_success
+      - column_character_search_origin_name_type_mismatch_rejected
+      - column_character_search_origin_name_missing_rejected
+      - column_character_search_origin_name_null_rejected
+      - column_character_search_origin_name_string_budget_boundary
+      - column_character_search_origin_name_string_budget_one_over_rejected
+      - column_character_search_episode_success
+      - column_character_search_episode_type_mismatch_rejected
+      - column_character_search_episode_missing_rejected
+      - column_character_search_episode_null_rejected
+      - array_character_search_search_characters_episode_success
+      - array_character_search_search_characters_episode_empty
+      - array_character_search_search_characters_episode_singleton
+      - array_character_search_search_characters_episode_ordered_duplicates
+      - array_character_search_search_characters_episode_outer_type_rejected
+      - array_character_search_search_characters_episode_element_type_rejected
+      - array_character_search_search_characters_episode_nested_rejected
+      - array_character_search_search_characters_episode_late_invalid_element_rejected
+      - array_character_search_search_characters_episode_decode_cancellation
+      - array_character_search_search_characters_episode_query_transfer_cancellation
+      - array_character_search_search_characters_episode_null_element_rejected
+      - array_character_search_search_characters_episode_string_budget_boundary
+      - array_character_search_search_characters_episode_string_budget_one_over_rejected
+      - pagination_character_search_search_characters_first_page
+      - pagination_character_search_search_characters_multi_page
+      - pagination_character_search_search_characters_termination
+      - pagination_character_search_search_characters_encoded_target
+      - pagination_character_search_search_characters_malformed_target_rejected
+      - pagination_character_search_search_characters_replayed_target_rejected
+      - pagination_character_search_search_characters_max_pages_exhausted
+      - pagination_character_search_search_characters_next_field_wrong_type_rejected
+      - resource_character_search_max_response_bytes_per_page_boundary
+      - resource_character_search_max_response_bytes_per_page_one_over_rejected
+      - resource_character_search_max_response_bytes_per_scan_boundary
+      - resource_character_search_max_response_bytes_per_scan_one_over_rejected
+      - resource_character_search_max_records_per_page_boundary
+      - resource_character_search_max_records_per_page_one_over_rejected
+      - resource_character_search_max_records_per_scan_boundary
+      - resource_character_search_max_records_per_scan_one_over_rejected
+      - resource_character_search_max_extracted_string_bytes_boundary
+      - resource_character_search_max_extracted_string_bytes_one_over_rejected
+      - runtime_cancellation_character_search_search_characters_before_request
+      - runtime_cancellation_character_search_search_characters_transport
+      - runtime_cancellation_character_search_search_characters_decode
+      - runtime_cancellation_character_search_search_characters_page_boundary
+      - runtime_cancellation_character_search_search_characters_stream_close
+      - input_character_search_status_bound_value
+    inputs:
+      - {id: status, value: {kind: value, value: Alive}}
+    auth: anonymous
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: rickandmortyapi.com, port: 443}
+            path: /api/character
+            query:
+              - {name: status, encoded_value: Alive}
+              - {name: page, encoded_value: "1"}
+            authorization: none
+          response:
+            status: 200
+            headers: []
+            body_file: character_search_status_alive.json
+            body_digest: sha256.d4d2d304bdade9a8a9a50b347e14707f4ff18ffeaedddf6253341c35b3f7a236
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {id: 1, name: Rick Sanchez, status: Alive, species: Human, origin_name: "Earth (C-137)", episode: ["https://rickandmortyapi.com/api/episode/1"]}
+        - {id: 3, name: Summer Smith, status: Alive, species: Human, origin_name: "Earth (Replacement Dimension)", episode: ["https://rickandmortyapi.com/api/episode/6"]}
+      explain: {protocol: rest, pagination: response_next, auth: anonymous}
+
+  - id: rickandmorty_character_search_status_unbound
+    relation: character_search
+    operation: search_characters
+    covers:
+      - input_character_search_status_unbound
+    inputs: []
+    auth: anonymous
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: rickandmortyapi.com, port: 443}
+            path: /api/character
+            query:
+              - {name: page, encoded_value: "1"}
+            authorization: none
+          response:
+            status: 200
+            headers: []
+            body_file: character_search_unfiltered.json
+            body_digest: sha256.17c089e0fe987bf78e8ff6e76f559b5b4e4462ec0109307a903207ccb1df8c93
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {id: 1, name: Rick Sanchez, status: Alive, species: Human, origin_name: "Earth (C-137)", episode: ["https://rickandmortyapi.com/api/episode/1"]}
+        - {id: 2, name: Morty Smith, status: unknown, species: Human, origin_name: unknown, episode: ["https://rickandmortyapi.com/api/episode/1"]}
+      explain: {protocol: rest, pagination: response_next, auth: anonymous}
+
+  - id: rickandmorty_character_search_status_bound_null
+    relation: character_search
+    operation: search_characters
+    covers:
+      - input_character_search_status_bound_null_omitted
+    inputs:
+      - {id: status, value: {kind: null}}
+    auth: anonymous
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: rickandmortyapi.com, port: 443}
+            path: /api/character
+            query:
+              - {name: page, encoded_value: "1"}
+            authorization: none
+          response:
+            status: 200
+            headers: []
+            body_file: character_search_unfiltered_null.json
+            body_digest: sha256.17c089e0fe987bf78e8ff6e76f559b5b4e4462ec0109307a903207ccb1df8c93
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {id: 1, name: Rick Sanchez, status: Alive, species: Human, origin_name: "Earth (C-137)", episode: ["https://rickandmortyapi.com/api/episode/1"]}
+        - {id: 2, name: Morty Smith, status: unknown, species: Human, origin_name: unknown, episode: ["https://rickandmortyapi.com/api/episode/1"]}
+      explain: {protocol: rest, pagination: response_next, auth: anonymous}

@@ -1,0 +1,84 @@
+api_version: cuac/v1
+kind: relation
+id: character_search
+schema: static
+
+columns:
+  - id: id
+    type: BIGINT
+    nullable: false
+    extract: $.id
+  - id: name
+    type: VARCHAR
+    nullable: false
+    extract: $.name
+  - id: status
+    type: VARCHAR
+    nullable: false
+    extract: $.status
+  - id: species
+    type: VARCHAR
+    nullable: false
+    extract: $.species
+  - id: origin_name
+    type: VARCHAR
+    nullable: false
+    extract: $.origin.name
+  - id: episode
+    type: ARRAY
+    element_type: VARCHAR
+    element_nullable: false
+    nullable: false
+    extract: $.episode
+
+inputs:
+  - id: status
+    type: VARCHAR
+    nullable: true
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 65536
+  max_response_bytes_per_scan: 2097152
+  max_records_per_page: 20
+  max_records_per_scan: 640
+  max_extracted_string_bytes: 256
+
+operations:
+  - id: search_characters
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: rickandmortyapi.com
+        port: 443
+      path: /api/character
+      query:
+        - name: status
+          input: status
+          encoding: form_urlencoded
+          omit_when_unbound: true
+          omit_when_null: true
+        - name: page
+          literal: "1"
+          encoding: form_urlencoded
+      headers: []
+    response:
+      source: terminal_collection
+      records: $.results[*]
+    pagination:
+      strategy: response_next
+      dependency: sequential
+      consistency: mutable
+      target_scope: exact_operation_origin_and_path
+      next_url_path: $.info.next
+      page_number_parameter: page
+      first_page: 1
+      page_increment: 1
+      max_pages_per_scan: 32

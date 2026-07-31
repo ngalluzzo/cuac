@@ -1,0 +1,120 @@
+api_version: cuac/v1
+kind: relation
+id: viewer_repository_metrics
+schema: static
+
+columns:
+  - id: id
+    type: VARCHAR
+    nullable: false
+    extract: $.id
+  - id: full_name
+    type: VARCHAR
+    nullable: false
+    extract: $.nameWithOwner
+  - id: owner_login
+    type: VARCHAR
+    nullable: false
+    extract: $.owner.login
+  - id: stars
+    type: BIGINT
+    nullable: false
+    extract: $.stargazerCount
+  - id: primary_language
+    type: VARCHAR
+    nullable: true
+    extract: $.primaryLanguage.name
+  - id: private
+    type: BOOLEAN
+    nullable: false
+    extract: $.isPrivate
+  - id: archived
+    type: BOOLEAN
+    nullable: false
+    extract: $.isArchived
+  - id: updated_at
+    type: VARCHAR
+    nullable: false
+    extract: $.updatedAt
+
+auth:
+  mode: credential
+  credential: github_token
+
+resources:
+  max_response_bytes_per_page: 8388608
+  max_response_bytes_per_scan: 67108864
+  max_records_per_page: 100
+  max_records_per_scan: 3200
+  max_extracted_string_bytes: 512
+
+operations:
+  - id: github_viewer_repository_metrics
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: graphql
+      endpoint:
+        origin:
+          scheme: https
+          host: api.github.com
+          port: 443
+        path: /graphql
+      headers:
+        - name: Accept
+          value: application/vnd.github+json
+        - name: User-Agent
+          value: cuac
+        - name: X-GitHub-Api-Version
+          value: "2022-11-28"
+      query:
+        operation_name: CuacViewerRepositoryMetrics
+        root: [viewer, repositories]
+        fixed_arguments:
+          - name: affiliations
+            value:
+              list:
+                - {enum: OWNER}
+                - {enum: COLLABORATOR}
+                - {enum: ORGANIZATION_MEMBER}
+          - name: ownerAffiliations
+            value:
+              list:
+                - {enum: OWNER}
+                - {enum: COLLABORATOR}
+                - {enum: ORGANIZATION_MEMBER}
+          - name: orderBy
+            value:
+              object:
+                - name: field
+                  value: {enum: UPDATED_AT}
+                - name: direction
+                  value: {enum: DESC}
+        selection:
+          - {column: id, field_path: [id]}
+          - {column: full_name, field_path: [nameWithOwner]}
+          - {column: owner_login, field_path: [owner, login]}
+          - {column: stars, field_path: [stargazerCount]}
+          - {column: primary_language, field_path: [primaryLanguage, name]}
+          - {column: private, field_path: [isPrivate]}
+          - {column: archived, field_path: [isArchived]}
+          - {column: updated_at, field_path: [updatedAt]}
+      pagination:
+        strategy: relay_forward
+        dependency: sequential
+        consistency: mutable
+        page_size_argument: first
+        page_size_variable: pageSize
+        page_size: 100
+        cursor_argument: after
+        cursor_variable: cursor
+        page_info_field: pageInfo
+        has_next_page_field: hasNextPage
+        end_cursor_field: endCursor
+        max_pages_per_scan: 32
+        max_concurrent_pages: 1
+      partial_data: fail_on_any_error
+      max_document_bytes: 4096
+      max_serialized_body_bytes_per_request: 8192
+      max_serialized_body_bytes_per_scan: 262144
