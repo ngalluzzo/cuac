@@ -1,0 +1,102 @@
+api_version: cuac/v1
+kind: relation
+id: authenticated_repositories
+schema: static
+
+columns:
+  - id: id
+    type: BIGINT
+    nullable: false
+    extract: $.id
+  - id: full_name
+    type: VARCHAR
+    nullable: false
+    extract: $.full_name
+  - id: private
+    type: BOOLEAN
+    nullable: false
+    extract: $.private
+  - id: fork
+    type: BOOLEAN
+    nullable: false
+    extract: $.fork
+  - id: archived
+    type: BOOLEAN
+    nullable: false
+    extract: $.archived
+  - id: visibility
+    type: VARCHAR
+    nullable: false
+    extract: $.visibility
+
+auth:
+  mode: credential
+  credential: github_token
+
+resources:
+  max_response_bytes_per_page: 8388608
+  max_response_bytes_per_scan: 67108864
+  max_records_per_page: 100
+  max_records_per_scan: 3200
+  max_extracted_string_bytes: 512
+
+operations:
+  - id: github_authenticated_repositories
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: api.github.com
+        port: 443
+      path: /user/repos
+      query:
+        - name: per_page
+          literal: "100"
+          encoding: form_urlencoded
+        - name: page
+          literal: "1"
+          encoding: form_urlencoded
+        - name: visibility
+          conditional_input: visibility
+          encoding: form_urlencoded
+          omit_when_unbound: true
+      headers:
+        - name: Accept
+          value: application/vnd.github+json
+        - name: User-Agent
+          value: cuac
+        - name: X-GitHub-Api-Version
+          value: "2022-11-28"
+    response:
+      source: root_array
+    pagination:
+      strategy: link_next
+      dependency: sequential
+      consistency: mutable
+      target_scope: exact_operation_origin_and_path
+      page_size_parameter: per_page
+      page_size: 100
+      page_number_parameter: page
+      first_page: 1
+      page_increment: 1
+      max_pages_per_scan: 32
+
+predicates:
+  - id: private_visibility
+    column: visibility
+    operator: eq
+    literal:
+      type: VARCHAR
+      value: private
+    conditional_input: visibility
+    operations:
+      - github_authenticated_repositories
+    accuracy: superset
+    occurrence_fixtures:
+      matching: private_visibility_matching
+      false_or_null: private_visibility_false_or_null
+      duplicates: private_visibility_duplicates
