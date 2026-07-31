@@ -1,0 +1,18 @@
+{
+  "name": "CUAC development",
+  "build": {
+    "context": "..",
+    "dockerfile": "../containers/development/Dockerfile"
+  },
+  "containerEnv": {
+    "CUAC_DEV_CONTAINER": "1",
+    "CUAC_DEV_ROOT": "/workspaces/cuac/.build/container"
+  },
+  "postCreateCommand": "python3 -I -B scripts/verify-development-container.py environment containers/development/toolchain.json",
+  "remoteUser": "cuac",
+  "runArgs": [
+    "--init"
+  ],
+  "updateRemoteUserUID": true,
+  "workspaceFolder": "/workspaces/cuac"
+}

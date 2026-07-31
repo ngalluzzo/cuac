@@ -1,0 +1,3 @@
+clang-format==17.0.6 \
+    --hash=sha256:2a1323ca5322e0dead521223155fe2ae1ba81d50abab8e20aaac28f6a94f23b9 \
+    --hash=sha256:5cda40badfb01818ece739509d9cde678fc02660180cc1a55156782ef203704d

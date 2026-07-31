@@ -1,0 +1,28 @@
+{
+  "architectures": {
+    "aarch64": "linux_arm64",
+    "x86_64": "linux_amd64"
+  },
+  "base_image": "debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
+  "debian_snapshot": "20260701T000000Z",
+  "libcurl": {
+    "cmake_target": "CURL::libcurl",
+    "soname": "libcurl.so.4",
+    "ssl_backend": "OpenSSL/3.0.20",
+    "threadsafe_feature_mask": 1073741824,
+    "version": "7.88.1",
+    "version_num": "0x075801"
+  },
+  "operating_system": {
+    "id": "debian",
+    "version_id": "12"
+  },
+  "schema_version": 1,
+  "tools": {
+    "clang_format": "17.0.6",
+    "cmake": "3.25.1",
+    "compiler": "12.",
+    "ninja": "1.11.1",
+    "python": "3.11"
+  }
+}

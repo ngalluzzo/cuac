@@ -1,0 +1,9 @@
+.git
+.build
+.cache
+build
+target
+__pycache__
+*.pyc
+*.duckdb
+*.duckdb.wal
