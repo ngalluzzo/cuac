@@ -1,0 +1,57 @@
+# Remote Runtime owns these execution services. The narrower groups support
+# focused consumers without importing the complete transport graph.
+set(REMOTE_RUNTIME_INTERFACE_SOURCES
+    src/runtime/api/authorization.cpp
+    src/runtime/api/credential_provider.cpp
+    src/runtime/api/execution_error.cpp)
+set(REMOTE_RUNTIME_GENERATION_SOURCES
+    src/runtime/generation/generation_snapshot.cpp
+    src/runtime/generation/generation_publication.cpp
+    src/runtime/generation/generation_registry.cpp)
+set(REMOTE_RUNTIME_ADMISSION_SOURCES
+    src/runtime/admission/admission_controller.cpp)
+set(REMOTE_RUNTIME_CACHE_SOURCES
+    src/runtime/cache/cached_scan_stream.cpp
+    src/runtime/cache/complete_scan_result_cache.cpp)
+set(REMOTE_RUNTIME_RESILIENCE_SOURCES
+    src/runtime/resilience/rate_limit_clock.cpp
+    src/runtime/resilience/rate_limit_guidance.cpp
+    src/runtime/resilience/rate_limit_coordinator.cpp)
+set(REMOTE_RUNTIME_PAGINATION_SOURCES
+    src/runtime/pagination/uri_reference.cpp
+    src/runtime/pagination/link_header.cpp
+    src/runtime/pagination/link_pagination.cpp
+    src/runtime/policy/request_validation.cpp
+    src/runtime/policy/scan_resource_accounting.cpp)
+set(REMOTE_RUNTIME_EXECUTOR_SOURCES
+    ${REMOTE_RUNTIME_PAGINATION_SOURCES}
+    src/runtime/authentication/api_key_authenticator.cpp
+    src/runtime/authentication/bearer_authenticator.cpp
+    src/runtime/decoding/graphql_response_decoder.cpp
+    src/runtime/decoding/json_decoder.cpp
+    src/runtime/decoding/strict_json_reader.cpp
+    src/runtime/executor/graphql_paginated_scan.cpp
+    src/runtime/admission/graphql_plan_admission.cpp
+    src/runtime/admission/graphql_recipe_admission.cpp
+    src/runtime/admission/http_execution_profile.cpp
+    src/runtime/admission/http_plan_admission.cpp
+    src/runtime/executor/http_paginated_scan.cpp
+    src/runtime/executor/http_scan_executor.cpp
+    src/runtime/admission/rest_authority_admission.cpp
+    src/runtime/admission/rest_pagination_admission.cpp
+    src/runtime/admission/rest_relational_admission.cpp
+    src/runtime/executor/rest_request_materialization.cpp
+    src/runtime/executor/rest_request_profile.cpp
+    src/runtime/pagination/graphql_cursor_pagination.cpp
+    src/runtime/transport/graphql_request_body.cpp)
+set(REMOTE_RUNTIME_SOURCES
+    ${REMOTE_RUNTIME_ADMISSION_SOURCES}
+    ${REMOTE_RUNTIME_CACHE_SOURCES}
+    ${REMOTE_RUNTIME_RESILIENCE_SOURCES}
+    ${REMOTE_RUNTIME_EXECUTOR_SOURCES}
+    src/runtime/policy/network_policy.cpp
+    src/runtime/transport/http_chunk_decoder.cpp
+    src/runtime/transport/curl_response_accumulator.cpp
+    src/runtime/transport/curl_transfer.cpp
+    src/runtime/transport/curl_http_transport.cpp
+    src/runtime/transport/http_runtime.cpp)
