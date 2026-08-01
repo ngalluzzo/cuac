@@ -4,7 +4,9 @@
 #include "cuac/runtime/execution.hpp"
 #include "cuac/internal/runtime/cache/complete_scan_result_cache.hpp"
 
+#include <chrono>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <string>
 #include <vector>
@@ -73,10 +75,15 @@ private:
 	bool ServeAccumulatingMiss(ExecutionControl &control, TypedBatch &batch);
 	bool ServeBarrierBuffering(ExecutionControl &control, TypedBatch &batch);
 	bool ServeBarrierFresh(TypedBatch &batch);
-	bool ServeBarrierDrainEmit(TypedBatch &batch);
+	bool ServeBarrierDrainEmit(ExecutionControl &control, TypedBatch &batch);
 	bool ServeBarrierDrainedUncached(ExecutionControl &control, TypedBatch &batch);
 	bool ServeStale(TypedBatch &batch);
 	void PublishCandidate();
+	void CaptureUnderlyingDiagnostics() noexcept;
+	void StartProfile() noexcept;
+	void FinishProfile(ScanOutcome outcome, bool has_failure = false,
+	                   FailureClass failure_class = FailureClass::INTERNAL) noexcept;
+	std::uint64_t ProfileElapsedMilliseconds() const noexcept;
 	static bool IsEligibleStaleFailure(const ExecutionError &error);
 
 	std::unique_ptr<BatchStream> underlying;
@@ -88,14 +95,30 @@ private:
 
 	std::vector<TypedBatch> cached_batches;
 	std::vector<TypedBatch> stale_batches;
+	TypedBatch pending_uncached_batch;
+	bool has_pending_uncached_batch;
 	std::size_t replay_index;
 	std::uint64_t hit_age_milliseconds;
+	std::uint64_t hit_stored_at_milliseconds;
 	std::uint64_t delivery_age_milliseconds;
 	std::uint64_t candidate_size_bytes;
 	CacheStatus diagnostics_status;
 	bool diagnostics_refresh_attempted;
 	FailureClass stale_cause_failure_class;
 	std::uint64_t max_candidate_bytes;
+	std::uint64_t rows_returned;
+	ScanOutcome profile_outcome;
+	bool profile_started;
+	bool profile_finished;
+	std::chrono::steady_clock::time_point profile_started_at;
+	std::chrono::steady_clock::time_point profile_finished_at;
+	bool has_terminal_failure;
+	FailureClass terminal_failure_class;
+	bool cancelled;
+	bool closed;
+	std::exception_ptr terminal_exception;
+	bool has_captured_underlying_snapshot;
+	ExecutionSnapshot captured_underlying_snapshot;
 };
 
 } // namespace internal

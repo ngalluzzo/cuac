@@ -5,6 +5,7 @@
 #include "support/require.hpp"
 
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -38,38 +39,75 @@ public:
 	}
 };
 
+class CancelledControl : public cuac::ExecutionControl {
+public:
+	bool IsCancellationRequested() const noexcept override {
+		return true;
+	}
+};
+
 class FakeStream : public cuac::BatchStream {
 public:
-	FakeStream(std::vector<cuac::TypedBatch> batches_p, bool fail_on_last = false)
-	    : batches(std::move(batches_p)), index(0), fail_on_last(fail_on_last) {
+	FakeStream(std::vector<cuac::TypedBatch> batches_p, bool fail_on_last = false,
+	           std::function<void()> before_failure_p = std::function<void()>())
+	    : batches(std::move(batches_p)), index(0), fail_on_last(fail_on_last),
+	      before_failure(std::move(before_failure_p)), profile() {
 	}
 
 	bool Next(cuac::ExecutionControl &, cuac::TypedBatch &batch) override {
+		if (profile.outcome == cuac::ScanOutcome::NOT_STARTED) {
+			profile.outcome = cuac::ScanOutcome::RUNNING;
+			profile.remote_requests = 1;
+			profile.aggregate_attempts = 1;
+			profile.current_step = 1;
+			profile.response_header_bytes = 17;
+			profile.wire_response_bytes = 31;
+			profile.decompressed_response_bytes = 47;
+			profile.peak_decoded_memory_bytes = 59;
+		}
 		if (index >= batches.size()) {
 			if (fail_on_last) {
+				if (before_failure) {
+					before_failure();
+				}
+				profile.outcome = cuac::ScanOutcome::FAILED;
+				profile.has_terminal_failure = true;
+				profile.terminal_failure_class = cuac::FailureClass::TRANSPORT;
 				throw cuac::ExecutionError(cuac::ErrorStage::TRANSPORT, "transport", "simulated late failure");
 			}
+			profile.outcome = cuac::ScanOutcome::SUCCEEDED;
 			return false;
 		}
 		batch = batches[index];
 		++index;
+		profile.rows_decoded += static_cast<std::uint64_t>(batch.rows.size());
+		profile.rows_returned += static_cast<std::uint64_t>(batch.rows.size());
 		return true;
 	}
 
 	void Cancel() noexcept override {
+		if (profile.outcome != cuac::ScanOutcome::SUCCEEDED && profile.outcome != cuac::ScanOutcome::FAILED) {
+			profile.outcome = cuac::ScanOutcome::CANCELLED;
+		}
 	}
 
 	void Close() noexcept override {
+		if (profile.outcome != cuac::ScanOutcome::SUCCEEDED && profile.outcome != cuac::ScanOutcome::FAILED &&
+		    profile.outcome != cuac::ScanOutcome::CANCELLED) {
+			profile.outcome = cuac::ScanOutcome::CLOSED;
+		}
 	}
 
 	cuac::ExecutionSnapshot Diagnostics() const noexcept override {
-		return BatchStream::Diagnostics();
+		return profile;
 	}
 
 private:
 	std::vector<cuac::TypedBatch> batches;
 	std::size_t index;
 	bool fail_on_last;
+	std::function<void()> before_failure;
+	cuac::ExecutionSnapshot profile;
 };
 
 cuac::TypedBatch MakeBatch(std::int64_t id, const std::string &text) {
@@ -120,6 +158,9 @@ void TestFreshHitReplaysWithoutRemoteWork() {
 	const auto diag = stream.Diagnostics();
 	Require(diag.cache_diagnostics.status == cuac::CacheStatus::FRESH_HIT, "diagnostics did not report FRESH_HIT");
 	Require(diag.cache_diagnostics.age_milliseconds == 5000, "diagnostics did not report the hit age");
+	Require(diag.outcome == cuac::ScanOutcome::SUCCEEDED && diag.rows_returned == 2 && diag.rows_decoded == 0 &&
+	            diag.remote_requests == 0 && diag.aggregate_attempts == 0,
+	        "fresh cache hit did not report successful delivery with zero remote work");
 }
 
 void TestMissAccumulatesAndPublishesOnCleanExhaustion() {
@@ -147,6 +188,11 @@ void TestMissAccumulatesAndPublishesOnCleanExhaustion() {
 	const auto diag = stream.Diagnostics();
 	Require(diag.cache_diagnostics.status == cuac::CacheStatus::REFRESHED,
 	        "diagnostics did not report REFRESHED after clean exhaustion");
+	Require(diag.outcome == cuac::ScanOutcome::SUCCEEDED && diag.remote_requests == 1 && diag.aggregate_attempts == 1 &&
+	            diag.rows_decoded == 2 && diag.rows_returned == 2 && diag.response_header_bytes == 17 &&
+	            diag.wire_response_bytes == 31 && diag.decompressed_response_bytes == 47 &&
+	            diag.peak_decoded_memory_bytes == 59,
+	        "cache miss did not preserve the underlying remote profile");
 
 	Require(cache->ResidentEntries() == 1, "clean exhaustion did not publish a cache entry");
 
@@ -180,6 +226,11 @@ void TestPartialFailureDiscardsCandidate() {
 	}
 	Require(threw, "late failure did not propagate through the cached stream");
 	Require(cache->ResidentEntries() == 0, "failed scan left a cache entry");
+	const auto diag = stream.Diagnostics();
+	Require(diag.outcome == cuac::ScanOutcome::FAILED && diag.has_terminal_failure &&
+	            diag.terminal_failure_class == cuac::FailureClass::TRANSPORT && diag.remote_requests == 1 &&
+	            diag.rows_decoded == 1 && diag.rows_returned == 1,
+	        "failed cache candidate did not preserve its terminal remote profile");
 }
 
 void TestOffPolicyBypassesCache() {
@@ -253,6 +304,7 @@ void TestExpiredEntryCausesMiss() {
 
 void TestStaleIfErrorBarrierServesStaleOnEligibleLateFailure() {
 	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	clock->now_ms = 1000000;
 	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock);
 	CacheKey key = MakeKey(7);
 	cuac::FreshnessPolicy policy = cuac::FreshnessPolicy::StaleIfError(10000, 30000);
@@ -265,7 +317,8 @@ void TestStaleIfErrorBarrierServesStaleOnEligibleLateFailure() {
 
 	std::vector<cuac::TypedBatch> remote_batches;
 	remote_batches.push_back(MakeBatch(1, "first_refresh"));
-	std::unique_ptr<cuac::BatchStream> remote(new FakeStream(std::move(remote_batches), true));
+	std::unique_ptr<cuac::BatchStream> remote(
+	    new FakeStream(std::move(remote_batches), true, [clock]() { clock->Advance(1000); }));
 
 	CachedScanStream stream(std::move(remote), cache, key, policy, clock);
 
@@ -279,6 +332,101 @@ void TestStaleIfErrorBarrierServesStaleOnEligibleLateFailure() {
 	Require(diag.cache_diagnostics.status == cuac::CacheStatus::STALE_SERVED,
 	        "barrier diagnostics did not report STALE_SERVED");
 	Require(diag.cache_diagnostics.refresh_attempted, "barrier diagnostics did not report refresh attempted");
+	Require(diag.outcome == cuac::ScanOutcome::SUCCEEDED && !diag.has_terminal_failure && diag.remote_requests == 1 &&
+	            diag.rows_decoded == 1 && diag.rows_returned == 1 && diag.cache_diagnostics.age_milliseconds == 16000 &&
+	            diag.cache_diagnostics.stale_cause_failure_class == cuac::FailureClass::TRANSPORT,
+	        "stale delivery did not distinguish successful delivery from its failed refresh work");
+}
+
+void TestStaleIfErrorExpiresWhileRefreshIsRunning() {
+	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	clock->now_ms = 2000000;
+	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock);
+	CacheKey key = MakeKey(10);
+	cuac::FreshnessPolicy policy = cuac::FreshnessPolicy::StaleIfError(10000, 30000);
+
+	std::vector<cuac::TypedBatch> seed_batches;
+	seed_batches.push_back(MakeBatch(50, "stale_founding"));
+	cache->Publish(key, seed_batches, 100);
+	clock->Advance(15000);
+
+	std::vector<cuac::TypedBatch> remote_batches;
+	remote_batches.push_back(MakeBatch(1, "first_refresh"));
+	std::unique_ptr<cuac::BatchStream> remote(
+	    new FakeStream(std::move(remote_batches), true, [clock]() { clock->Advance(25000); }));
+	CachedScanStream stream(std::move(remote), cache, key, policy, clock);
+
+	NoopCancellation control;
+	cuac::TypedBatch batch;
+	bool failed = false;
+	try {
+		stream.Next(control, batch);
+	} catch (const cuac::ExecutionError &) {
+		failed = true;
+	}
+	const auto diagnostics = stream.Diagnostics();
+	Require(failed && diagnostics.outcome == cuac::ScanOutcome::FAILED && diagnostics.has_terminal_failure &&
+	            diagnostics.cache_diagnostics.status == cuac::CacheStatus::EXPIRED_DURING_REFRESH &&
+	            diagnostics.rows_returned == 0,
+	        "refresh completion outside the stale window served expired data or lost its terminal profile");
+}
+
+void TestCachedTerminalLifecycleIsLatched() {
+	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock);
+	NoopCancellation control;
+	cuac::TypedBatch batch;
+
+	CacheKey cancelled_key = MakeKey(11);
+	std::vector<cuac::TypedBatch> cancelled_seed;
+	cancelled_seed.push_back(MakeBatch(1, "cancelled"));
+	cache->Publish(cancelled_key, cancelled_seed, 100);
+	std::unique_ptr<cuac::BatchStream> cancelled_remote(new FakeStream(std::vector<cuac::TypedBatch>()));
+	CachedScanStream cancelled(std::move(cancelled_remote), cache, cancelled_key, cuac::FreshnessPolicy::Fresh(60000),
+	                           clock);
+	cancelled.Cancel();
+	bool cancellation_rethrown = false;
+	try {
+		cancelled.Next(control, batch);
+	} catch (const cuac::ExecutionCancelled &) {
+		cancellation_rethrown = true;
+	}
+	Require(cancellation_rethrown && cancelled.Diagnostics().outcome == cuac::ScanOutcome::CANCELLED &&
+	            cancelled.Diagnostics().rows_returned == 0,
+	        "cancelled fresh cache hit resumed delivery or changed its terminal outcome");
+
+	CacheKey closed_key = MakeKey(12);
+	std::vector<cuac::TypedBatch> closed_seed;
+	closed_seed.push_back(MakeBatch(2, "closed"));
+	cache->Publish(closed_key, closed_seed, 100);
+	std::unique_ptr<cuac::BatchStream> closed_remote(new FakeStream(std::vector<cuac::TypedBatch>()));
+	CachedScanStream closed(std::move(closed_remote), cache, closed_key, cuac::FreshnessPolicy::Fresh(60000), clock);
+	closed.Close();
+	Require(!closed.Next(control, batch) && closed.Diagnostics().outcome == cuac::ScanOutcome::CLOSED,
+	        "closed cache stream was rewritten as successful on a later pull");
+
+	CacheKey control_key = MakeKey(13);
+	std::vector<cuac::TypedBatch> live_batches;
+	live_batches.push_back(MakeBatch(3, "live"));
+	std::unique_ptr<cuac::BatchStream> live_remote(new FakeStream(std::move(live_batches)));
+	CachedScanStream control_cancelled(std::move(live_remote), cache, control_key, cuac::FreshnessPolicy::Fresh(60000),
+	                                   clock);
+	CancelledControl cancelled_control;
+	bool initial_cancelled = false;
+	bool later_cancelled = false;
+	try {
+		control_cancelled.Next(cancelled_control, batch);
+	} catch (const cuac::ExecutionCancelled &) {
+		initial_cancelled = true;
+	}
+	try {
+		control_cancelled.Next(control, batch);
+	} catch (const cuac::ExecutionCancelled &) {
+		later_cancelled = true;
+	}
+	Require(initial_cancelled && later_cancelled &&
+	            control_cancelled.Diagnostics().outcome == cuac::ScanOutcome::CANCELLED,
+	        "control cancellation was not latched across subsequent cache-stream pulls");
 }
 
 void TestStaleIfErrorBarrierServesFreshOnSuccessfulRefresh() {
@@ -309,6 +457,9 @@ void TestStaleIfErrorBarrierServesFreshOnSuccessfulRefresh() {
 	const auto diag = stream.Diagnostics();
 	Require(diag.cache_diagnostics.status == cuac::CacheStatus::REFRESHED,
 	        "barrier diagnostics did not report REFRESHED after successful refresh");
+	Require(diag.outcome == cuac::ScanOutcome::SUCCEEDED && diag.remote_requests == 1 && diag.rows_decoded == 1 &&
+	            diag.rows_returned == 1 && !diag.has_terminal_failure,
+	        "successful stale refresh did not preserve its remote work and delivered-row profile");
 }
 
 void TestCapacityAbandonedDrainEmitsAccumulatedAndContinuesUncached() {
@@ -360,8 +511,10 @@ int main() {
 		TestStoreBypassedCapacityDoesNotFailTheScan();
 		TestExpiredEntryCausesMiss();
 		TestStaleIfErrorBarrierServesStaleOnEligibleLateFailure();
+		TestStaleIfErrorExpiresWhileRefreshIsRunning();
 		TestStaleIfErrorBarrierServesFreshOnSuccessfulRefresh();
 		TestCapacityAbandonedDrainEmitsAccumulatedAndContinuesUncached();
+		TestCachedTerminalLifecycleIsLatched();
 		std::cout << "cached scan stream tests passed" << std::endl;
 		return EXIT_SUCCESS;
 	} catch (const std::exception &error) {
