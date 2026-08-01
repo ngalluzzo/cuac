@@ -301,7 +301,7 @@ TableFunction BuildGeneratedRelationFunction(const std::shared_ptr<CatalogGenera
 	function.filter_prune = false;
 	function.pushdown_complex_filter = GeneratedRelationPushdown;
 	function.to_string = GeneratedRelationToString;
-	function.dynamic_to_string = cuac_query_internal::CacheProfilingToString;
+	function.dynamic_to_string = cuac_query_internal::ScanProfilingToString;
 	function.function_info = make_shared_ptr<PackageCatalogFunctionInfo>(
 	    coordinator, nullptr, PackageCatalogFunctionKind::GENERATED_RELATION, generation, &relation);
 	return function;

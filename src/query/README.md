@@ -41,6 +41,9 @@ behind their public interfaces; do not reproduce those rules in the adapter.
    cancels unfinished work and closes the stream without throwing.
 8. The adapter translates provider failures at the DuckDB exception boundary;
    providers retain ownership of their structured, redacted errors.
+9. `EXPLAIN ANALYZE` reads one bounded content-free profile from each physical
+   scan's operator-local stream state. Ordinary `EXPLAIN` remains offline and
+   renders only immutable planned facts.
 
 Package publication follows a separate catalog lifecycle. Lead composition
 implements `QueryPackageStagingService` by composing Connector compilation and
@@ -58,7 +61,7 @@ Runtime registry.
 | `ScanRequest` values or DuckDB capability reporting | `request/` | `test/cpp/query/request/` |
 | Installed product and package-generation assembly | `composition/` | `test/cpp/query/composition/` and integration tests |
 | Atomic publication, package functions, catalog ownership, and introspection | `duckdb/catalog/` | `test/cpp/query/duckdb/catalog/` |
-| Predicate translation, plan state, explanation, stream lifecycle, and vector writes | `duckdb/adapter/` | `test/cpp/query/duckdb/adapter/` |
+| Predicate translation, plan state, static explanation, dynamic scan profiling, stream lifecycle, and vector writes | `duckdb/adapter/` | `test/cpp/query/duckdb/adapter/` |
 | Credential registration, storage, and exact-name resolution | `duckdb/credentials/` | `test/cpp/query/duckdb/credentials/` |
 | Extension identity, load order, and initialization containment | `duckdb/extension/` | SQL and direct-load contracts |
 | Controlled end-to-end composition | `test/cpp/query/integration/` | `test/python/live_rest_product_contract.py`, `test/python/authenticated_relation_product_contract.py`, `test/python/repository_pagination_product_contract.py` |

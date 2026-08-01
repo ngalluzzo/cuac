@@ -1,6 +1,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "cuac/internal/query/adapter/relation_execution.hpp"
 #include "query/support/duckdb_adapter_auth_test_support.hpp"
 #include "query/support/duckdb_adapter_test_support.hpp"
 #include "support/require.hpp"
@@ -13,6 +14,8 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace cuac_test {
 void RunComplexFilterAdapterTests();
@@ -27,6 +30,132 @@ using cuac_test::QueryError;
 using cuac_test::QueryRuntimeScenario;
 using cuac_test::RegisterPackageAdapter;
 using cuac_test::Require;
+
+std::string ExplainText(duckdb::QueryResult &result) {
+	std::string explanation;
+	while (auto chunk = result.Fetch()) {
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			for (duckdb::idx_t column = 0; column < chunk->ColumnCount(); column++) {
+				explanation += chunk->GetValue(column, row).ToString();
+				explanation.push_back('\n');
+			}
+		}
+	}
+	return explanation;
+}
+
+void TestBoundedScanProfilingMap() {
+	cuac::ExecutionSnapshot snapshot;
+	snapshot.outcome = cuac::ScanOutcome::FAILED;
+	snapshot.elapsed_milliseconds = 37;
+	snapshot.remote_requests = 2;
+	snapshot.aggregate_attempts = 3;
+	snapshot.current_step = 2;
+	snapshot.rows_decoded = 11;
+	snapshot.rows_returned = 7;
+	snapshot.response_header_bytes = 13;
+	snapshot.wire_response_bytes = 17;
+	snapshot.decompressed_response_bytes = 19;
+	snapshot.serialized_request_body_bytes = 23;
+	snapshot.peak_decoded_memory_bytes = 29;
+	snapshot.cumulative_remote_transport_milliseconds = 31;
+	snapshot.cumulative_delay_milliseconds = 5;
+	snapshot.cumulative_rate_limit_waiting_milliseconds = 7;
+	snapshot.cumulative_admission_waiting_milliseconds = 11;
+	snapshot.cumulative_waiting_milliseconds = 23;
+	snapshot.exposure_state = cuac::ExposureState::EXPOSED;
+	snapshot.rate_limit_events = 2;
+	snapshot.rate_limit_waits = 1;
+	snapshot.rate_limit_reason = cuac::RateLimitReason::WAITING_EXHAUSTED;
+	snapshot.rate_limit_waiting = false;
+	snapshot.admission_reason = cuac::AdmissionReason::REQUEST_QUEUE_TIMEOUT;
+	snapshot.admission_scope = cuac::AdmissionScope::DESTINATION;
+	snapshot.admission_waiting = false;
+	snapshot.cache_diagnostics.status = cuac::CacheStatus::STALE_SERVED;
+	snapshot.cache_diagnostics.age_milliseconds = 41;
+	snapshot.cache_diagnostics.refresh_attempted = true;
+	snapshot.cache_diagnostics.stale_cause_failure_class = cuac::FailureClass::TRANSPORT;
+	snapshot.has_terminal_failure = true;
+	snapshot.terminal_failure_class = cuac::FailureClass::RESOURCE_BUDGET;
+
+	const std::vector<std::pair<std::string, std::string>> expected = {
+	    {"Scan Outcome", "failed"},
+	    {"Elapsed Milliseconds", "37"},
+	    {"Remote Requests", "2"},
+	    {"Request Attempts", "3"},
+	    {"Pages", "2"},
+	    {"Rows Decoded", "11"},
+	    {"Rows Returned", "7"},
+	    {"Response Header Bytes", "13"},
+	    {"Wire Response Bytes", "17"},
+	    {"Decompressed Response Bytes", "19"},
+	    {"Request Body Bytes", "23"},
+	    {"Peak Decoded Memory Bytes", "29"},
+	    {"Remote Transport Milliseconds", "31"},
+	    {"Retry Wait Milliseconds", "5"},
+	    {"Rate Limit Wait Milliseconds", "7"},
+	    {"Admission Wait Milliseconds", "11"},
+	    {"Total Resilience Wait Milliseconds", "23"},
+	    {"Exposure", "exposed"},
+	    {"Rate Limit Events", "2"},
+	    {"Rate Limit Waits", "1"},
+	    {"Rate Limit Reason", "waiting_exhausted"},
+	    {"Rate Limit Waiting", "false"},
+	    {"Admission Reason", "request_queue_timeout"},
+	    {"Admission Scope", "destination"},
+	    {"Admission Waiting", "false"},
+	    {"Cache Status", "stale_served"},
+	    {"Cache Age Milliseconds", "41"},
+	    {"Cache Refresh Attempted", "true"},
+	    {"Stale Cause Failure Class", "transport"},
+	    {"Failure Class", "resource_budget"},
+	};
+	const auto fields = duckdb::cuac_query_internal::BuildScanProfilingFields(snapshot);
+	Require(fields.size() == expected.size(), "scan profile rendered an unbounded or incomplete field set");
+	const auto keys = fields.Keys();
+	for (std::size_t index = 0; index < expected.size(); index++) {
+		Require(keys[index] == expected[index].first && fields.at(expected[index].first) == expected[index].second,
+		        "scan profiling field name, order, or closed value drifted at index " + std::to_string(index));
+	}
+
+	const auto empty = duckdb::cuac_query_internal::BuildScanProfilingFields(cuac::ExecutionSnapshot());
+	Require(empty.size() == 28 && !empty.contains("Failure Class") && !empty.contains("Stale Cause Failure Class"),
+	        "default scan profile exposed a terminal-failure field");
+}
+
+void TestExplainAnalyzeRendersPerScanProfile() {
+	duckdb::DuckDB database(nullptr);
+	auto probe = RegisterPackageAdapter(database, QueryRuntimeScenario::SUCCESS);
+	duckdb::Connection connection(database);
+	auto explained = connection.Query(std::string("EXPLAIN (ANALYZE, FORMAT JSON) ") + ACCEPTED_LIVE_SQL);
+	if (explained->HasError()) {
+		throw std::runtime_error("EXPLAIN ANALYZE failed: " + explained->GetError());
+	}
+	const auto explanation = ExplainText(*explained);
+	for (const auto *marker :
+	     {"Scan Outcome", "succeeded", "Elapsed Milliseconds", "Remote Requests", "Request Attempts", "Pages",
+	      "Rows Decoded", "Rows Returned", "Response Header Bytes", "Wire Response Bytes",
+	      "Decompressed Response Bytes", "Peak Decoded Memory Bytes", "Cache Status", "off"}) {
+		Require(explanation.find(marker) != std::string::npos,
+		        "EXPLAIN ANALYZE omitted bounded scan profile marker: " + std::string(marker));
+	}
+
+	const std::string limited_sql = "SELECT id, login, site_admin FROM cuac_scan(connector := 'github', "
+	                                "relation := 'duckdb_login_search_page') LIMIT 1";
+	auto limited = connection.Query(std::string("EXPLAIN (ANALYZE, FORMAT JSON) ") + limited_sql);
+	if (limited->HasError()) {
+		throw std::runtime_error("limited EXPLAIN ANALYZE failed: " + limited->GetError());
+	}
+	const auto limited_explanation = ExplainText(*limited);
+	Require(limited_explanation.find("Scan Outcome") != std::string::npos &&
+	            limited_explanation.find("cancelled") != std::string::npos,
+	        "EXPLAIN ANALYZE did not settle a downstream-short-circuited scan as cancelled");
+	Require(probe->streams_opened.load(std::memory_order_relaxed) == 2 &&
+	            probe->streams_closed.load(std::memory_order_relaxed) == 2 &&
+	            probe->cancellations.load(std::memory_order_relaxed) == 1 &&
+	            probe->rows.load(std::memory_order_relaxed) == 5,
+	        "EXPLAIN ANALYZE did not isolate its completed and short-circuited physical scans");
+}
 
 void TestOfflineBindPreparedCopyAndTypedRows() {
 	duckdb::DuckDB database(nullptr);
@@ -357,6 +486,8 @@ void TestSynchronizedCancellation() {
 
 int main() {
 	try {
+		TestBoundedScanProfilingMap();
+		TestExplainAnalyzeRendersPerScanProfile();
 		TestOfflineBindPreparedCopyAndTypedRows();
 		TestDuckdbRetainsRelationalOperators();
 		TestBindFailuresDoNotOpenRuntime();

@@ -66,7 +66,7 @@ public:
 	QueryScenarioStream(QueryRuntimeScenario scenario_p, bool authenticated_p, cuac::PlannedProtocol protocol_p,
 	                    std::shared_ptr<QueryLifecycleProbe> probe_p)
 	    : scenario(scenario_p), authenticated(authenticated_p), protocol(protocol_p), probe(std::move(probe_p)),
-	      offset(0), cancelled(false), closed(false) {
+	      offset(0), exhausted(false), cancelled(false), closed(false) {
 	}
 
 	~QueryScenarioStream() noexcept override {
@@ -100,6 +100,7 @@ public:
 			                      cuac::ValueKind::BIGINT,  cuac::ValueKind::VARCHAR, cuac::ValueKind::BOOLEAN,
 			                      cuac::ValueKind::BOOLEAN, cuac::ValueKind::VARCHAR};
 			if (offset != 0) {
+				exhausted = true;
 				return false;
 			}
 			batch.rows.push_back(GraphqlRow("NODE-A", "fixture/zero", "fixture", 0,
@@ -153,6 +154,7 @@ public:
 		}
 		if (authenticated) {
 			if (offset != 0) {
+				exhausted = true;
 				return false;
 			}
 			batch.rows.push_back(Row(42, "authenticated", true));
@@ -189,6 +191,7 @@ public:
 			batch.rows.push_back(Row(3, "duckdb", true));
 			offset = 3;
 		} else {
+			exhausted = true;
 			return false;
 		}
 		probe->batches.fetch_add(1, std::memory_order_relaxed);
@@ -211,7 +214,23 @@ public:
 	}
 
 	cuac::ExecutionSnapshot Diagnostics() const noexcept override {
-		return BatchStream::Diagnostics();
+		cuac::ExecutionSnapshot result;
+		result.outcome = cancelled.load(std::memory_order_relaxed) ? cuac::ScanOutcome::CANCELLED
+		                 : exhausted                               ? cuac::ScanOutcome::SUCCEEDED
+		                 : offset == 0                             ? cuac::ScanOutcome::NOT_STARTED
+		                                                           : cuac::ScanOutcome::RUNNING;
+		result.elapsed_milliseconds = offset == 0 ? 0 : 7;
+		result.remote_requests = offset == 0 ? 0 : 1;
+		result.aggregate_attempts = offset == 0 ? 0 : 1;
+		result.current_step = offset == 0 ? 0 : 1;
+		result.exposure_state = offset == 0 ? cuac::ExposureState::UNACCEPTED : cuac::ExposureState::EXPOSED;
+		result.rows_decoded = static_cast<std::uint64_t>(offset);
+		result.rows_returned = static_cast<std::uint64_t>(offset);
+		result.response_header_bytes = offset == 0 ? 0 : 64;
+		result.wire_response_bytes = offset == 0 ? 0 : 128;
+		result.decompressed_response_bytes = offset == 0 ? 0 : 256;
+		result.peak_decoded_memory_bytes = offset == 0 ? 0 : 512;
+		return result;
 	}
 
 private:
@@ -220,6 +239,7 @@ private:
 	const cuac::PlannedProtocol protocol;
 	std::shared_ptr<QueryLifecycleProbe> probe;
 	std::size_t offset;
+	bool exhausted;
 	std::atomic<bool> cancelled;
 	std::atomic<bool> closed;
 };

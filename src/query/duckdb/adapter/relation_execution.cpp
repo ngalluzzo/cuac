@@ -244,27 +244,63 @@ void ScanRelationExecution(ClientContext &context, TableFunctionInput &input, Da
 	}
 }
 
-InsertionOrderPreservingMap<std::string> CacheProfilingToString(TableFunctionDynamicToStringInput &input) {
+InsertionOrderPreservingMap<std::string> BuildScanProfilingFields(const cuac::ExecutionSnapshot &snapshot) {
 	InsertionOrderPreservingMap<std::string> result;
-	if (!input.global_state) {
-		return result;
-	}
-	auto *state = dynamic_cast<RelationExecutionState *>(input.global_state.get());
-	if (!state || !state->stream) {
-		return result;
-	}
-	const auto snapshot = state->stream->Diagnostics();
+	result["Scan Outcome"] = cuac::ScanOutcomeName(snapshot.outcome);
+	result["Elapsed Milliseconds"] = std::to_string(snapshot.elapsed_milliseconds);
+	result["Remote Requests"] = std::to_string(snapshot.remote_requests);
+	result["Request Attempts"] = std::to_string(snapshot.aggregate_attempts);
+	result["Pages"] = std::to_string(snapshot.current_step);
+	result["Rows Decoded"] = std::to_string(snapshot.rows_decoded);
+	result["Rows Returned"] = std::to_string(snapshot.rows_returned);
+	result["Response Header Bytes"] = std::to_string(snapshot.response_header_bytes);
+	result["Wire Response Bytes"] = std::to_string(snapshot.wire_response_bytes);
+	result["Decompressed Response Bytes"] = std::to_string(snapshot.decompressed_response_bytes);
+	result["Request Body Bytes"] = std::to_string(snapshot.serialized_request_body_bytes);
+	result["Peak Decoded Memory Bytes"] = std::to_string(snapshot.peak_decoded_memory_bytes);
+	result["Remote Transport Milliseconds"] = std::to_string(snapshot.cumulative_remote_transport_milliseconds);
+	result["Retry Wait Milliseconds"] = std::to_string(snapshot.cumulative_delay_milliseconds);
+	result["Rate Limit Wait Milliseconds"] = std::to_string(snapshot.cumulative_rate_limit_waiting_milliseconds);
+	result["Admission Wait Milliseconds"] = std::to_string(snapshot.cumulative_admission_waiting_milliseconds);
+	result["Total Resilience Wait Milliseconds"] = std::to_string(snapshot.cumulative_waiting_milliseconds);
+	result["Exposure"] = cuac::ExposureStateName(snapshot.exposure_state);
+	result["Rate Limit Events"] = std::to_string(snapshot.rate_limit_events);
+	result["Rate Limit Waits"] = std::to_string(snapshot.rate_limit_waits);
+	result["Rate Limit Reason"] = cuac::RateLimitReasonName(snapshot.rate_limit_reason);
+	result["Rate Limit Waiting"] = snapshot.rate_limit_waiting ? "true" : "false";
+	result["Admission Reason"] = cuac::AdmissionReasonName(snapshot.admission_reason);
+	result["Admission Scope"] = cuac::AdmissionScopeName(snapshot.admission_scope);
+	result["Admission Waiting"] = snapshot.admission_waiting ? "true" : "false";
 	const auto &cache = snapshot.cache_diagnostics;
-	if (cache.status == cuac::CacheStatus::OFF) {
-		return result;
-	}
 	result["Cache Status"] = cuac::CacheStatusName(cache.status);
 	result["Cache Age Milliseconds"] = std::to_string(cache.age_milliseconds);
 	result["Cache Refresh Attempted"] = cache.refresh_attempted ? "true" : "false";
 	if (cache.status == cuac::CacheStatus::STALE_SERVED) {
 		result["Stale Cause Failure Class"] = cuac::FailureClassName(cache.stale_cause_failure_class);
 	}
+	if (snapshot.has_terminal_failure) {
+		result["Failure Class"] = cuac::FailureClassName(snapshot.terminal_failure_class);
+	}
 	return result;
+}
+
+InsertionOrderPreservingMap<std::string> ScanProfilingToString(TableFunctionDynamicToStringInput &input) {
+	if (!input.global_state) {
+		return InsertionOrderPreservingMap<std::string>();
+	}
+	auto *state = dynamic_cast<RelationExecutionState *>(input.global_state.get());
+	if (!state || !state->stream) {
+		return InsertionOrderPreservingMap<std::string>();
+	}
+	// DuckDB finalizes dynamic source profiling before it destroys the global
+	// state. A LIMIT or another downstream short-circuit therefore has not yet
+	// reached our destructor even though source execution is over. Settle that
+	// unfinished stream through Runtime's ordinary cancellation boundary before
+	// taking the terminal snapshot.
+	if (!state->finished) {
+		state->stream->Cancel();
+	}
+	return BuildScanProfilingFields(state->stream->Diagnostics());
 }
 
 } // namespace cuac_query_internal

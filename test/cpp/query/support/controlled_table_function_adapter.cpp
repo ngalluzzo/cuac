@@ -209,7 +209,7 @@ void RegisterControlledCuacScan(ExtensionLoader &loader, cuac::CompiledConnector
 	scan.filter_prune = false;
 	scan.pushdown_complex_filter = CuacPushdownComplexFilter;
 	scan.to_string = CuacToString;
-	scan.dynamic_to_string = cuac_query_internal::CacheProfilingToString;
+	scan.dynamic_to_string = cuac_query_internal::ScanProfilingToString;
 	scan.function_info = make_shared_ptr<CuacFunctionInfo>(std::move(connector), std::move(executor));
 	loader.RegisterFunction(std::move(scan));
 }

@@ -34,13 +34,17 @@ InitializeRelationExecution(duckdb::ClientContext &context, const cuac::ScanPlan
 void ScanRelationExecution(duckdb::ClientContext &context, duckdb::TableFunctionInput &input,
                            duckdb::DataChunk &output);
 
-// Post-execution profiling hook. Extracts cache diagnostics from the
-// operator-local execution state and returns them as operator-scoped
-// profiling fields for EXPLAIN ANALYZE. Each operator reads only its own
-// RelationExecutionState; two scans in one statement cannot overwrite or
-// inherit one another's observations.
+// Converts Runtime's closed, content-free snapshot to stable DuckDB profiling
+// fields. This separate pure mapping is the redaction/cardinality boundary and
+// is exercised independently of DuckDB's callback lifecycle.
+duckdb::InsertionOrderPreservingMap<std::string> BuildScanProfilingFields(const cuac::ExecutionSnapshot &snapshot);
+
+// Post-execution profiling hook. Extracts the complete bounded scan profile
+// from operator-local execution state for EXPLAIN ANALYZE. Each operator reads
+// only its own RelationExecutionState; two scans in one statement cannot
+// overwrite or inherit one another's observations.
 duckdb::InsertionOrderPreservingMap<std::string>
-CacheProfilingToString(duckdb::TableFunctionDynamicToStringInput &input);
+ScanProfilingToString(duckdb::TableFunctionDynamicToStringInput &input);
 
 } // namespace cuac_query_internal
 } // namespace duckdb
