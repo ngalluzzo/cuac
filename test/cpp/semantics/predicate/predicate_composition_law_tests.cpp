@@ -331,12 +331,16 @@ void TestProductionDecisionCompositionMatrix() {
 	const auto ambiguous_connector = cuac_test::BuildAmbiguousPredicateMappingsCatalogFixture();
 	const auto &ambiguous_relation =
 	    FindRelation(ambiguous_connector, cuac_test::PREDICATE_AMBIGUOUS_MAPPINGS_RELATION);
+	const auto visibility_public = cuac::RequestedPredicate::Comparison(
+	    FindColumn(ambiguous_relation, "visibility"), cuac::RequestedPredicateValueKind::VARCHAR,
+	    cuac::RequestedPredicateComparisonOperator::EQUALS, cuac::RequestedPredicateValue::Varchar("public"));
 	const auto ambiguous = cuac::BuildConservativeScanPlan(
-	    ambiguous_connector,
-	    CandidateRequest(ambiguous_connector, ambiguous_relation, VisibilityPrivate(ambiguous_relation),
-	                     cuac::RetainedPredicateScope::REQUESTED_PREDICATE));
-	RequireCompositionLaw(connection, ambiguous, ambiguous_relation, "visibility = 'private'",
-	                      cuac::PredicateDecisionCategory::AMBIGUOUS, "incompatible mapping-input ambiguity");
+	    ambiguous_connector, CandidateRequest(ambiguous_connector, ambiguous_relation,
+	                                          cuac::RequestedPredicate::Conjunction(
+	                                              {VisibilityPrivate(ambiguous_relation), visibility_public}),
+	                                          cuac::RetainedPredicateScope::REQUESTED_PREDICATE));
+	RequireCompositionLaw(connection, ambiguous, ambiguous_relation, "visibility = 'private' AND visibility = 'public'",
+	                      cuac::PredicateDecisionCategory::UNSUPPORTED, "conflicting mapping-input fallback");
 
 	const auto baseline = cuac::BuildConservativeScanPlan(
 	    github, CandidateRequest(github, github_relation, cuac::RequestedPredicate::Unrestricted(),

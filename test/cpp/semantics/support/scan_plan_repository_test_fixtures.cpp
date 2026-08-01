@@ -7,18 +7,34 @@ namespace cuac_test {
 
 cuac::ScanPlan ScanPlanTestAccess::Repository(cuac::ScanPlan plan, RepositoryPlanCounterexample counterexample) {
 	switch (counterexample) {
-	case RepositoryPlanCounterexample::MISSING_VISIBILITY_COLUMN:
+	case RepositoryPlanCounterexample::MISSING_VISIBILITY_COLUMN: {
 		plan.output_columns.pop_back();
+		auto operation = plan.Operation().Rest();
+		operation.result_columns.pop_back();
+		ReplaceRest(plan, std::move(operation));
 		break;
-	case RepositoryPlanCounterexample::VISIBILITY_NOT_TRAILING:
+	}
+	case RepositoryPlanCounterexample::VISIBILITY_NOT_TRAILING: {
 		std::swap(plan.output_columns[4], plan.output_columns[5]);
+		auto operation = plan.Operation().Rest();
+		std::swap(operation.result_columns[4], operation.result_columns[5]);
+		ReplaceRest(plan, std::move(operation));
 		break;
-	case RepositoryPlanCounterexample::VISIBILITY_NULLABLE:
+	}
+	case RepositoryPlanCounterexample::VISIBILITY_NULLABLE: {
 		plan.output_columns.back().nullable = true;
+		auto operation = plan.Operation().Rest();
+		operation.result_columns.back().nullable = true;
+		ReplaceRest(plan, std::move(operation));
 		break;
-	case RepositoryPlanCounterexample::VISIBILITY_WRONG_TYPE:
+	}
+	case RepositoryPlanCounterexample::VISIBILITY_WRONG_TYPE: {
 		plan.output_columns.back().logical_type = "BOOLEAN";
+		auto operation = plan.Operation().Rest();
+		operation.result_columns.back().scalar_kind = cuac::PlannedRestScalarKind::BOOLEAN;
+		ReplaceRest(plan, std::move(operation));
 		break;
+	}
 	case RepositoryPlanCounterexample::VISIBILITY_WRONG_EXTRACTOR:
 		plan.output_columns.back().extractor = "$.private";
 		break;

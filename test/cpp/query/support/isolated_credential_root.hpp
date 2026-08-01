@@ -16,7 +16,7 @@ namespace query_test_internal {
 class IsolatedCredentialRootPool final {
 public:
 	IsolatedCredentialRootPool() : next_id(0) {
-		char pattern[] = "/private/tmp/cuac-query-tests-XXXXXX";
+		char pattern[] = "/tmp/cuac-query-tests-XXXXXX";
 		const auto *created = ::mkdtemp(pattern);
 		if (!created) {
 			throw std::runtime_error("could not create isolated Query credential root");

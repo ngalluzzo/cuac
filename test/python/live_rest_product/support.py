@@ -361,7 +361,7 @@ def load_controlled_extension(
     if credential_root is None:
         credential_root = pathlib.Path(
             tempfile.mkdtemp(
-                prefix="cuac-controlled-credentials-", dir="/private/tmp"
+                prefix="cuac-controlled-credentials-", dir="/tmp"
             )
         )
         _CONTROLLED_CREDENTIAL_ROOTS.append(credential_root)

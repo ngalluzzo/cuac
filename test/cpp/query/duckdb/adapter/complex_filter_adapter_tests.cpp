@@ -98,14 +98,14 @@ void RequireStructuredFallbackExplanation(const std::string &explanation, const 
 }
 
 void RequireSelectiveExplanation(const std::string &explanation, const std::string &context,
-                                 const std::string &expected_residual = "visibility_equals_private") {
+                                 const std::string &expected_residual = "typed_equality") {
 	RequireCompleteOwnershipExplanation(explanation, context);
 	Require(explanation.find("Relation") != std::string::npos &&
 	            explanation.find("authenticated_repositories") != std::string::npos &&
 	            explanation.find("Residual Owner") != std::string::npos &&
 	            explanation.find("duckdb") != std::string::npos,
 	        context + " did not explain the complete selected plan:\n" + explanation);
-	RequireExplainedField(explanation, "Remote Predicate", "visibility_equals_private", "Remote Accuracy", context);
+	RequireExplainedField(explanation, "Remote Predicate", "typed_equality", "Remote Accuracy", context);
 	RequireExplainedField(explanation, "Remote Accuracy", "superset", "Residual Predicate", context);
 	RequireExplainedField(explanation, "Residual Predicate", expected_residual, "Residual Owner", context);
 	RequireExplainedField(explanation, "Classification Category", "superset", "Classification Reason", context);
@@ -231,7 +231,7 @@ void TestDescribePrepareCopyAndBoundParameterReplanningStayOffline() {
 	        "private parameter executions produced different selected plans around a fallback execution");
 
 	const auto parameter_null = Explain(connection, "EXECUTE visibility_parameter(NULL)");
-	Require(parameter_null.find("visibility_equals_private") == std::string::npos &&
+	Require(parameter_null.find("typed_equality") == std::string::npos &&
 	            parameter_null.find("superset") == std::string::npos,
 	        "NULL parameter execution acquired selective remote authority:\n" + parameter_null);
 	auto unbound = connection.Query("EXPLAIN EXECUTE visibility_parameter");

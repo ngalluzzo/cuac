@@ -143,7 +143,7 @@ const cuac::PackageReloadDecision &LocalPackageReloadFixture::Decision() const {
 
 LocalPackageReloadFixture BuildRepositoryGithubLocalPackageReloadFixture(const std::string &absolute_repository_root,
                                                                          LocalPackageReloadFixtureVariant variant) {
-	char pattern[] = "/private/tmp/cuac-reload-fixture-XXXXXX";
+	char pattern[] = "/tmp/cuac-reload-fixture-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create local-package reload fixture root");

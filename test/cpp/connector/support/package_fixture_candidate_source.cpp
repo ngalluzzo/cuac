@@ -84,11 +84,7 @@ void WriteFile(const std::string &path, const std::string &bytes) {
 }
 
 std::string CreateRoot() {
-#if defined(__APPLE__)
-	char pattern[] = "/private/tmp/cuac-fixture-candidate-XXXXXX";
-#else
 	char pattern[] = "/tmp/cuac-fixture-candidate-XXXXXX";
-#endif
 	const auto *created = ::mkdtemp(pattern);
 	if (created == nullptr) {
 		throw std::runtime_error("private fixture candidate root could not be created");

@@ -27,6 +27,7 @@ tree_digest_projection() (
     rsync -a "${TEMPLATE_ROOT}/src/" "${stage}/src/"
     rsync -a "${TEMPLATE_ROOT}/test/" "${stage}/test/"
     rsync -a "${TEMPLATE_ROOT}/cmake/" "${stage}/cmake/"
+    rsync -a "${TEMPLATE_ROOT}/connectors/" "${stage}/connectors/"
     cp "${TEMPLATE_ROOT}/CMakeLists.txt" "${TEMPLATE_ROOT}/Makefile" \
         "${TEMPLATE_ROOT}/extension_config.cmake" "${TEMPLATE_ROOT}/version.txt" "${stage}/"
     tree_digest "${stage}"
@@ -38,7 +39,7 @@ sync_sources() {
     local stage
     local status
     status="$(git -C "${REPOSITORY_ROOT}" status --porcelain --untracked-files=all -- \
-        src test cmake CMakeLists.txt Makefile extension_config.cmake version.txt | sed -n '/^??/p')"
+        src test cmake connectors CMakeLists.txt Makefile extension_config.cmake version.txt | sed -n '/^??/p')"
     if [[ -n "${status}" ]]; then
         echo "container source projection accepts tracked files only; add or remove:" >&2
         echo "${status}" >&2
@@ -47,7 +48,7 @@ sync_sources() {
     stage="$(mktemp -d "${DEV_ROOT}/sync.XXXXXX")"
     TEMP_ROOTS+=("${stage}")
     git -C "${REPOSITORY_ROOT}" ls-files -z -- \
-        src test cmake CMakeLists.txt Makefile extension_config.cmake version.txt |
+        src test cmake connectors CMakeLists.txt Makefile extension_config.cmake version.txt |
         rsync -a --from0 --files-from=- "${REPOSITORY_ROOT}/" "${stage}/"
     source_digest="$(tree_digest "${stage}")"
     if [[ -f "${SOURCE_STATE}" && "$(cat "${SOURCE_STATE}")" == "${source_digest}" ]]; then
@@ -61,6 +62,7 @@ sync_sources() {
     rsync -a --delete "${stage}/src/" "${TEMPLATE_ROOT}/src/"
     rsync -a --delete "${stage}/test/" "${TEMPLATE_ROOT}/test/"
     rsync -a --delete "${stage}/cmake/" "${TEMPLATE_ROOT}/cmake/"
+    rsync -a --delete "${stage}/connectors/" "${TEMPLATE_ROOT}/connectors/"
     rm -rf "${TEMPLATE_ROOT}/fixtures"
     cp "${stage}/CMakeLists.txt" "${stage}/Makefile" "${stage}/extension_config.cmake" \
         "${stage}/version.txt" "${TEMPLATE_ROOT}/"

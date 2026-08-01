@@ -57,7 +57,7 @@ public:
 } // namespace
 
 ScopedCredentialRoot::ScopedCredentialRoot() {
-	char pattern[] = "/private/tmp/cuac-credential-tests-XXXXXX";
+	char pattern[] = "/tmp/cuac-credential-tests-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create isolated credential test root");

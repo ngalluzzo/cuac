@@ -8,6 +8,8 @@ cases:
     operation: github_search_duckdb_login_page
     covers:
       - operation_duckdb_login_search_page_github_search_duckdb_login_page_success
+      - rate_limit_duckdb_login_search_page_github_search_duckdb_login_page_mode_disabled
+      - rate_limit_duckdb_login_search_page_github_search_duckdb_login_page_safe_explanation
       - auth_duckdb_login_search_page_github_search_duckdb_login_page_anonymous
       - column_duckdb_login_search_page_id_success
       - column_duckdb_login_search_page_id_type_mismatch_rejected
@@ -114,6 +116,8 @@ cases:
     operation: github_authenticated_user
     covers:
       - operation_authenticated_user_github_authenticated_user_success
+      - rate_limit_authenticated_user_github_authenticated_user_mode_disabled
+      - rate_limit_authenticated_user_github_authenticated_user_safe_explanation
       - auth_authenticated_user_github_authenticated_user_bearer_present
       - column_authenticated_user_id_success
       - column_authenticated_user_id_type_mismatch_rejected
@@ -189,6 +193,8 @@ cases:
     operation: github_authenticated_repositories
     covers:
       - operation_authenticated_repositories_github_authenticated_repositories_success
+      - rate_limit_authenticated_repositories_github_authenticated_repositories_mode_disabled
+      - rate_limit_authenticated_repositories_github_authenticated_repositories_safe_explanation
       - auth_authenticated_repositories_github_authenticated_repositories_bearer_present
       - column_authenticated_repositories_id_success
       - column_authenticated_repositories_id_type_mismatch_rejected
@@ -465,6 +471,8 @@ cases:
     operation: github_viewer_repository_metrics
     covers:
       - operation_viewer_repository_metrics_github_viewer_repository_metrics_success
+      - rate_limit_viewer_repository_metrics_github_viewer_repository_metrics_mode_disabled
+      - rate_limit_viewer_repository_metrics_github_viewer_repository_metrics_safe_explanation
       - auth_viewer_repository_metrics_github_viewer_repository_metrics_bearer_present
       - column_viewer_repository_metrics_id_success
       - column_viewer_repository_metrics_id_type_mismatch_rejected
@@ -554,7 +562,7 @@ cases:
             endpoint:
               origin: {scheme: https, host: api.github.com, port: 443}
               path: /graphql
-            document_digest: sha256.9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85
+            document_digest: sha256.9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf
             variables:
               - {name: pageSize, type: INT_NON_NULL, value: {kind: value, value: 100}}
               - {name: cursor, type: STRING_NULLABLE, value: {kind: null}}
@@ -571,7 +579,7 @@ cases:
             endpoint:
               origin: {scheme: https, host: api.github.com, port: 443}
               path: /graphql
-            document_digest: sha256.9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85
+            document_digest: sha256.9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf
             variables:
               - {name: pageSize, type: INT_NON_NULL, value: {kind: value, value: 100}}
               - {name: cursor, type: STRING_NULLABLE, value: {kind: value, value: "cursor-1"}}

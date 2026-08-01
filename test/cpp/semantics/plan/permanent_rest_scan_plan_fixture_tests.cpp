@@ -25,8 +25,7 @@ void RunPermanentRestScanPlanFixtureTests() {
 	const auto repeated = cuac_test::BuildValidPermanentRestScanPlanFixture();
 	Require(plan.Snapshot() == repeated.Snapshot() && plan.ConnectorName() == "rest_materialization_package" &&
 	            plan.ConnectorVersion() == "1.2.3" && plan.RelationName() == "materialized_records" &&
-	            plan.SourceSnapshot() == "origin=package_compiled_metadata;relation=materialized_records;operation="
-	                                     "materialized_records_by_scope" &&
+	            plan.SourceSnapshot() == "relation=materialized_records;operation=materialized_records_by_scope" &&
 	            plan.Operation().Protocol() == cuac::PlannedProtocol::REST &&
 	            plan.RemotePredicate() == cuac::PlannedPredicate::TRUE_FOR_BASE_DOMAIN &&
 	            plan.RemoteAccuracy() == cuac::RemotePredicateAccuracy::UNSUPPORTED &&

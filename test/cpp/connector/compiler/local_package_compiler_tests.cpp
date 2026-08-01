@@ -36,7 +36,7 @@ int RemoveEntry(const char *path, const struct stat *, int, struct FTW *) {
 class TemporaryPackageParent {
 public:
 	TemporaryPackageParent() {
-		char pattern[] = "/private/tmp/cuac-local-package-XXXXXX";
+		char pattern[] = "/tmp/cuac-local-package-XXXXXX";
 		const auto *created = ::mkdtemp(pattern);
 		if (!created) {
 			throw std::runtime_error("could not create local-package test tree");
@@ -318,7 +318,7 @@ void TestCancellationStopsRecompile() {
 		throw std::runtime_error("initial compilation ignored call-scoped cancellation");
 	} catch (const cuac::connector::PackageCompilationCancelled &error) {
 		Require(std::string(error.what()) == "local package compilation was cancelled" &&
-		            std::string(error.what()).find("/private/tmp/") == std::string::npos,
+		            std::string(error.what()).find("/tmp/") == std::string::npos,
 		        "initial cancellation used an unsafe or unstable public boundary");
 	}
 
@@ -329,7 +329,7 @@ void TestCancellationStopsRecompile() {
 		throw std::runtime_error("recompile ignored call-scoped cancellation");
 	} catch (const cuac::connector::PackageCompilationCancelled &error) {
 		Require(std::string(error.what()) == "local package compilation was cancelled" &&
-		            std::string(error.what()).find("/private/tmp/") == std::string::npos,
+		            std::string(error.what()).find("/tmp/") == std::string::npos,
 		        "recompile cancellation used an unsafe or unstable public boundary");
 	}
 }

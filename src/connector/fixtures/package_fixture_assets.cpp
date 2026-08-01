@@ -17,7 +17,7 @@ const char FIXTURE_COVERAGE_V1_MAPPING[] =
     ;
 
 const char *INDEX_DIGEST = "aa3b37992407c32b7731391383dc138d678dae457ac1b90d6e862278a6385bff";
-const char *COVERAGE_DIGEST = "f1f92427a2eebbc481a48fdd53645013be24a4b6c8c3f2d3a4f87679e212db02";
+const char *COVERAGE_DIGEST = "01680e39f35eae9e2df122863d71ffae97306345a4830c1927bd5a3f5158cd26";
 
 } // namespace
 
@@ -26,7 +26,7 @@ const char *PackageFixtureIndexV1SchemaDigest() {
 }
 
 const char *PackageFixtureCoverageV1MappingDigest() {
-	return "sha256.f1f92427a2eebbc481a48fdd53645013be24a4b6c8c3f2d3a4f87679e212db02";
+	return "sha256.01680e39f35eae9e2df122863d71ffae97306345a4830c1927bd5a3f5158cd26";
 }
 
 bool VerifyPackageFixtureContractAssets() {

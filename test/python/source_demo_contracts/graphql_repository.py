@@ -98,8 +98,8 @@ EXPECTED_FUNCTION_ARGUMENTS = {
     "read_token": (),
     "main": (),
 }
-EXPECTED_RUNNER_AST_DIGEST = (
-    "a5ac6faad12314ba588673e94ccb740d88619dd320a0b9555d3440103b411a52"
+EXPECTED_RUNNER_SOURCE_DIGEST = (
+    "a1c8902788afcefde8f720d5222abf39194242378126f060dc40d1ecea9af8a9"
 )
 EXPECTED_EXTENSION_QUERY = (
     "SELECT extension_name, extension_version, loaded, installed, install_mode "
@@ -211,11 +211,9 @@ def validate_runner_source(source: str) -> None:
     """Prove that live execution rows and provider text cannot reach output."""
 
     tree = ast.parse(source)
-    runner_digest = hashlib.sha256(
-        ast.dump(tree, include_attributes=False).encode("utf-8")
-    ).hexdigest()
-    if runner_digest != EXPECTED_RUNNER_AST_DIGEST:
-        raise AssertionError("GraphQL example canonical AST drifted")
+    runner_digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    if runner_digest != EXPECTED_RUNNER_SOURCE_DIGEST:
+        raise AssertionError("GraphQL example canonical source drifted")
     imports = [
         (alias.name, alias.asname)
         for node in tree.body

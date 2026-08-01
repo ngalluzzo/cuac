@@ -42,10 +42,11 @@ cuac::CompiledConnector BuildPaginationPlannerCandidate(std::uint64_t max_pages,
                                                         std::uint64_t records_per_page, std::uint64_t records_per_scan,
                                                         std::uint64_t extracted_string_bytes);
 
-// Returns the repository-shaped root-array counterexample with pagination
-// explicitly disabled. Its GitHub-shaped identity remains fixture-only and
-// carries no credential value or execution authority.
-cuac::CompiledConnector BuildDisabledRootArrayRepositoryCandidate();
+// Returns a repository-shaped root-array relation with pagination explicitly
+// disabled and page-shaped fixed query names. Its GitHub-shaped identity is
+// fixture-only; consumers must honor the compiled profile rather than infer
+// pagination from provider names or request-field spelling.
+cuac::CompiledConnector BuildDeclaredUnpaginatedRootArrayRepositoryCandidate();
 
 // Valid mapping decoys for consumer tests. Each factory exposes only public
 // immutable catalog access and deliberately publishes no predicate mapping:

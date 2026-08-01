@@ -10,7 +10,7 @@ Catalog Error: Table Function with name cuac_scan does not exist!
 require cuac
 
 statement ok
-SET secret_directory = '__TEST_DIR__/cuac_credentials';
+SET secret_directory = '/tmp/cuac_sql_contract_credentials';
 
 query T
 SELECT extension_version

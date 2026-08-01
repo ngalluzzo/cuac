@@ -98,7 +98,7 @@ void TestOutboundHeaderBoundaries() {
 		                                                  nullptr,
 		                                                  nullptr};
 		const auto fixed_header_bytes = FixedProjectHeaderBytesWithoutToken();
-		Require(fixed_header_bytes == 125, "fixed project request-header byte accounting drifted");
+		Require(fixed_header_bytes == 113, "fixed project request-header byte accounting drifted");
 		auto oversized_project_header =
 		    std::string(static_cast<std::size_t>(cuac::HOST_MAX_HEADER_BYTES - fixed_header_bytes + 1), 'a');
 		bool rejected = false;

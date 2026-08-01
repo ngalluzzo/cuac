@@ -1,0 +1,6 @@
+{
+  global:
+    cuac_duckdb_cpp_init;
+  local:
+    *;
+};

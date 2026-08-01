@@ -132,8 +132,8 @@ target_link_libraries(
           cuac_package_generation_fixture_service
           cuac_package_bound_planning_service
           cuac_relational_planning_service
-          dummy_static_extension_loader
-          duckdb_static)
+          duckdb_static
+          dummy_static_extension_loader)
 
 add_executable(
   cuac_scan_plan_contract_tests

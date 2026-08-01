@@ -82,16 +82,6 @@ initialize_dev_root() {
 
 acquire_lock() {
     initialize_dev_root
-    # Older development cells used a PID-bearing directory. Container PID
-    # namespaces make those numbers ambiguous, so migrate only that exact
-    # owned state shape before acquiring an OS-backed advisory lock.
-    if [[ -d "${LOCK_FILE}" ]]; then
-        rm -f "${LOCK_FILE}/pid"
-        if ! rmdir "${LOCK_FILE}"; then
-            echo "legacy container build lock cannot be migrated: ${LOCK_FILE}" >&2
-            exit 1
-        fi
-    fi
     exec 9>"${LOCK_FILE}"
     if ! flock -n 9; then
         echo "container build cell is busy: ${DEV_ROOT}" >&2
@@ -119,7 +109,7 @@ assert_template_overlay_only() {
         path="${status_line:3}"
         case "${path}" in
             .cache/clangd/* | CMakeLists.txt | Makefile | extension_config.cmake | version.txt | vcpkg.json | cmake/* | \
-                src/* | test/* | fixtures/*)
+                connectors/* | src/* | test/*)
                 ;;
             *)
                 echo "template checkout contains an unverified change: ${status_line}" >&2

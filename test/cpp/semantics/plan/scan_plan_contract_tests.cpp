@@ -115,12 +115,14 @@ void RequireOperationMatches(const cuac::ScanPlan &plan, const cuac::CompiledRel
 	        "plan operation lost its exact typed origin");
 	Require(planned.path == compiled.request.path && planned.records_extractor == compiled.records_extractor,
 	        "plan operation path or extraction drifted");
-	Require(planned.query_parameters.size() == compiled.request.query_parameters.size() &&
+	Require(planned.query_parameters.empty() &&
+	            planned.query_bindings.size() == compiled.request.query_parameters.size() &&
 	            planned.headers.size() == compiled.request.headers.size(),
 	        "plan operation lost structural request fields");
 	for (std::size_t index = 0; index < compiled.request.query_parameters.size(); index++) {
-		Require(planned.query_parameters[index].name == compiled.request.query_parameters[index].name &&
-		            planned.query_parameters[index].encoded_value ==
+		Require(planned.query_bindings[index].Name() == compiled.request.query_parameters[index].name &&
+		            planned.query_bindings[index].Source() == cuac::PlannedRestQueryValueSource::FIXED &&
+		            planned.query_bindings[index].EncodedValue() ==
 		                compiled.request.query_parameters[index].encoded_value,
 		        "plan operation changed a fixed query field");
 	}
@@ -202,7 +204,9 @@ void RequireSelectedNetworkAndBudgets(const cuac::ScanPlan &plan, const cuac::Co
 void RequireAnonymousPlan(const cuac::ScanPlan &plan, const cuac::CompiledConnector &connector,
                           const cuac::CompiledRelation &relation) {
 	Require(plan.ConnectorName() == connector.ConnectorName() && plan.ConnectorVersion() == connector.Version() &&
-	            plan.RelationName() == relation.Name() && plan.SourceSnapshot() == relation.Snapshot(),
+	            plan.RelationName() == relation.Name() &&
+	            plan.SourceSnapshot() ==
+	                "relation=" + relation.Name() + ";operation=" + plan.Operation().Rest().operation_name,
 	        "anonymous plan identity or selected provenance drifted");
 	Require(plan.Domain() == cuac::BaseDomain::JSON_PATH_RECORDS &&
 	            plan.Pagination().Strategy() == cuac::PlannedPaginationStrategy::DISABLED &&
@@ -227,7 +231,9 @@ void RequireAnonymousPlan(const cuac::ScanPlan &plan, const cuac::CompiledConnec
 void RequireAuthenticatedPlan(const cuac::ScanPlan &plan, const cuac::CompiledConnector &connector,
                               const cuac::CompiledRelation &relation, const std::string &secret_name) {
 	Require(plan.ConnectorName() == connector.ConnectorName() && plan.ConnectorVersion() == connector.Version() &&
-	            plan.RelationName() == relation.Name() && plan.SourceSnapshot() == relation.Snapshot(),
+	            plan.RelationName() == relation.Name() &&
+	            plan.SourceSnapshot() ==
+	                "relation=" + relation.Name() + ";operation=" + plan.Operation().Rest().operation_name,
 	        "authenticated plan identity or selected provenance drifted");
 	Require(plan.Domain() == cuac::BaseDomain::SUCCESSFUL_ROOT_OBJECT &&
 	            plan.Pagination().Strategy() == cuac::PlannedPaginationStrategy::DISABLED &&
@@ -299,15 +305,17 @@ void TestPackageGoldenPlans() {
 	            anonymous_plan.RelationName() == "duckdb_login_search_page" &&
 	            anonymous_plan.Operation().Rest().operation_name == "github_search_duckdb_login_page" &&
 	            anonymous_plan.Operation().Rest().path == "/search/users" &&
-	            anonymous_plan.Operation().Rest().query_parameters.size() == 2 &&
-	            anonymous_plan.Operation().Rest().query_parameters[0].name == "q" &&
-	            anonymous_plan.Operation().Rest().query_parameters[0].encoded_value == "duckdb+in%3Alogin" &&
-	            anonymous_plan.Operation().Rest().query_parameters[1].name == "per_page" &&
-	            anonymous_plan.Operation().Rest().query_parameters[1].encoded_value == "3" &&
+	            anonymous_plan.Operation().Rest().query_parameters.empty() &&
+	            anonymous_plan.Operation().Rest().query_bindings.size() == 2 &&
+	            anonymous_plan.Operation().Rest().query_bindings[0].Name() == "q" &&
+	            anonymous_plan.Operation().Rest().query_bindings[0].EncodedValue() == "duckdb+in%3Alogin" &&
+	            anonymous_plan.Operation().Rest().query_bindings[1].Name() == "per_page" &&
+	            anonymous_plan.Operation().Rest().query_bindings[1].EncodedValue() == "3" &&
 	            authenticated_plan.RelationName() == "authenticated_user" &&
 	            authenticated_plan.Operation().Rest().operation_name == "github_authenticated_user" &&
 	            authenticated_plan.Operation().Rest().path == "/user" &&
 	            authenticated_plan.Operation().Rest().query_parameters.empty() &&
+	            authenticated_plan.Operation().Rest().query_bindings.empty() &&
 	            anonymous_plan.Operation().Rest().headers.size() == 3 &&
 	            anonymous_plan.Operation().Rest().headers[1].value == "cuac" &&
 	            authenticated_plan.Operation().Rest().headers.size() == 3 &&

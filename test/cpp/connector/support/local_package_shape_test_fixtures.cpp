@@ -120,7 +120,7 @@ const cuac::CompiledLocalPackage &LocalPackageShapeFixture::Package() const {
 
 LocalPackageShapeFixture BuildRepositoryDerivedLocalPackageShape(const std::string &absolute_repository_root,
                                                                  LocalPackageShapeFixtureVariant variant) {
-	char pattern[] = "/private/tmp/cuac-package-shape-XXXXXX";
+	char pattern[] = "/tmp/cuac-package-shape-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (created == nullptr) {
 		throw std::runtime_error("could not create private package shape root");

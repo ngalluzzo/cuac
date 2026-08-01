@@ -15,6 +15,14 @@
       "relation": ["max_response_bytes_per_page", "max_response_bytes_per_scan", "max_records_per_page", "max_records_per_scan", "max_extracted_string_bytes"],
       "graphql_request": ["max_document_bytes", "max_serialized_body_bytes_per_request", "max_serialized_body_bytes_per_scan"]
     },
+    "rate_limit_expansion": {
+      "mode": {"disabled": "mode_disabled", "fail": "mode_fail", "wait": "mode_wait", "wait_if_deadline_allows": "mode_wait_if_deadline_allows"},
+      "statuses": "status_{base-10 status}, in declared order",
+      "guidance": "guidance_{zero-based index}_{retry_after|delta_seconds|unix_seconds}, in declared order",
+      "remaining_quota_header": "remaining_present when declared",
+      "remote_bucket_header": "remote_bucket_present when declared",
+      "terminal": "safe_explanation"
+    },
     "scope_vocabulary": {
       "each relation operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each anonymous relation operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["relation.auth.mode", "anonymous"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
@@ -28,6 +36,7 @@
       "each non-nullable output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.nullable", "false"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
       "each BIGINT output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "BIGINT"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
       "each VARCHAR output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "VARCHAR"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
+      "each DOUBLE output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "DOUBLE"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
       "each operation and ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and element-nullable ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_nullable", "true"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and element-non-nullable ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_nullable", "false"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
@@ -40,6 +49,7 @@
       "each disabled-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "disabled"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each Link-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "link_next"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each ResponseNext-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "response_next"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
+      "each ShortPage-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "short_page"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each Relay-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "graphql"]}, {"equals": ["operation.request.pagination.strategy", "relay_forward"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each GraphQL operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "graphql"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each declared relation resource field": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"fields": "derivation_language.resource_fields.relation", "from": "relation.resources", "as": "resource"}], "bindings": {"relation": "relation.id", "resource": "resource.name"}},
@@ -110,6 +120,11 @@
       "variants": ["string_budget_boundary", "string_budget_one_over_rejected"]
     },
     {
+      "scope": "each DOUBLE output column",
+      "template": "column_{relation}_{column}_{variant}",
+      "variants": ["minimum", "maximum", "magnitude_overflow_rejected"]
+    },
+    {
       "scope": "each operation and ARRAY output column",
       "template": "array_{relation}_{operation}_{column}_{variant}",
       "variants": ["success", "empty", "singleton", "ordered_duplicates", "outer_type_rejected", "element_type_rejected", "nested_rejected", "late_invalid_element_rejected", "decode_cancellation", "query_transfer_cancellation"]
@@ -170,6 +185,11 @@
       "variants": ["first_page", "multi_page", "termination", "encoded_target", "malformed_target_rejected", "replayed_target_rejected", "max_pages_exhausted", "next_field_wrong_type_rejected"]
     },
     {
+      "scope": "each ShortPage-pagination operation",
+      "template": "pagination_{relation}_{operation}_{variant}",
+      "variants": ["first_page", "multi_page", "termination_on_short_page", "termination_on_empty_page", "exact_multiple_page_boundary", "max_pages_exhausted"]
+    },
+    {
       "scope": "each Relay-pagination operation",
       "template": "pagination_{relation}_{operation}_{variant}",
       "variants": ["first_page", "multi_page", "termination", "cursor_transition", "missing_cursor_rejected", "repeated_cursor_rejected", "max_pages_exhausted"]
@@ -188,6 +208,11 @@
       "scope": "each GraphQL request resource field",
       "template": "resource_{relation}_{operation}_{resource}_{variant}",
       "variants": ["boundary", "one_over_rejected"]
+    },
+    {
+      "scope": "each relation operation",
+      "template": "rate_limit_{relation}_{operation}_{variant}",
+      "variant_expansion": "derivation_language.rate_limit_expansion"
     },
     {
       "scope": "one semantic package",
@@ -240,8 +265,8 @@
   },
   "github_golden": {
     "semantic_package_digest": "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c",
-    "required_key_count": 258,
-    "ordered_keys_digest": "sha256.a4e2cafbe8acea3e02b5739e4751a9b05a7c927164d5ec23ec9e5bd03a734aa8",
+    "required_key_count": 266,
+    "ordered_keys_digest": "sha256.555116e3bd3f0dd28164e0e24218a14f536c054ff1cac1ded2b1cb6d33ccdfa5",
     "selected_keys": [
       "resource_viewer_repository_metrics_max_response_bytes_per_page_boundary",
       "resource_viewer_repository_metrics_max_response_bytes_per_page_one_over_rejected",
@@ -258,7 +283,9 @@
       "resource_viewer_repository_metrics_github_viewer_repository_metrics_max_serialized_body_bytes_per_request_boundary",
       "resource_viewer_repository_metrics_github_viewer_repository_metrics_max_serialized_body_bytes_per_request_one_over_rejected",
       "resource_viewer_repository_metrics_github_viewer_repository_metrics_max_serialized_body_bytes_per_scan_boundary",
-      "resource_viewer_repository_metrics_github_viewer_repository_metrics_max_serialized_body_bytes_per_scan_one_over_rejected"
+      "resource_viewer_repository_metrics_github_viewer_repository_metrics_max_serialized_body_bytes_per_scan_one_over_rejected",
+      "rate_limit_viewer_repository_metrics_github_viewer_repository_metrics_mode_disabled",
+      "rate_limit_viewer_repository_metrics_github_viewer_repository_metrics_safe_explanation"
     ]
   },
   "evaluation_order": [

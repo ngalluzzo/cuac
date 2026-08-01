@@ -167,6 +167,17 @@ set(CONTROLLED_PRODUCT_SOURCES
 
 build_static_extension(${TARGET_NAME} ${PRODUCTION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${PRODUCTION_SOURCES})
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(CUAC_LOADABLE_EXPORT_MAP
+      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cuac_loadable_exports.map")
+  target_link_options(
+    ${TARGET_NAME}_loadable_extension
+    PRIVATE "LINKER:--version-script=${CUAC_LOADABLE_EXPORT_MAP}")
+  set_property(
+    TARGET ${TARGET_NAME}_loadable_extension
+    APPEND
+    PROPERTY LINK_DEPENDS "${CUAC_LOADABLE_EXPORT_MAP}")
+endif()
 # This private artifact is a deterministic product oracle, not an installable
 # extension. Its entry/composition replace the installed entry/composition and
 # are intentionally omitted from every install rule.

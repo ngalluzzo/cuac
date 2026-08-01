@@ -8,6 +8,8 @@ cases:
     operation: fetch_pilot_episode
     covers:
       - operation_pilot_episode_fetch_pilot_episode_success
+      - rate_limit_pilot_episode_fetch_pilot_episode_mode_disabled
+      - rate_limit_pilot_episode_fetch_pilot_episode_safe_explanation
       - auth_pilot_episode_fetch_pilot_episode_anonymous
       - column_pilot_episode_id_success
       - column_pilot_episode_id_type_mismatch_rejected
@@ -120,6 +122,8 @@ cases:
     operation: search_characters
     covers:
       - operation_character_search_search_characters_success
+      - rate_limit_character_search_search_characters_mode_disabled
+      - rate_limit_character_search_search_characters_safe_explanation
       - auth_character_search_search_characters_anonymous
       - column_character_search_id_success
       - column_character_search_id_type_mismatch_rejected

@@ -25,7 +25,7 @@ namespace {
 
 using cuac_test::BuildAnonymousScanRequest;
 using cuac_test::BuildAuthenticatedScanRequest;
-using cuac_test::BuildDisabledRootArrayRepositoryCandidate;
+using cuac_test::BuildDeclaredUnpaginatedRootArrayRepositoryCandidate;
 using cuac_test::BuildPaginationPlannerCandidate;
 using cuac_test::Require;
 using cuac_test::scan_plan_contract::FindRelation;
@@ -279,10 +279,15 @@ void TestFixedSourceInputsRemainNonRelational() {
 	const auto &anonymous = FindRelation(connector, "duckdb_login_search_page");
 	const auto plan =
 	    cuac::BuildConservativeScanPlan(connector, BuildAnonymousScanRequest(connector, anonymous.Name()));
-	Require(plan.Operation().Rest().query_parameters.size() ==
+	Require(plan.Operation().Rest().query_parameters.empty() &&
+	            plan.Operation().Rest().query_bindings.size() ==
 	                anonymous.Operation().Rest().request.query_parameters.size() &&
-	            !plan.Operation().Rest().query_parameters.empty(),
+	            !plan.Operation().Rest().query_bindings.empty(),
 	        "fixed source query fields disappeared from the selected operation");
+	for (const auto &binding : plan.Operation().Rest().query_bindings) {
+		Require(binding.Source() == cuac::PlannedRestQueryValueSource::FIXED,
+		        "fixed source query field acquired relational input authority");
+	}
 	Require(plan.RemotePredicate() == cuac::PlannedPredicate::TRUE_FOR_BASE_DOMAIN &&
 	            plan.ResidualPredicate() == cuac::PlannedPredicate::TRUE_FOR_BASE_DOMAIN &&
 	            plan.RemoteLimit() == cuac::RelationalDelegation::NONE &&
@@ -424,12 +429,17 @@ void TestPaginationRequiresExplicitSupportedProfile() {
 	            linked_plan.Domain() == cuac::BaseDomain::PAGINATED_JSON_PATH_RECORDS &&
 	            linked_plan.Pagination().ScanBudgets().pages == 4,
 	        "planner ignored the explicit supported Link profile");
-	const auto disabled_root_array = BuildDisabledRootArrayRepositoryCandidate();
-	const auto &disabled_root_array_relation = FindRelation(disabled_root_array, "authenticated_repositories");
-	RequireRequestRejected(
-	    disabled_root_array,
-	    BuildAuthenticatedScanRequest(disabled_root_array, disabled_root_array_relation.Name(), "pagination_secret"),
-	    "a repository root array without its declared completeness proof");
+	const auto declared_unpaginated_root_array = BuildDeclaredUnpaginatedRootArrayRepositoryCandidate();
+	const auto &declared_unpaginated_relation =
+	    FindRelation(declared_unpaginated_root_array, "authenticated_repositories");
+	const auto declared_unpaginated_plan = cuac::BuildConservativeScanPlan(
+	    declared_unpaginated_root_array,
+	    BuildAuthenticatedScanRequest(declared_unpaginated_root_array, declared_unpaginated_relation.Name(),
+	                                  "pagination_secret"));
+	Require(declared_unpaginated_plan.Pagination().Strategy() == cuac::PlannedPaginationStrategy::DISABLED &&
+	            declared_unpaginated_plan.Domain() == cuac::BaseDomain::ROOT_ARRAY_RECORDS &&
+	            declared_unpaginated_plan.Operation().Rest().query_bindings.size() == 2,
+	        "planner inferred pagination from provider identity or page-shaped fixed query fields");
 
 	const auto too_many_pages = BuildPaginationPlannerCandidate(33, 1024, 33 * 1024, 3, 99, 96);
 	const auto &too_many_relation = FindRelation(too_many_pages, "planner_pagination_candidate");

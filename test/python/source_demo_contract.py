@@ -72,7 +72,7 @@ import duckdb
 import sys
 
 connection = duckdb.connect(config={"allow_unsigned_extensions": "true"})
-connection.execute("LOAD 'cuac.duckdb_extension'")
+connection.execute("LOAD './cuac.duckdb_extension'")
 try:
     connection.execute(
         "SELECT * FROM cuac_scan(connector := 'example', relation := 'items')"

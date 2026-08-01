@@ -35,8 +35,8 @@ void TestExactGithubGolden() {
 	TemporaryPackage package;
 	const auto &operation = CompileGraphql(GraphqlSource(), package);
 	const auto &recipe = operation.QueryRecipe();
-	Require(operation.document.size() == 581 &&
-	            operation.document_digest == "9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85" &&
+	Require(operation.document.size() == 576 &&
+	            operation.document_digest == "9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf" &&
 	            recipe.Identity() == cuac::CompiledGraphqlDocumentIdentity::PACKAGE_QUERY_GENERATOR_V1 &&
 	            recipe.OperationName() == "CuacViewerRepositoryMetrics" &&
 	            recipe.RootPath() == std::vector<std::string>({"viewer", "repositories"}) &&
@@ -49,7 +49,7 @@ void TestExactGithubGolden() {
 	            recipe.FixedArguments()[2].Value().Kind() == cuac::CompiledGraphqlLiteralKind::OBJECT &&
 	            recipe.Selections().size() == 8 &&
 	            cuac::internal::RenderCompiledGraphqlQueryRecipe(recipe) == operation.document,
-	        "renderer did not reproduce the exact 581-byte GitHub query golden");
+	        "renderer did not reproduce the exact 576-byte GitHub query golden");
 }
 
 void TestIndependentStructuredQuery() {
@@ -58,7 +58,7 @@ void TestIndependentStructuredQuery() {
 	source = cuac_test::ReplaceOnce(std::move(source), "path: /graphql", "path: /alternate/graphql");
 	TemporaryPackage package;
 	const auto &operation = CompileGraphql(source, package);
-	Require(operation.document_digest != "9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85" &&
+	Require(operation.document_digest != "9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf" &&
 	            operation.document.find("query IndependentAccountProjects") == 0 &&
 	            operation.document.find("  account {\n    projects(") != std::string::npos &&
 	            operation.response.nodes.segments ==

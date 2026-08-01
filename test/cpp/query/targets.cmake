@@ -20,6 +20,7 @@ target_include_directories(cuac_typed_value_adapter_tests PRIVATE test/cpp)
 target_link_libraries(
   cuac_typed_value_adapter_tests
   PRIVATE cuac_query_typed_value_adapter_service
+          duckdb_static
           dummy_static_extension_loader)
 
 add_executable(
@@ -37,8 +38,8 @@ target_link_libraries(
           cuac_semantics_fixture_service
           cuac_query_credential_service
           cuac_runtime_interface_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)
 target_include_directories(cuac_duckdb_secret_tests PRIVATE test/cpp src/query/duckdb)
 target_compile_definitions(
@@ -53,6 +54,7 @@ add_executable(
   test/cpp/query/duckdb/adapter/duckdb_adapter_auth_lifecycle_tests.cpp
   test/cpp/query/duckdb/adapter/complex_filter_adapter_tests.cpp
   test/cpp/query/duckdb/adapter/predicate_candidate_translation_tests.cpp
+  test/cpp/query/duckdb/adapter/table_function_plan_state_tests.cpp
   ${QUERY_DUCKDB_ADAPTER_SUPPORT_SOURCES}
   test/cpp/query/support/controlled_table_function_adapter.cpp
   ${QUERY_ADAPTER_TEST_SUPPORT_SOURCES}
@@ -61,11 +63,12 @@ target_link_libraries(
   cuac_adapter_tests
   PRIVATE cuac_connector_fixture_service
           cuac_package_compiler_fixture_service
+          cuac_package_generation_fixture_service
           cuac_query_credential_service
           cuac_relational_planning_service
           cuac_runtime_interface_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)
 target_include_directories(cuac_adapter_tests PRIVATE test/cpp src/query/duckdb)
 target_compile_definitions(
@@ -87,8 +90,8 @@ target_link_libraries(
           cuac_relational_planning_service
           cuac_query_credential_service
           cuac_runtime_controlled_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)
 target_include_directories(
   cuac_graphql_product_contract_tests
@@ -110,8 +113,8 @@ target_link_libraries(
           cuac_relational_planning_service
           cuac_query_credential_service
           cuac_runtime_interface_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)
 target_include_directories(cuac_adapter_stream_contract_tests PRIVATE test/cpp)
 target_compile_definitions(
@@ -140,8 +143,8 @@ target_link_libraries(
           cuac_package_generation_fixture_service
           cuac_relational_planning_service
           cuac_semantics_materialized_fixture_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)
 
 # Query's reusable publication fixture owns real isolated DuckDB catalogs and
@@ -164,8 +167,8 @@ target_link_libraries(
           cuac_package_compiler_fixture_service
           cuac_package_generation_fixture_service
           cuac_relational_planning_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)
 
 add_executable(
@@ -209,6 +212,6 @@ target_link_libraries(
           cuac_package_compiler_fixture_service
           cuac_query_package_catalog_service
           cuac_runtime_controlled_service
-          dummy_static_extension_loader
           duckdb_static
+          dummy_static_extension_loader
           Threads::Threads)

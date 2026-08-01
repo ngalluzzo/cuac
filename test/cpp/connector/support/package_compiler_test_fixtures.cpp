@@ -303,7 +303,7 @@ CompilePackageEnvelopeWithMutation(const std::string &absolute_repository_root, 
                                    const std::vector<PackageReplacement> &manifest_replacements,
                                    const std::vector<PackageReplacement> &relation_replacements) {
 	const auto source = ResolvePackageProfile(profile);
-	char pattern[] = "/private/tmp/cuac-equivalence-fixture-XXXXXX";
+	char pattern[] = "/tmp/cuac-equivalence-fixture-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create package equivalence fixture root");
@@ -349,7 +349,7 @@ BuildRepositoryCrossPackageEquivalenceFixture(const std::string &absolute_reposi
 }
 
 cuac::CompiledLocalPackage CompileRepositoryDistinctLocalPackageFixture(const std::string &absolute_repository_root) {
-	char pattern[] = "/private/tmp/cuac-distinct-fixture-XXXXXX";
+	char pattern[] = "/tmp/cuac-distinct-fixture-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create distinct local-package fixture root");

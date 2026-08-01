@@ -8,6 +8,8 @@ cases:
     operation: list_public_announcements
     covers:
       - operation_public_announcements_list_public_announcements_success
+      - rate_limit_public_announcements_list_public_announcements_mode_disabled
+      - rate_limit_public_announcements_list_public_announcements_safe_explanation
       - auth_public_announcements_list_public_announcements_anonymous
       - column_public_announcements_announcement_id_success
       - column_public_announcements_announcement_id_type_mismatch_rejected
@@ -105,6 +107,8 @@ cases:
     operation: regional_event_graph
     covers:
       - operation_regional_events_regional_event_graph_success
+      - rate_limit_regional_events_regional_event_graph_mode_disabled
+      - rate_limit_regional_events_regional_event_graph_safe_explanation
       - auth_regional_events_regional_event_graph_bearer_present
       - input_regional_events_graph_view_bound_value
       - input_regional_events_graph_view_unbound
@@ -199,6 +203,8 @@ cases:
     operation: regional_event_rest
     covers:
       - operation_regional_events_regional_event_rest_success
+      - rate_limit_regional_events_regional_event_rest_mode_disabled
+      - rate_limit_regional_events_regional_event_rest_safe_explanation
       - auth_regional_events_regional_event_rest_bearer_present
       - input_regional_events_rest_view_bound_value
       - input_regional_events_rest_view_unbound
@@ -289,6 +295,8 @@ cases:
     operation: fallback_events
     covers:
       - operation_regional_events_fallback_events_success
+      - rate_limit_regional_events_fallback_events_mode_disabled
+      - rate_limit_regional_events_fallback_events_safe_explanation
       - auth_regional_events_fallback_events_bearer_present
       - input_regional_events_region_bound_value
       - input_regional_events_region_unbound

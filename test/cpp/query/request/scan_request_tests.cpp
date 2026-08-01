@@ -197,9 +197,12 @@ void TestAcceptedAnonymousAndAuthenticatedRequests() {
 	            "offset=unset;capabilities=projection:"
 	            "unavailable,filter:unavailable,selective-predicate:unavailable,retains-predicate:unavailable,"
 	            "ordering:unavailable,limit:unavailable,offset:unavailable,progress:unavailable,"
-	            "cancellation:verified,secret-manager:available;secret-reference=none;generation=built-in;"
+	            "cancellation:verified,secret-manager:available;secret-reference=none;generation=package,"
+	            "spec_identifier=hex:637561632f7631,connector_id=hex:676974687562,version=hex:312e302e30,"
+	            "digest=hex:7368613235362e666666666666666666666666666666666666666666666666666666666666666666666666"
+	            "66666666666666666666666666666666666666666666666666666666;"
 	            "cache_mode=off;fresh_ms=0;stale_ms=0",
-	        "anonymous request snapshot changed");
+	        "anonymous request snapshot changed (observed=" + anonymous.Snapshot() + ")");
 	Require(authenticated.Snapshot().find(";relation=authenticated_user;") != std::string::npos &&
 	            authenticated.Snapshot().find("secret-reference=named-hex:6769746875625f64656661756c74") !=
 	                std::string::npos,
@@ -235,7 +238,9 @@ void TestAuthenticatedRepositoryRequest() {
 	    "projection:unavailable,filter:unavailable,selective-predicate:unavailable,retains-predicate:unavailable,"
 	    "ordering:unavailable,limit:unavailable,offset:unavailable,progress:unavailable,cancellation:"
 	    "verified,secret-manager:available;secret-reference=named-hex:6769746875625f64656661756c74;"
-	    "generation=built-in;cache_mode=off;fresh_ms=0;stale_ms=0";
+	    "generation=package,spec_identifier=hex:637561632f7631,connector_id=hex:676974687562,version=hex:312e302e30,"
+	    "digest=hex:7368613235362e666666666666666666666666666666666666666666666666666666666666666666666666"
+	    "66666666666666666666666666666666666666666666666666666666;cache_mode=off;fresh_ms=0;stale_ms=0";
 	Require(request.Snapshot() == expected && copy.Snapshot() == expected,
 	        "repository request copy or exact snapshot drifted");
 	for (const auto &forbidden : {"api.github.com", "/user/repos", "per_page", "page=", "Link", "Bearer "}) {

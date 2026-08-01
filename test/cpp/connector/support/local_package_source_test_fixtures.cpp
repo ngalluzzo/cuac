@@ -77,7 +77,7 @@ const std::string &MalformedYamlPackageFixture::Root() const noexcept {
 }
 
 MalformedYamlPackageFixture BuildRepositoryMalformedYamlPackageFixture(const std::string &absolute_repository_root) {
-	char pattern[] = "/private/tmp/cuac-malformed-package-XXXXXX";
+	char pattern[] = "/tmp/cuac-malformed-package-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create malformed-package fixture root");
@@ -125,7 +125,7 @@ const std::string &ShortPagePackageFixture::Root() const noexcept {
 }
 
 ShortPagePackageFixture BuildRepositoryShortPagePackageFixture(const std::string &absolute_repository_root) {
-	char pattern[] = "/private/tmp/cuac-short-page-package-XXXXXX";
+	char pattern[] = "/tmp/cuac-short-page-package-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create short_page package fixture root");
@@ -181,7 +181,7 @@ const std::string &DoubleColumnPackageFixture::Root() const noexcept {
 }
 
 DoubleColumnPackageFixture BuildRepositoryDoubleColumnPackageFixture(const std::string &absolute_repository_root) {
-	char pattern[] = "/private/tmp/cuac-double-column-package-XXXXXX";
+	char pattern[] = "/tmp/cuac-double-column-package-XXXXXX";
 	const auto *created = ::mkdtemp(pattern);
 	if (!created) {
 		throw std::runtime_error("could not create DOUBLE-column package fixture root");

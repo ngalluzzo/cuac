@@ -49,6 +49,9 @@ cuac::ScanPlan ScanPlanTestAccess::Operation(cuac::ScanPlan plan, OperationPlanC
 	case OperationPlanCounterexample::INVALID_QUERY: {
 		auto operation = plan.Operation().Rest();
 		operation.query_parameters.push_back({"invalid?query", "fixed-test-value"});
+		operation.query_bindings.push_back(cuac::PlannedRestQueryBinding(
+		    "invalid?query", cuac::PlannedRestQueryValueSource::FIXED, "", cuac::PlannedRestScalarKind::VARCHAR, false,
+		    0, "fixed-test-value", 0.0, cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "fixed-test-value"));
 		ReplaceRest(plan, std::move(operation));
 		break;
 	}

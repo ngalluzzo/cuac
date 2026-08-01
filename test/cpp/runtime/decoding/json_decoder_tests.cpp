@@ -152,7 +152,7 @@ void TestTypedRowsAndCompleteValidation() {
 	ManualControl control;
 	const auto rows = Decode("{\"ignored\":{\"nested\":[true,null,3.5]},\"items\":["
 	                         "{\"id\":11,\"login\":\"duckdb\",\"site_admin\":false,\"ignored\":1},"
-	                         "{\"site_admin\":true,\"login\":\"duck\\u0064b-fdw\",\"id\":-22},"
+	                         "{\"site_admin\":true,\"login\":\"cu\\u0061c\",\"id\":-22},"
 	                         "{\"id\":33,\"login\":\"three\",\"site_admin\":false}]}",
 	                         control);
 	Require(rows.size() == 3, "decoder did not return all bounded records");

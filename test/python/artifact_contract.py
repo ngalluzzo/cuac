@@ -794,7 +794,7 @@ def main() -> int:
                 "graphql": {
                     "arbitrary_documents": False,
                     "canonical_document_digest": (
-                        "9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85"
+                        "9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf"
                     ),
                     "canonical_document_identity": (
                         "GITHUB_VIEWER_REPOSITORY_METRICS_V1"
@@ -885,7 +885,7 @@ def main() -> int:
                 },
                 "over_limit_rejection": EXPECTED_HEADER_BUDGET_REJECTION,
             },
-            "removed_relations": [{"connector": "example", "relation": "items"}],
+            "removed_relations": [],
             "secret_type": {
                 "ambiguity": "reject_same_name_across_supported_storages",
                 "config": {

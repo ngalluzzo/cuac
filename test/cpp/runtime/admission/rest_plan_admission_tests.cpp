@@ -71,23 +71,18 @@ void TestNamesClassificationAndValidRequestFactsAreNotAuthority() {
 	Require(nullable && nullable->Columns()[0].nullable,
 	        "REST admission rejected a structurally valid nullable output column");
 
-	const RepositoryPlanCounterexample independent_facts[] = {
-	    RepositoryPlanCounterexample::MISSING_VISIBILITY_COLUMN,
-	    RepositoryPlanCounterexample::VISIBILITY_NOT_TRAILING,
-	    RepositoryPlanCounterexample::VISIBILITY_NULLABLE,
-	    RepositoryPlanCounterexample::VISIBILITY_WRONG_TYPE,
-	    RepositoryPlanCounterexample::VISIBILITY_WRONG_EXTRACTOR,
+	const RepositoryPlanCounterexample independent_classification_facts[] = {
 	    RepositoryPlanCounterexample::UNKNOWN_PREDICATE_CATEGORY,
 	    RepositoryPlanCounterexample::UNKNOWN_PREDICATE_REASON,
 	    RepositoryPlanCounterexample::EXACT_CATEGORY_SUPERSET_ACCURACY,
-	    RepositoryPlanCounterexample::SUPERSET_CATEGORY_EXACT_ACCURACY,
 	    RepositoryPlanCounterexample::AMBIGUOUS_RESIDUAL_TRUE,
 	    RepositoryPlanCounterexample::MAPPING_UNAVAILABLE_RESIDUAL_TRUE};
-	for (std::size_t index = 0; index < sizeof(independent_facts) / sizeof(independent_facts[0]); index++) {
+	for (std::size_t index = 0;
+	     index < sizeof(independent_classification_facts) / sizeof(independent_classification_facts[0]); index++) {
 		Require(static_cast<bool>(cuac::internal::TryAdmitPaginatedRestPlan(
-		            BuildRepositoryPlanCounterexample("fixture_secret", independent_facts[index]),
+		            BuildRepositoryPlanCounterexample("fixture_secret", independent_classification_facts[index]),
 		            RepositoryExecutionProfile())),
-		        "REST admission interpreted independent schema/classification variation " + std::to_string(index) +
+		        "REST admission interpreted independent classification variation " + std::to_string(index) +
 		            " as provider identity");
 	}
 }

@@ -351,14 +351,18 @@ void TestClosedValidation() {
 		                                     authenticated.Authentication(),
 		                                     ConnectorCatalogTestAccess::UnpaginatedResources(2, 64));
 	});
-	RequireInvalid("authenticated relation accepted a query-bearing request", [&authenticated]() {
+	{
 		auto operation = authenticated.Operation();
 		auto rest = operation.Rest();
-		rest.request.query_parameters.push_back(ConnectorCatalogTestAccess::FixedQuery("page", "1"));
+		rest.request.query_parameters.push_back(ConnectorCatalogTestAccess::FixedQuery("view", "summary"));
 		auto changed = ConnectorCatalogTestAccess::RestOperation(operation, std::move(rest), operation.selector);
-		ConnectorCatalogTestAccess::Relation(authenticated.Name(), authenticated.Columns(), std::move(changed),
-		                                     authenticated.Authentication(), authenticated.ResourceCeilings());
-	});
+		auto relation =
+		    ConnectorCatalogTestAccess::Relation(authenticated.Name(), authenticated.Columns(), std::move(changed),
+		                                         authenticated.Authentication(), authenticated.ResourceCeilings());
+		Require(relation.Operation().Rest().request.query_parameters.size() == 1 &&
+		            relation.Operation().Rest().request.query_parameters[0].name == "view",
+		        "authenticated relation lost its non-credential fixed query field");
+	}
 	RequireInvalid("authenticated relation accepted a mismatched credential destination", [&authenticated]() {
 		auto operation = authenticated.Operation();
 		auto rest = operation.Rest();

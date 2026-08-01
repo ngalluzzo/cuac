@@ -125,9 +125,13 @@ cuac::ScanPlan BuildRepositoryGithubPackagePrivateRepositoriesPlan(const std::st
 	const cuac::PackageBoundScanPlanningService planning(generation);
 	auto request = BuildPackageScanRequest(generation.Connector(), "authenticated_repositories",
 	                                       cuac::LogicalSecretReference::Named(logical_secret_name));
-	request.requested_predicate = cuac::RequestedPredicate::Comparison(
-	    5, cuac::RequestedPredicateValueKind::VARCHAR, cuac::RequestedPredicateComparisonOperator::EQUALS,
-	    cuac::RequestedPredicateValue::Varchar("private"));
+	auto visibility = cuac::RequestedPredicate::Comparison(5, cuac::RequestedPredicateValueKind::VARCHAR,
+	                                                       cuac::RequestedPredicateComparisonOperator::EQUALS,
+	                                                       cuac::RequestedPredicateValue::Varchar("private"));
+	request.requested_predicate =
+	    retain_complete_where_clause
+	        ? cuac::RequestedPredicate::Conjunction({std::move(visibility), cuac::RequestedPredicate::Unsupported(1)})
+	        : std::move(visibility);
 	request.retained_predicate_scope = retain_complete_where_clause
 	                                       ? cuac::RetainedPredicateScope::COMPLETE_DUCKDB_FILTER
 	                                       : cuac::RetainedPredicateScope::REQUESTED_PREDICATE;

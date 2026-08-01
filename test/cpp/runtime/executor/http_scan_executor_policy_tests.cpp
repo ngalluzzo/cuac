@@ -125,9 +125,8 @@ void TestProviderOwnedPlanDenialMatrix() {
 
 	const ResponsePlanCounterexample responses[] = {
 	    ResponsePlanCounterexample::JSON_PATH_RESPONSE_SOURCE, ResponsePlanCounterexample::ZERO_TO_MANY_CARDINALITY,
-	    ResponsePlanCounterexample::JSON_PATH_BASE_DOMAIN,     ResponsePlanCounterexample::EMPTY_RECORDS_EXTRACTOR,
-	    ResponsePlanCounterexample::EMPTY_SCHEMA_NAME,         ResponsePlanCounterexample::UNSUPPORTED_SCHEMA_TYPE,
-	    ResponsePlanCounterexample::EMPTY_SCHEMA_EXTRACTOR};
+	    ResponsePlanCounterexample::JSON_PATH_BASE_DOMAIN, ResponsePlanCounterexample::EMPTY_SCHEMA_NAME,
+	    ResponsePlanCounterexample::UNSUPPORTED_SCHEMA_TYPE};
 	for (std::size_t index = 0; index < sizeof(responses) / sizeof(responses[0]); index++) {
 		const auto runtime = BuildControlledHttpRuntime();
 		RequirePlanDeniedBeforeTransport(runtime, BuildResponsePlanCounterexample("fixture_secret", responses[index]),

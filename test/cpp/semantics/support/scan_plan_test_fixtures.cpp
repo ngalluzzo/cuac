@@ -94,11 +94,49 @@ private:
 	                             uint64_t max_pages, uint64_t response_bytes_per_page, uint64_t response_bytes_per_scan,
 	                             uint64_t records_per_page, uint64_t records_per_scan, uint64_t extracted_string_bytes);
 	static void SetRestOperation(cuac::ScanPlan &plan, cuac::PlannedRestOperation operation);
+	static void SetRestExecutionAuthority(cuac::ScanPlan &plan,
+	                                      std::vector<cuac::PlannedRestQueryBinding> query_bindings,
+	                                      cuac::PlannedRestResponsePath records_path);
 };
 
 void ScanPlanFixtureBuilder::SetRestOperation(cuac::ScanPlan &plan, cuac::PlannedRestOperation operation) {
 	plan.operation = std::make_shared<const cuac::PlannedProtocolOperation>(
 	    cuac::PlannedProtocolOperation::FromRest(std::move(operation)));
+}
+
+void ScanPlanFixtureBuilder::SetRestExecutionAuthority(cuac::ScanPlan &plan,
+                                                       std::vector<cuac::PlannedRestQueryBinding> query_bindings,
+                                                       cuac::PlannedRestResponsePath records_path) {
+	auto operation = plan.Operation().Rest();
+	operation.query_bindings = std::move(query_bindings);
+	operation.records_path = std::move(records_path);
+	operation.result_columns.clear();
+	for (const auto &column : plan.OutputColumns()) {
+		cuac::PlannedRestScalarKind kind;
+		switch (column.ScalarKind()) {
+		case cuac::PlannedColumnScalarKind::BOOLEAN:
+			kind = cuac::PlannedRestScalarKind::BOOLEAN;
+			break;
+		case cuac::PlannedColumnScalarKind::BIGINT:
+			kind = cuac::PlannedRestScalarKind::BIGINT;
+			break;
+		case cuac::PlannedColumnScalarKind::VARCHAR:
+			kind = cuac::PlannedRestScalarKind::VARCHAR;
+			break;
+		case cuac::PlannedColumnScalarKind::DOUBLE:
+			kind = cuac::PlannedRestScalarKind::DOUBLE;
+			break;
+		}
+		operation.result_columns.push_back({column.name,
+		                                    kind,
+		                                    column.nullable,
+		                                    {{column.name}},
+		                                    column.shape == cuac::PlannedColumnShape::ARRAY
+		                                        ? cuac::PlannedResultShape::ARRAY
+		                                        : cuac::PlannedResultShape::SCALAR,
+		                                    column.element_nullable});
+	}
+	ScanPlanTestAccess::ReplaceRest(plan, std::move(operation));
 }
 
 cuac::ScanPlan ScanPlanFixtureBuilder::Common(std::string connector, std::string version, std::string relation,
@@ -229,6 +267,15 @@ cuac::ScanPlan ScanPlanFixtureBuilder::Anonymous() {
 	     false},
 	    {"site_admin", "BOOLEAN", false, "$.site_admin", cuac::PlannedColumnShape::SCALAR,
 	     cuac::PlannedColumnScalarKind::BOOLEAN, false}};
+	SetRestExecutionAuthority(
+	    plan,
+	    {cuac::PlannedRestQueryBinding("q", cuac::PlannedRestQueryValueSource::FIXED, "",
+	                                   cuac::PlannedRestScalarKind::VARCHAR, false, 0, "duckdb in:login", 0.0,
+	                                   cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "duckdb+in%3Alogin"),
+	     cuac::PlannedRestQueryBinding("per_page", cuac::PlannedRestQueryValueSource::FIXED, "",
+	                                   cuac::PlannedRestScalarKind::VARCHAR, false, 0, "3", 0.0,
+	                                   cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "3")},
+	    {{"items"}});
 	plan.budgets = {1, 65536, 16384, 65536, 3, 256, 16, 131072, 2, 5000, 1, 0};
 	return plan;
 }
@@ -249,6 +296,7 @@ cuac::ScanPlan ScanPlanFixtureBuilder::AnonymousDoubleColumn() {
 	                        "$.items[*]"});
 	plan.output_columns = {{"score", "DOUBLE", false, "$.score", cuac::PlannedColumnShape::SCALAR,
 	                        cuac::PlannedColumnScalarKind::DOUBLE, false}};
+	SetRestExecutionAuthority(plan, {}, {{"items"}});
 	plan.budgets = {1, 65536, 16384, 65536, 3, 256, 16, 131072, 2, 5000, 1, 0};
 	return plan;
 }
@@ -274,6 +322,7 @@ cuac::ScanPlan ScanPlanFixtureBuilder::Authenticated(const std::string &secret_n
 	     false},
 	    {"site_admin", "BOOLEAN", false, "$.site_admin", cuac::PlannedColumnShape::SCALAR,
 	     cuac::PlannedColumnScalarKind::BOOLEAN, false}};
+	SetRestExecutionAuthority(plan, {}, {});
 	plan.budgets = {1, 65536, 16384, 65536, 1, 256, 16, 131072, 2, 5000, 1, 0};
 	RequireBearer(plan, secret_name);
 	return plan;
@@ -301,6 +350,7 @@ cuac::ScanPlan ScanPlanFixtureBuilder::ApiKey(const std::string &secret_name,
 	     false},
 	    {"site_admin", "BOOLEAN", false, "$.site_admin", cuac::PlannedColumnShape::SCALAR,
 	     cuac::PlannedColumnScalarKind::BOOLEAN, false}};
+	SetRestExecutionAuthority(plan, {}, {});
 	plan.budgets = {1, 65536, 16384, 65536, 1, 256, 16, 131072, 2, 5000, 1, 0};
 	RequireApiKey(plan, secret_name, placement, std::move(placement_name));
 	return plan;
@@ -335,6 +385,15 @@ cuac::ScanPlan ScanPlanFixtureBuilder::Repository(const std::string &secret_name
 	     cuac::PlannedColumnScalarKind::BOOLEAN, false},
 	    {"visibility", "VARCHAR", false, "$.visibility", cuac::PlannedColumnShape::SCALAR,
 	     cuac::PlannedColumnScalarKind::VARCHAR, false}};
+	SetRestExecutionAuthority(
+	    plan,
+	    {cuac::PlannedRestQueryBinding("per_page", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_SIZE, "",
+	                                   cuac::PlannedRestScalarKind::BIGINT, false, 100, "", 0.0,
+	                                   cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "100"),
+	     cuac::PlannedRestQueryBinding("page", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_NUMBER, "",
+	                                   cuac::PlannedRestScalarKind::BIGINT, false, 1, "", 0.0,
+	                                   cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "1")},
+	    {});
 	EnablePagination(plan, cuac::PlannedPaginationStrategy::LINK_HEADER, "per_page", 100, "page", 32, 8 * 1024 * 1024,
 	                 64 * 1024 * 1024, 100, 3200, 512);
 	RequireBearer(plan, secret_name);
@@ -387,6 +446,15 @@ cuac::ScanPlan ScanPlanFixtureBuilder::GenericPagination(const std::string &secr
 	                        cuac::PlannedColumnScalarKind::BIGINT, false},
 	                       {"record_label", "VARCHAR", false, "$.record_label", cuac::PlannedColumnShape::SCALAR,
 	                        cuac::PlannedColumnScalarKind::VARCHAR, false}};
+	SetRestExecutionAuthority(
+	    plan,
+	    {cuac::PlannedRestQueryBinding("batch_size", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_SIZE, "",
+	                                   cuac::PlannedRestScalarKind::BIGINT, false, 3, "", 0.0,
+	                                   cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "3"),
+	     cuac::PlannedRestQueryBinding("cursor_page", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_NUMBER, "",
+	                                   cuac::PlannedRestScalarKind::BIGINT, false, 1, "", 0.0,
+	                                   cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "1")},
+	    {{"records"}});
 	EnablePagination(plan, cuac::PlannedPaginationStrategy::LINK_HEADER, "batch_size", 3, "cursor_page", 4, 1024, 4096,
 	                 3, 12, 96);
 	RequireBearer(plan, secret_name);
@@ -397,16 +465,27 @@ cuac::ScanPlan ScanPlanFixtureBuilder::ShortPagePagination(const std::string &se
 	auto plan =
 	    Common("fixture_pagination_catalog", "test-1", "fixture_short_page_records", "fixture:short-page-records");
 	plan.domain = cuac::BaseDomain::PAGINATED_JSON_PATH_RECORDS;
+	std::vector<cuac::PlannedRestQueryBinding> bindings;
+	bindings.push_back(cuac::PlannedRestQueryBinding(
+	    "batch_size", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_SIZE, "", cuac::PlannedRestScalarKind::BIGINT,
+	    false, 3, "", 0.0, cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "3"));
+	bindings.push_back(cuac::PlannedRestQueryBinding(
+	    "cursor_page", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_NUMBER, "",
+	    cuac::PlannedRestScalarKind::BIGINT, false, 1, "", 0.0, cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "1"));
 	SetRestOperation(plan, {"fixture_short_page_records",
 	                        cuac::PlannedHttpMethod::GET,
 	                        cuac::PlannedCardinality::ZERO_TO_MANY,
 	                        cuac::PlannedReplaySafety::SAFE,
 	                        {cuac::PlannedUrlScheme::HTTPS, "api.github.com", 443},
 	                        "/fixtures/short-page-records",
-	                        {{"batch_size", "3"}, {"cursor_page", "1"}},
+	                        {},
 	                        {{"X-Connector-Fixture", "short-page-shape"}},
 	                        cuac::PlannedResponseSource::JSON_PATH_MANY,
-	                        "$.records[*]"});
+	                        "$.records[*]",
+	                        std::move(bindings),
+	                        {{"records"}},
+	                        {{"record_id", cuac::PlannedRestScalarKind::BIGINT, false, {{"record_id"}}},
+	                         {"record_label", cuac::PlannedRestScalarKind::VARCHAR, false, {{"record_label"}}}}});
 	plan.output_columns = {{"record_id", "BIGINT", false, "$.record_id", cuac::PlannedColumnShape::SCALAR,
 	                        cuac::PlannedColumnScalarKind::BIGINT, false},
 	                       {"record_label", "VARCHAR", false, "$.record_label", cuac::PlannedColumnShape::SCALAR,

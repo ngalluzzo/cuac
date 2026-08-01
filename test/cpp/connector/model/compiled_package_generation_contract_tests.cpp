@@ -459,19 +459,21 @@ cuac::CompiledOperation SelectorTestOperation(cuac::CompiledOperationSelector se
 cuac::CompiledOperation ControlledExactOperation(cuac::CompiledOperationSelector selector) {
 	const cuac::CompiledHttpOrigin origin = {cuac::CompiledUrlScheme::HTTPS,
 	                                         cuac::CompiledHttpHost("predicate-proof.invalid"), 443};
-	return cuac::CompiledOperation {
-	    "controlled_exact_repositories",
-	    false,
-	    cuac::CompiledOperationCardinality::ZERO_TO_MANY,
-	    cuac::CompiledProtocol::REST,
-	    cuac::CompiledHttpMethod::GET,
-	    cuac::CompiledReplaySafety::SAFE,
-	    false,
-	    CompiledModelBuilder::DisabledPagination(),
-	    {origin, "/fixtures/exact-repositories", {}, {{"X-Connector-Fixture", "exact-duplicate-repositories"}}},
-	    cuac::CompiledResponseSource::ROOT_ARRAY,
-	    "$",
-	    std::move(selector)};
+	return cuac::CompiledOperation {"controlled_exact_repositories",
+	                                false,
+	                                cuac::CompiledOperationCardinality::ZERO_TO_MANY,
+	                                cuac::CompiledProtocol::REST,
+	                                cuac::CompiledHttpMethod::GET,
+	                                cuac::CompiledReplaySafety::SAFE,
+	                                false,
+	                                CompiledModelBuilder::DisabledPagination(),
+	                                {origin,
+	                                 "/fixtures/exact-repositories",
+	                                 {CompiledModelBuilder::ConditionalInputQueryParameter("visibility", "visibility")},
+	                                 {{"X-Connector-Fixture", "exact-duplicate-repositories"}}},
+	                                cuac::CompiledResponseSource::ROOT_ARRAY,
+	                                "$",
+	                                std::move(selector)};
 }
 
 void TestTaggedRequiredInputReferences() {

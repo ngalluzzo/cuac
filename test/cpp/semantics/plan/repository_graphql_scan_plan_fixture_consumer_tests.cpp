@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
 		    "isolated Runtime consumer did not receive the complete Semantics-owned package GraphQL plan");
 		using Counterexample = cuac_test::PackageGraphqlRuntimeRecipeCounterexample;
 		const auto count = static_cast<std::size_t>(Counterexample::COUNT);
-		cuac_test::Require(count == 38,
+		cuac_test::Require(count == 37,
 		                   "closed Runtime-facing package recipe counterexample catalog changed without review");
 		for (std::size_t value = 0; value < count; value++) {
 			const auto counterexample = static_cast<Counterexample>(value);

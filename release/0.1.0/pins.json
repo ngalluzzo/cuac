@@ -305,7 +305,7 @@
         "test/cpp/runtime/support/loopback_curl_runtime.cpp",
         "test/cpp/runtime/support/loopback_curl_runtime.hpp"
       ],
-      "sha256": "9a46ec4e43e92b923187aa58bc01859a5e74dcc0e154e472a6c4d0e50739ed47"
+      "sha256": "ed623786ce2143c22283a8b234d347a70e777fbeb4e15f61800046da6b9d8f50"
     },
     "native_product_sources": {
       "algorithm": "sha256-length-prefixed-path-and-bytes-v1",
@@ -580,10 +580,10 @@
         "src/semantics/sources.cmake",
         "src/semantics/targets.cmake"
       ],
-      "sha256": "d098233a2e71c9e123e9ce907d708bacdfd1dc64c4e207e8618fb427bbb1f8bf"
+      "sha256": "096aad07cd4a78d30a93b6038e935d5dac582e19a17c7a0cae6a6bf4556577dd"
     },
     "public_contract": {
-      "canonical_json_sha256": "9115566ccccfebbfa85bf87fa478f693ccfb2a490f8b95a9049d460a19ab4f6a",
+      "canonical_json_sha256": "7eeecfacd7fa77833d819575b5ce4b0636fe1743b2ee497d0ac2ccb00116832b",
       "path": "release/0.1.0/public_contract.json"
     },
     "repository_connector_package": {
@@ -609,7 +609,7 @@
         "connectors/github/relations/duckdb_login_search_page.yaml",
         "connectors/github/relations/viewer_repository_metrics.yaml"
       ],
-      "sha256": "e5231dc3be87f73e32f303306247e7b0a3239820ef9310d1ea89f5ad31b14674"
+      "sha256": "5b72d95c9610524ca9975b8e5f365baf755f2d40ea442db8aebf35326c8a2108"
     }
   },
   "release_cells": {

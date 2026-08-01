@@ -35,10 +35,12 @@ void TestGithubPackageCompilesAsOneGeneration() {
 	        "compiled GitHub package lost its declared predicate binding");
 	const auto *graphql = connector.FindRelation("viewer_repository_metrics");
 	Require(graphql != nullptr && graphql->Operations().size() == 1 &&
-	            graphql->Operation().Graphql().document.size() == 581 &&
+	            graphql->Operation().Graphql().document.size() == 576 &&
 	            graphql->Operation().Graphql().document_digest ==
-	                "9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85",
-	        "structured GitHub package did not reproduce the exact GraphQL golden");
+	                "9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf",
+	        "structured GitHub package did not reproduce the exact GraphQL golden (bytes=" +
+	            std::to_string(graphql == nullptr ? 0 : graphql->Operation().Graphql().document.size()) + ", digest=" +
+	            (graphql == nullptr ? std::string("absent") : graphql->Operation().Graphql().document_digest) + ")");
 	const auto query = generation->QueryRegistration();
 	Require(query.Relations().size() == 4 && query.GenerationHandle().IsValid() &&
 	            query.Identity().PackageDigest() == generation->Identity().PackageDigest(),

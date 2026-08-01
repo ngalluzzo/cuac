@@ -215,7 +215,7 @@ void TestNondefaultPortRestAndLinkContinuation(const std::string &repository_roo
 
 void TestPackageRecipeCounterexamplesIssueZeroRequests(const std::string &repository_root) {
 	const auto count = static_cast<std::size_t>(PackageGraphqlRuntimeRecipeCounterexample::COUNT);
-	Require(count == 38, "Runtime recipe counterexample corpus changed without updating the execution oracle");
+	Require(count == 37, "Runtime recipe counterexample corpus changed without updating the execution oracle");
 	NeverCancelled control;
 	for (std::size_t value = 0; value < count; value++) {
 		const auto runtime = cuac_test::BuildControlledPackageHttpRuntime();

@@ -232,7 +232,7 @@ def _assert_environment_and_persistent_providers(
         memory_only.close()
 
     with tempfile.TemporaryDirectory(
-        prefix="cuac-persistent-contract-", dir="/private/tmp"
+        prefix="cuac-persistent-contract-", dir="/tmp"
     ) as directory:
         root = pathlib.Path(directory)
         first = load_controlled_extension(extension_path, root)
@@ -372,7 +372,7 @@ def _assert_persistent_storage_failures(
         ),
     ):
         with tempfile.TemporaryDirectory(
-            prefix="cuac-private-boundary-", dir="/private/tmp"
+            prefix="cuac-private-boundary-", dir="/tmp"
         ) as directory:
             root = pathlib.Path(directory)
             project = root / "cuac"
@@ -396,7 +396,7 @@ def _assert_persistent_storage_failures(
                 connection.close()
 
     with tempfile.TemporaryDirectory(
-        prefix="cuac-malformed-index-", dir="/private/tmp"
+        prefix="cuac-malformed-index-", dir="/tmp"
     ) as directory:
         root = pathlib.Path(directory)
         project = root / "cuac"
@@ -418,9 +418,9 @@ def _assert_persistent_storage_failures(
             connection.close()
 
     with tempfile.TemporaryDirectory(
-        prefix="cuac-symlink-root-", dir="/private/tmp"
+        prefix="cuac-symlink-root-", dir="/tmp"
     ) as directory, tempfile.TemporaryDirectory(
-        prefix="cuac-symlink-target-", dir="/private/tmp"
+        prefix="cuac-symlink-target-", dir="/tmp"
     ) as target:
         root = pathlib.Path(directory)
         (root / "cuac").symlink_to(pathlib.Path(target), target_is_directory=True)
@@ -438,7 +438,7 @@ def _assert_persistent_storage_failures(
             connection.close()
 
     with tempfile.TemporaryDirectory(
-        prefix="cuac-corrupt-record-", dir="/private/tmp"
+        prefix="cuac-corrupt-record-", dir="/tmp"
     ) as directory:
         root = pathlib.Path(directory)
         first = load_controlled_extension(extension_path, root)
@@ -470,7 +470,7 @@ def _assert_persistent_storage_failures(
             restarted.close()
 
     with tempfile.TemporaryDirectory(
-        prefix="cuac-aliased-index-", dir="/private/tmp"
+        prefix="cuac-aliased-index-", dir="/tmp"
     ) as directory:
         root = pathlib.Path(directory)
         first = load_controlled_extension(extension_path, root)
@@ -510,7 +510,7 @@ def _assert_persistent_storage_failures(
             restarted.close()
 
     with tempfile.TemporaryDirectory(
-        prefix="cuac-path-replacement-", dir="/private/tmp"
+        prefix="cuac-path-replacement-", dir="/tmp"
     ) as directory:
         root = pathlib.Path(directory)
         project = root / "cuac"

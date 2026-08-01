@@ -187,7 +187,7 @@ cases:
             endpoint:
               origin: {scheme: https, host: api.github.com, port: 443}
               path: /graphql
-            document_digest: sha256.9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85
+            document_digest: sha256.9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf
             variables:
               - {name: pageSize, type: INT_NON_NULL, value: {kind: value, value: 100}}
               - {name: cursor, type: STRING_NULLABLE, value: {kind: null}}
@@ -204,7 +204,7 @@ cases:
             endpoint:
               origin: {scheme: https, host: api.github.com, port: 443}
               path: /graphql
-            document_digest: sha256.9d3d78e2214669f11b9caabc2a7f062e2985f9da9628485f124e1f24e3a50c85
+            document_digest: sha256.9ce36f2aea8bb0c4047d15adebd549c1fb79fe6c75faa011c955f247ebb09dbf
             variables:
               - {name: pageSize, type: INT_NON_NULL, value: {kind: value, value: 100}}
               - {name: cursor, type: STRING_NULLABLE, value: {kind: value, value: "cursor-1"}}

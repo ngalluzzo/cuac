@@ -16,7 +16,7 @@ namespace cuac_test {
 class TemporaryPackage {
 public:
 	TemporaryPackage() {
-		char pattern[] = "/private/tmp/cuac-compiler-XXXXXX";
+		char pattern[] = "/tmp/cuac-compiler-XXXXXX";
 		const auto *created = ::mkdtemp(pattern);
 		if (created == nullptr) {
 			throw std::runtime_error("could not create compiler test package root");

@@ -109,12 +109,14 @@ public:
 void TestRickAndMortyCoverageMatchesDerivedMapping(const std::string &repository_root) {
 	const auto generation = cuac_test::CompileRepositoryRickAndMortyLocalPackageFixture(repository_root).Generation();
 	const auto coverage = cuac::connector::DerivePackageFixtureCoverage(generation);
-	Require(coverage.RequiredKeys().size() == 163,
-	        "Rick and Morty package did not derive its complete 163-key fixture-coverage matrix");
+	Require(coverage.RequiredKeys().size() == 167,
+	        "Rick and Morty package did not derive its complete 167-key fixture-coverage matrix (observed=" +
+	            std::to_string(coverage.RequiredKeys().size()) + ")");
 	Require(coverage.Entries().size() == coverage.RequiredKeys().size(),
 	        "Rick and Morty typed coverage registry does not align one-for-one with rendered keys");
-	Require(coverage.OrderedDigest() == "sha256.a1bfeb2df29612a350d8c9e68408d0eafb6f682bbed02dd1a240363784c01036",
-	        "Rick and Morty coverage ordering drifted from the authored fixture corpus");
+	Require(coverage.OrderedDigest() == "sha256.d29de08dc2cb9fef8ca995e532675f296508a38cc66678ed6574eca1618ba6ad",
+	        "Rick and Morty coverage ordering drifted from the authored fixture corpus (observed=" +
+	            coverage.OrderedDigest() + ")");
 }
 
 void TestRickAndMortyFixtureCorpusReachesProvider(const std::string &repository_root) {

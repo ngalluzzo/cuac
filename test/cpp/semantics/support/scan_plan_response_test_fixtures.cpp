@@ -34,9 +34,13 @@ cuac::ScanPlan ScanPlanTestAccess::Response(cuac::ScanPlan plan, ResponsePlanCou
 	case ResponsePlanCounterexample::UNSUPPORTED_SCHEMA_TYPE:
 		plan.output_columns.front().logical_type = "DECIMAL";
 		break;
-	case ResponsePlanCounterexample::FLIPPED_SCHEMA_NULLABILITY:
+	case ResponsePlanCounterexample::FLIPPED_SCHEMA_NULLABILITY: {
 		plan.output_columns.front().nullable = !plan.output_columns.front().nullable;
+		auto operation = plan.Operation().Rest();
+		operation.result_columns.front().nullable = plan.output_columns.front().nullable;
+		ReplaceRest(plan, std::move(operation));
 		break;
+	}
 	case ResponsePlanCounterexample::EMPTY_SCHEMA_EXTRACTOR:
 		plan.output_columns.front().extractor.clear();
 		break;

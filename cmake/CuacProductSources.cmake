@@ -54,6 +54,7 @@ function(_cuac_normalize_product_sources output target)
     endif()
     list(APPEND result "${relative}")
   endforeach()
+  list(SORT result)
   set(${output} "${result}" PARENT_SCOPE)
 endfunction()
 

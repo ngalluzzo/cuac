@@ -38,7 +38,7 @@ int RemoveEntry(const char *path, const struct stat *, int, struct FTW *) {
 class TempTree {
 public:
 	TempTree() {
-		char pattern[] = "/private/tmp/cuac-package-XXXXXX";
+		char pattern[] = "/tmp/cuac-package-XXXXXX";
 		char *created = ::mkdtemp(pattern);
 		if (!created) {
 			throw std::runtime_error("could not create temporary package tree");
@@ -105,7 +105,7 @@ void RequireSourceFailure(PackageSourceErrorCode expected, Function function) {
 		                         std::to_string(static_cast<unsigned>(expected)));
 	} catch (const PackageSourceError &error) {
 		Require(error.Code() == expected, "package source failed with the wrong typed category");
-		Require(std::string(error.what()).find("/private/tmp/") == std::string::npos,
+		Require(std::string(error.what()).find("/tmp/") == std::string::npos,
 		        "package source error disclosed an absolute root");
 	}
 }

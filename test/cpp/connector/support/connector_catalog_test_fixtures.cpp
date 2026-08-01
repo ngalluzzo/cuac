@@ -62,32 +62,40 @@ std::vector<cuac::CompiledColumn> PredicateRepositorySchema() {
 cuac::CompiledOperation
 ControlledExactPredicateOperation(bool fallback = true,
                                   cuac::CompiledOperationSelector selector = cuac::CompiledOperationSelector(),
-                                  std::string operation_name = "controlled_exact_repositories") {
+                                  std::string operation_name = "controlled_exact_repositories",
+                                  std::vector<std::string> conditional_inputs = {"visibility"}) {
 	const cuac::CompiledHttpOrigin origin = {cuac::CompiledUrlScheme::HTTPS,
 	                                         cuac::CompiledHttpHost("predicate-proof.invalid"), 443};
-	return cuac::CompiledOperation {
-	    std::move(operation_name),
-	    fallback,
-	    cuac::CompiledOperationCardinality::ZERO_TO_MANY,
-	    cuac::CompiledProtocol::REST,
-	    cuac::CompiledHttpMethod::GET,
-	    cuac::CompiledReplaySafety::SAFE,
-	    false,
-	    ConnectorCatalogTestAccess::DisabledPagination(),
-	    {origin, "/fixtures/exact-repositories", {}, {{"X-Connector-Fixture", "exact-duplicate-repositories"}}},
-	    cuac::CompiledResponseSource::ROOT_ARRAY,
-	    "$",
-	    std::move(selector)};
+	std::vector<cuac::CompiledQueryParameter> query_parameters;
+	for (const auto &conditional_input : conditional_inputs) {
+		query_parameters.push_back(
+		    cuac::internal::CompiledModelBuilder::ConditionalInputQueryParameter(conditional_input, conditional_input));
+	}
+	return cuac::CompiledOperation {std::move(operation_name),
+	                                fallback,
+	                                cuac::CompiledOperationCardinality::ZERO_TO_MANY,
+	                                cuac::CompiledProtocol::REST,
+	                                cuac::CompiledHttpMethod::GET,
+	                                cuac::CompiledReplaySafety::SAFE,
+	                                false,
+	                                ConnectorCatalogTestAccess::DisabledPagination(),
+	                                {origin,
+	                                 "/fixtures/exact-repositories",
+	                                 std::move(query_parameters),
+	                                 {{"X-Connector-Fixture", "exact-duplicate-repositories"}}},
+	                                cuac::CompiledResponseSource::ROOT_ARRAY,
+	                                "$",
+	                                std::move(selector)};
 }
 
 cuac::CompiledPredicateMapping
 ControlledExactPredicateMapping(std::string remote_input_name,
-                                std::string operation_name = "controlled_exact_repositories") {
+                                std::string operation_name = "controlled_exact_repositories",
+                                std::string literal = "private") {
 	return ConnectorCatalogTestAccess::PackagePredicateMapping(
-	    "visibility", cuac::internal::CompiledModelBuilder::Varchar("private"), std::move(operation_name),
-	    std::move(remote_input_name), "private", cuac::CompiledPredicateAccuracy::EXACT,
-	    "controlled_exact_visibility_v1", "controlled_duplicate_occurrences_v1", "matching", "false_or_null",
-	    "duplicates");
+	    "visibility", cuac::internal::CompiledModelBuilder::Varchar(literal), std::move(operation_name),
+	    std::move(remote_input_name), literal, cuac::CompiledPredicateAccuracy::EXACT, "controlled_exact_visibility_v1",
+	    "controlled_duplicate_occurrences_v1", "matching", "false_or_null", "duplicates");
 }
 
 std::vector<cuac::CompiledColumn> ControlledPredicateSchema() {
@@ -287,7 +295,7 @@ cuac::CompiledConnector BuildPaginationPlannerCandidate(std::uint64_t max_pages,
 	        {"https"}, {"api.github.com"}, false, false, false, false, response_bytes_per_page});
 }
 
-cuac::CompiledConnector BuildDisabledRootArrayRepositoryCandidate() {
+cuac::CompiledConnector BuildDeclaredUnpaginatedRootArrayRepositoryCandidate() {
 	const cuac::CompiledHttpOrigin origin = {cuac::CompiledUrlScheme::HTTPS, cuac::CompiledHttpHost("api.github.com"),
 	                                         443};
 	std::vector<cuac::CompiledRelation> relations;
@@ -387,11 +395,17 @@ cuac::CompiledConnector BuildFallbackOperationsCatalogFixture() {
 }
 
 cuac::CompiledConnector BuildAmbiguousPredicateMappingsCatalogFixture() {
+	std::vector<cuac::CompiledOperation> operations;
+	operations.push_back(ControlledExactPredicateOperation(
+	    false, ConnectorCatalogTestAccess::OperationSelector(
+	               {ConnectorCatalogTestAccess::ConditionalInputReference("visibility")})));
+	operations.push_back(ControlledSelectorFallbackOperation());
 	std::vector<cuac::CompiledRelation> relations;
 	relations.push_back(ConnectorCatalogTestAccess::Relation(
-	    PREDICATE_AMBIGUOUS_MAPPINGS_RELATION, ControlledPredicateSchema(), ControlledExactPredicateOperation(),
+	    PREDICATE_AMBIGUOUS_MAPPINGS_RELATION, ControlledPredicateSchema(), std::move(operations),
 	    ConnectorCatalogTestAccess::Anonymous(), ConnectorCatalogTestAccess::UnpaginatedResources(8, 128),
-	    {ControlledExactPredicateMapping("visibility"), ControlledExactPredicateMapping("repository_visibility")}));
+	    {ControlledExactPredicateMapping("visibility"),
+	     ControlledExactPredicateMapping("visibility", "controlled_exact_repositories", "public")}));
 	return ConnectorCatalogTestAccess::Catalog(
 	    "controlled_ambiguous_predicate", "test-1", std::move(relations),
 	    cuac::CompiledNetworkPolicy {{"https"}, {"predicate-proof.invalid"}, false, false, false, false, 4096});

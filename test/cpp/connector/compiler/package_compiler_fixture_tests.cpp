@@ -88,7 +88,7 @@ std::string ReadBytes(const std::string &path) {
 class TemporaryInventoryTree {
 public:
 	TemporaryInventoryTree() {
-		char pattern[] = "/private/tmp/cuac-package-inventory-XXXXXX";
+		char pattern[] = "/tmp/cuac-package-inventory-XXXXXX";
 		const auto *created = ::mkdtemp(pattern);
 		if (created == nullptr) {
 			throw std::runtime_error("could not create package inventory test root");
