@@ -117,38 +117,52 @@ inline FailureProperties EnrichRateLimitFailureProperties(FailureProperties prop
 	return properties;
 }
 
-inline ExecutionSnapshot BuildExecutionSnapshot(const RetryPlan &retry, const AdmittedRateLimitPolicy &rate_limit,
-                                                const AdmittedResiliencePolicy &resilience,
-                                                const ScanResourceCounters &counters,
-                                                const ResilienceExecutionState &state,
-                                                ExposureState exposure) noexcept {
-	return {resilience.max_attempts_per_step,
-	        resilience.max_attempts_per_scan,
-	        retry.max_delay_milliseconds,
-	        resilience.max_cumulative_waiting_milliseconds_per_scan,
-	        counters.request_attempts,
-	        counters.cumulative_retry_waiting_milliseconds,
-	        counters.pages,
-	        exposure,
-	        rate_limit.max_attempts_per_step,
-	        rate_limit.max_attempts_per_scan,
-	        rate_limit.max_delay_milliseconds,
-	        rate_limit.max_cumulative_waiting_milliseconds_per_scan,
-	        resilience.max_cumulative_waiting_milliseconds_per_scan,
-	        counters.cumulative_rate_limit_waiting_milliseconds,
-	        counters.cumulative_remote_transport_milliseconds,
-	        state.rate_limit_events,
-	        state.rate_limit_waits,
-	        state.rate_limit_reason,
-	        state.rate_limit_waiting,
-	        AdmissionReason::NONE,
-	        AdmissionScope::NONE,
-	        0,
-	        0,
-	        0,
-	        counters.cumulative_admission_waiting_milliseconds,
-	        false,
-	        {}};
+inline ExecutionSnapshot
+BuildExecutionSnapshot(const RetryPlan &retry, const AdmittedRateLimitPolicy &rate_limit,
+                       const AdmittedResiliencePolicy &resilience, const ScanResourceAccounting &accounting,
+                       const ResilienceExecutionState &state, ExposureState exposure, uint64_t rows_returned = 0,
+                       ScanOutcome outcome = ScanOutcome::RUNNING, bool has_terminal_failure = false,
+                       FailureClass terminal_failure_class = FailureClass::INTERNAL,
+                       std::chrono::steady_clock::time_point observed_at = std::chrono::steady_clock::now()) noexcept {
+	const auto &counters = accounting.Counters();
+	ExecutionSnapshot result;
+	result.effective_max_attempts_per_step = resilience.max_attempts_per_step;
+	result.effective_max_attempts_per_scan = resilience.max_attempts_per_scan;
+	result.effective_max_delay_milliseconds = retry.max_delay_milliseconds;
+	result.effective_max_cumulative_waiting_milliseconds_per_scan =
+	    resilience.max_cumulative_waiting_milliseconds_per_scan;
+	result.aggregate_attempts = counters.request_attempts;
+	result.cumulative_delay_milliseconds = counters.cumulative_retry_waiting_milliseconds;
+	result.current_step = counters.pages;
+	result.exposure_state = exposure;
+	result.effective_max_rate_limit_attempts_per_step = rate_limit.max_attempts_per_step;
+	result.effective_max_rate_limit_attempts_per_scan = rate_limit.max_attempts_per_scan;
+	result.effective_max_rate_limit_delay_milliseconds = rate_limit.max_delay_milliseconds;
+	result.effective_max_rate_limit_waiting_milliseconds_per_scan =
+	    rate_limit.max_cumulative_waiting_milliseconds_per_scan;
+	result.effective_max_combined_waiting_milliseconds_per_scan =
+	    resilience.max_cumulative_waiting_milliseconds_per_scan;
+	result.cumulative_rate_limit_waiting_milliseconds = counters.cumulative_rate_limit_waiting_milliseconds;
+	result.cumulative_remote_transport_milliseconds = counters.cumulative_remote_transport_milliseconds;
+	result.rate_limit_events = state.rate_limit_events;
+	result.rate_limit_waits = state.rate_limit_waits;
+	result.rate_limit_reason = state.rate_limit_reason;
+	result.rate_limit_waiting = state.rate_limit_waiting;
+	result.cumulative_admission_waiting_milliseconds = counters.cumulative_admission_waiting_milliseconds;
+	result.outcome = outcome;
+	result.elapsed_milliseconds = accounting.ElapsedMilliseconds(observed_at);
+	result.remote_requests = counters.remote_requests;
+	result.rows_decoded = counters.decoded_records;
+	result.rows_returned = rows_returned;
+	result.response_header_bytes = counters.header_bytes;
+	result.wire_response_bytes = counters.wire_response_bytes;
+	result.decompressed_response_bytes = counters.decompressed_response_bytes;
+	result.serialized_request_body_bytes = counters.serialized_request_body_bytes;
+	result.peak_decoded_memory_bytes = counters.peak_decoded_memory_bytes;
+	result.cumulative_waiting_milliseconds = counters.cumulative_waiting_milliseconds;
+	result.has_terminal_failure = has_terminal_failure;
+	result.terminal_failure_class = terminal_failure_class;
+	return result;
 }
 
 namespace rate_limit_detail {
@@ -438,7 +452,7 @@ inline AdmissionController::Permit
 AcquireRequestAdmission(AdmissionRuntimeContext &runtime, RateLimitRuntimeContext &rate_runtime, const RetryPlan &retry,
                         const AdmittedRateLimitPolicy &rate_limit, const AdmittedResiliencePolicy &resilience,
                         ScanResourceAccounting &accounting, ResilienceExecutionState &execution_state,
-                        ExecutionControl &control) {
+                        ExecutionControl &control, uint64_t rows_returned) {
 	const auto profile = runtime.controller->Profile();
 	const auto used = accounting.Counters().cumulative_admission_waiting_milliseconds;
 	const auto remaining = Remaining(profile.aggregate_request_waiting_milliseconds, used);
@@ -449,8 +463,9 @@ AcquireRequestAdmission(AdmissionRuntimeContext &runtime, RateLimitRuntimeContex
 	AdmissionController::Permit permit;
 	AdmissionObservation observation {};
 	AdmissionWaitPublication publication(*rate_runtime.wait_diagnostics,
-	                                     BuildExecutionSnapshot(retry, rate_limit, resilience, accounting.Counters(),
-	                                                            execution_state, ExposureState::UNACCEPTED));
+	                                     BuildExecutionSnapshot(retry, rate_limit, resilience, accounting,
+	                                                            execution_state, ExposureState::UNACCEPTED,
+	                                                            rows_returned));
 	const auto status = runtime.controller->AcquireRequest(runtime.identity, wait, cancellation, &permit, &observation);
 	publication.Complete();
 	if (observation.waited_milliseconds != 0) {
@@ -738,6 +753,7 @@ ExecuteOneAdmittedTransportAttempt(const std::function<HttpRequest(uint64_t)> &r
 	                         allowance.deadline,
 	                         rate_limit_detail::RetainedHeaderNames(rate_limit),
 	                         rate_limit_detail::RetainDate(rate_limit)};
+	accounting.CommitRemoteRequest();
 	const auto transport_started = std::chrono::steady_clock::now();
 	HttpResponse response;
 	try {
@@ -770,7 +786,7 @@ ExecuteHttpStepWithRetry(const RetryPlan &policy, const AdmittedRateLimitPolicy 
                          AdmissionRuntimeContext &admission_runtime, ScanResourceAccounting &accounting,
                          const std::shared_ptr<const HttpTransport> &transport, uint64_t max_metadata_bytes,
                          uint64_t jitter_seed, const std::function<HttpRequest(uint64_t)> &request_factory,
-                         ExecutionControl &control) {
+                         ExecutionControl &control, uint64_t rows_returned = 0) {
 	using namespace rate_limit_detail;
 	accounting.BeginStep(std::chrono::steady_clock::now());
 	PageResourceAllowance allowance {};
@@ -810,9 +826,9 @@ ExecuteHttpStepWithRetry(const RetryPlan &policy, const AdmittedRateLimitPolicy 
 			CancellationView cancellation(control);
 			execution_state.rate_limit_waiting = true;
 			WaitPublication wait_publication(*rate_runtime.wait_diagnostics, execution_state,
-			                                 BuildExecutionSnapshot(policy, rate_limit, observed_resilience,
-			                                                        accounting.Counters(), execution_state,
-			                                                        ExposureState::UNACCEPTED));
+			                                 BuildExecutionSnapshot(policy, rate_limit, observed_resilience, accounting,
+			                                                        execution_state, ExposureState::UNACCEPTED,
+			                                                        rows_returned));
 			const auto acquire_status = rate_runtime.coordinator->Acquire(*quota_key, wait_started,
 			                                                              coordinator_deadline, cancellation, &permit);
 			const auto wait_completed = rate_runtime.clock->SteadyNowMilliseconds();
@@ -838,8 +854,9 @@ ExecuteHttpStepWithRetry(const RetryPlan &policy, const AdmittedRateLimitPolicy 
 			}
 			wait_reservation.Release();
 		}
-		auto request_permit = AcquireRequestAdmission(admission_runtime, rate_runtime, policy, rate_limit,
-		                                              observed_resilience, accounting, execution_state, control);
+		auto request_permit =
+		    AcquireRequestAdmission(admission_runtime, rate_runtime, policy, rate_limit, observed_resilience,
+		                            accounting, execution_state, control, rows_returned);
 		auto buffer_reservation = ReserveAttemptBuffers(admission_runtime, accounting, max_metadata_bytes);
 		allowance = accounting.BeginAttempt(std::chrono::steady_clock::now());
 		uint64_t request_body_bytes = 0;
@@ -942,8 +959,8 @@ ExecuteHttpStepWithRetry(const RetryPlan &policy, const AdmittedRateLimitPolicy 
 				execution_state.rate_limit_waiting = true;
 				WaitPublication wait_publication(*rate_runtime.wait_diagnostics, execution_state,
 				                                 BuildExecutionSnapshot(policy, rate_limit, observed_resilience,
-				                                                        accounting.Counters(), execution_state,
-				                                                        ExposureState::UNACCEPTED));
+				                                                        accounting, execution_state,
+				                                                        ExposureState::UNACCEPTED, rows_returned));
 				RateLimitAcquireStatus acquire_status = RateLimitAcquireStatus::SCHEDULER_CLOSED;
 				if (permit.IsValid()) {
 					acquire_status = rate_runtime.coordinator->Requeue(&permit, guidance.eligible_steady_milliseconds,

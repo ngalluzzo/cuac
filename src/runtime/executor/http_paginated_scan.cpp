@@ -178,7 +178,9 @@ public:
 	                 static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())),
 	      rate_limit_runtime(std::move(rate_limit_runtime_p)), admission_runtime(std::move(admission_runtime_p)),
 	      scan_permit(std::move(scan_permit_p)), resilience_state(), current_step_exposure(ExposureState::UNACCEPTED),
-	      terminal_exposure(ExposureState::UNACCEPTED), has_terminal_exposure(false) {
+	      terminal_exposure(ExposureState::UNACCEPTED), has_terminal_exposure(false),
+	      profile_outcome(ScanOutcome::NOT_STARTED), profile_finished(false), profile_finished_at(),
+	      has_terminal_failure(false), terminal_failure_class(FailureClass::INTERNAL) {
 	}
 
 	~PaginatedBatchStream() noexcept override {
@@ -227,6 +229,7 @@ public:
 					accounting.CompletePage(page_has_next, std::chrono::steady_clock::now());
 					if (!page_has_next) {
 						exhausted = true;
+						FinishProfile(ScanOutcome::SUCCEEDED);
 						authorization.reset();
 						scan_permit.Release();
 						return false;
@@ -236,7 +239,7 @@ public:
 				FetchPage(combined);
 			}
 		} catch (const ExecutionCancelled &) {
-			RememberCurrentFailure();
+			RememberCurrentFailure(ScanOutcome::CANCELLED);
 			throw;
 		} catch (const ExecutionError &error) {
 			FailWithExecutionError(
@@ -277,6 +280,7 @@ public:
 		try {
 			std::lock_guard<std::mutex> guard(mutex);
 			if (!closed) {
+				FinishProfile(ScanOutcome::CANCELLED);
 				ReleasePrivateState();
 			}
 		} catch (...) {
@@ -291,6 +295,7 @@ public:
 				return;
 			}
 			closed = true;
+			FinishProfile(ScanOutcome::CLOSED);
 			ReleasePrivateState();
 		} catch (...) {
 		}
@@ -305,10 +310,10 @@ public:
 				}
 				std::unique_lock<std::mutex> guard(mutex, std::try_to_lock);
 				if (guard.owns_lock()) {
-					const auto &counters = accounting.Counters();
 					return BuildExecutionSnapshot(admitted_profile->RetryPolicy(), admitted_profile->RateLimitPolicy(),
-					                              admitted_profile->ResiliencePolicy(), counters, resilience_state,
-					                              CurrentExposure());
+					                              admitted_profile->ResiliencePolicy(), accounting, resilience_state,
+					                              CurrentExposure(), rows_emitted, CurrentProfileOutcome(),
+					                              has_terminal_failure, terminal_failure_class, ProfileObservedAt());
 				}
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
@@ -323,6 +328,22 @@ private:
 			return terminal_exposure;
 		}
 		return current_step_exposure;
+	}
+	ScanOutcome CurrentProfileOutcome() const noexcept {
+		return profile_outcome == ScanOutcome::NOT_STARTED && accounting.DeadlineStarted() ? ScanOutcome::RUNNING
+		                                                                                   : profile_outcome;
+	}
+	std::chrono::steady_clock::time_point ProfileObservedAt() const noexcept {
+		return profile_finished ? profile_finished_at : std::chrono::steady_clock::now();
+	}
+	void FinishProfile(ScanOutcome outcome) noexcept {
+		if (profile_outcome == ScanOutcome::SUCCEEDED || profile_outcome == ScanOutcome::FAILED ||
+		    profile_outcome == ScanOutcome::CANCELLED || profile_outcome == ScanOutcome::CLOSED) {
+			return;
+		}
+		profile_outcome = outcome;
+		profile_finished_at = std::chrono::steady_clock::now();
+		profile_finished = true;
 	}
 	bool ProduceBatch(ExecutionControl &control, TypedBatch &batch) {
 		CheckState(control, accounting.Deadline());
@@ -384,7 +405,7 @@ private:
 			    }
 			    return request;
 		    },
-		    control);
+		    control, rows_emitted);
 		auto response = std::move(attempted.response);
 		const auto allowance = attempted.allowance;
 		CheckState(control, allowance.deadline);
@@ -454,10 +475,21 @@ private:
 		ReleasePrivateState();
 	}
 
-	void RememberCurrentFailure() noexcept {
+	void RememberCurrentFailure(ScanOutcome outcome = ScanOutcome::FAILED) noexcept {
 		terminal_exposure = CurrentExposure();
 		has_terminal_exposure = true;
 		terminal_exception = std::current_exception();
+		if (outcome == ScanOutcome::FAILED) {
+			has_terminal_failure = true;
+			try {
+				std::rethrow_exception(terminal_exception);
+			} catch (const ExecutionError &error) {
+				terminal_failure_class = FailurePropertiesFromError(error).failure_class;
+			} catch (...) {
+				terminal_failure_class = FailureClass::INTERNAL;
+			}
+		}
+		FinishProfile(outcome);
 		Fail();
 	}
 
@@ -511,6 +543,11 @@ private:
 	ExposureState current_step_exposure;
 	ExposureState terminal_exposure;
 	bool has_terminal_exposure;
+	ScanOutcome profile_outcome;
+	bool profile_finished;
+	std::chrono::steady_clock::time_point profile_finished_at;
+	bool has_terminal_failure;
+	FailureClass terminal_failure_class;
 };
 
 } // namespace

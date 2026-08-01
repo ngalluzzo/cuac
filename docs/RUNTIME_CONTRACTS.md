@@ -930,6 +930,50 @@ Unknown values fail closed.
 Executor instances are immutable services. Each open creates isolated mutable
 stream state. Failure or cancellation of one stream cannot poison another.
 
+## Bounded per-scan profiling
+
+Every physical Runtime stream owns one `ExecutionSnapshot`. Runtime measures
+the facts; Query has no counters of its own and only converts the snapshot to
+DuckDB's dynamic table-function profile. Consequently `EXPLAIN ANALYZE`
+associates observations with the exact scan operator that performed the work,
+while ordinary `EXPLAIN`, `DESCRIBE`, and `PREPARE` remain offline and expose
+only immutable planned facts.
+
+The profile has a closed lifecycle: `not_started`, `running`, `succeeded`,
+`failed`, `cancelled`, or `closed`. Elapsed time uses one monotonic interval
+beginning with the first pull and freezes at terminal state. Remote execution
+clamps it to the admitted scan wall-time ceiling; cache replay includes its
+complete wrapper lifecycle in the fixed-width count. A successful cache hit is
+`succeeded` with delivered rows but zero remote requests, attempts, pages,
+decoded rows, bytes, and remote transport time. Stale delivery is also
+successful delivery, but retains the failed refresh's remote-work counters and
+closed stale-cause class.
+
+The stable DuckDB field inventory is:
+
+- outcome and elapsed milliseconds;
+- remote requests, request attempts, and pages;
+- rows decoded by Runtime and rows returned across the Runtime/Query handoff;
+- response-header, wire-response, decompressed-response, serialized-request-
+  body, and peak decoded-memory bytes;
+- remote transport, retry, rate-limit, admission, and total resilience waiting
+  milliseconds;
+- exposure, rate-limit event/wait/reason/current-wait facts, and admission
+  reason/scope/current-wait facts;
+- cache status, age, refresh-attempted, and conditional stale-cause class; and
+- the conditional terminal failure class.
+
+`remote requests` counts attempts handed to transport. `request attempts`
+also counts an admitted attempt whose request construction failed before that
+handoff. `rows decoded` counts accepted decoded records, whereas `rows
+returned` counts rows delivered from the stream, including cache replay. Every
+field is a checked count, Boolean, or closed vocabulary value. Request targets,
+headers, credentials, response values, rows, package paths, remote messages,
+bucket identities, and timestamps cannot enter the snapshot. DuckDB aborts a
+failing `EXPLAIN ANALYZE` with the existing structured failure; Runtime still
+freezes the failed snapshot for lifecycle consumers rather than converting the
+failure to a partial analyzed result.
+
 ## Publication and database lifecycle
 
 Runtime serializes generation staging per DatabaseInstance; Query separately

@@ -410,6 +410,14 @@ enum class CacheStatus : uint8_t {
 
 const char *CacheStatusName(CacheStatus status);
 
+// Closed, content-free lifecycle of one physical scan operator. RUNNING is the
+// only non-terminal state after the first pull. CLOSED records a direct early
+// close; ordinary host interruption records CANCELLED. A successful cache hit
+// is SUCCEEDED even though every remote-work counter remains zero.
+enum class ScanOutcome : uint8_t { NOT_STARTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, CLOSED };
+
+const char *ScanOutcomeName(ScanOutcome outcome);
+
 // RFC 0027: closed cache observations layered additively on ExecutionSnapshot.
 // Every member is a closed code or count — never content. Stale delivery is
 // never represented as an ordinary fresh success; stale_served is distinct
@@ -432,33 +440,52 @@ struct CacheDiagnostics {
 // streaming boundary. Cancel and Close are idempotent, non-throwing lifecycle
 // signals.
 struct ExecutionSnapshot {
-	std::uint64_t effective_max_attempts_per_step;
-	std::uint64_t effective_max_attempts_per_scan;
-	std::uint64_t effective_max_delay_milliseconds;
-	std::uint64_t effective_max_cumulative_waiting_milliseconds_per_scan;
-	std::uint64_t aggregate_attempts;
-	std::uint64_t cumulative_delay_milliseconds;
-	std::uint64_t current_step;
-	ExposureState exposure_state;
-	std::uint64_t effective_max_rate_limit_attempts_per_step;
-	std::uint64_t effective_max_rate_limit_attempts_per_scan;
-	std::uint64_t effective_max_rate_limit_delay_milliseconds;
-	std::uint64_t effective_max_rate_limit_waiting_milliseconds_per_scan;
-	std::uint64_t effective_max_combined_waiting_milliseconds_per_scan;
-	std::uint64_t cumulative_rate_limit_waiting_milliseconds;
-	std::uint64_t cumulative_remote_transport_milliseconds;
-	std::uint64_t rate_limit_events;
-	std::uint64_t rate_limit_waits;
-	RateLimitReason rate_limit_reason;
-	bool rate_limit_waiting;
-	AdmissionReason admission_reason;
-	AdmissionScope admission_scope;
-	std::uint64_t admission_limit;
-	std::uint64_t admission_observed;
-	std::uint64_t admission_requested;
-	std::uint64_t cumulative_admission_waiting_milliseconds;
-	bool admission_waiting;
+	std::uint64_t effective_max_attempts_per_step = 1;
+	std::uint64_t effective_max_attempts_per_scan = 1;
+	std::uint64_t effective_max_delay_milliseconds = 0;
+	std::uint64_t effective_max_cumulative_waiting_milliseconds_per_scan = 0;
+	std::uint64_t aggregate_attempts = 0;
+	std::uint64_t cumulative_delay_milliseconds = 0;
+	std::uint64_t current_step = 0;
+	ExposureState exposure_state = ExposureState::UNACCEPTED;
+	std::uint64_t effective_max_rate_limit_attempts_per_step = 1;
+	std::uint64_t effective_max_rate_limit_attempts_per_scan = 1;
+	std::uint64_t effective_max_rate_limit_delay_milliseconds = 0;
+	std::uint64_t effective_max_rate_limit_waiting_milliseconds_per_scan = 0;
+	std::uint64_t effective_max_combined_waiting_milliseconds_per_scan = 0;
+	std::uint64_t cumulative_rate_limit_waiting_milliseconds = 0;
+	std::uint64_t cumulative_remote_transport_milliseconds = 0;
+	std::uint64_t rate_limit_events = 0;
+	std::uint64_t rate_limit_waits = 0;
+	RateLimitReason rate_limit_reason = RateLimitReason::NONE;
+	bool rate_limit_waiting = false;
+	AdmissionReason admission_reason = AdmissionReason::NONE;
+	AdmissionScope admission_scope = AdmissionScope::NONE;
+	std::uint64_t admission_limit = 0;
+	std::uint64_t admission_observed = 0;
+	std::uint64_t admission_requested = 0;
+	std::uint64_t cumulative_admission_waiting_milliseconds = 0;
+	bool admission_waiting = false;
 	CacheDiagnostics cache_diagnostics;
+
+	// Bounded per-scan profile. Counts are aggregate structural facts from the
+	// scan ledger; no request target, header, credential, response value, row,
+	// package path, or remote message can enter this contract. remote_requests
+	// counts calls that reached the transport, while aggregate_attempts also
+	// includes a reserved attempt that failed during request materialization.
+	ScanOutcome outcome = ScanOutcome::NOT_STARTED;
+	std::uint64_t elapsed_milliseconds = 0;
+	std::uint64_t remote_requests = 0;
+	std::uint64_t rows_decoded = 0;
+	std::uint64_t rows_returned = 0;
+	std::uint64_t response_header_bytes = 0;
+	std::uint64_t wire_response_bytes = 0;
+	std::uint64_t decompressed_response_bytes = 0;
+	std::uint64_t serialized_request_body_bytes = 0;
+	std::uint64_t peak_decoded_memory_bytes = 0;
+	std::uint64_t cumulative_waiting_milliseconds = 0;
+	bool has_terminal_failure = false;
+	FailureClass terminal_failure_class = FailureClass::INTERNAL;
 };
 
 class BatchStream {

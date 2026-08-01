@@ -118,6 +118,8 @@ live-network authority.
   typed plan on every page; continuation metadata never becomes request
   authority.
 - Preserve explicit page and scan resource ownership and release ordering.
+- Measure profiling facts in the scan-owned resource ledger and lifecycle
+  state. Keep snapshots bounded and content-free; Query only renders them.
 - Curl initialization has process lifetime. Dynamic unload/reload is not a
   supported cleanup boundary.
 - Keep private curl observers confined to test targets and out of product
@@ -146,7 +148,7 @@ Tests mirror the production directories under `test/cpp/runtime/`:
 | --- | --- |
 | Authorization, credential snapshots, and stream values | `cuac_authorization_contract_tests`, `cuac_credential_provider_contract_tests`, `cuac_execution_contract_tests` |
 | Generation ownership and publication lifecycle | `cuac_runtime_generation_contract_tests`, `cuac_runtime_generation_lifecycle_tests` |
-| Request, network, and resource policy | `cuac_request_validation_tests`, `cuac_network_policy_tests`, `cuac_scan_resource_accounting_tests` |
+| Request, network, resource policy, and scan profiling ledger | `cuac_request_validation_tests`, `cuac_network_policy_tests`, `cuac_scan_resource_accounting_tests` |
 | Executor admission, bulkheads, queues, and reservations | `cuac_admission_controller_tests`, linked only through `cuac_runtime_admission_service` |
 | URI and Link pagination | `cuac_uri_reference_tests`, `cuac_link_pagination_tests` |
 | JSON and decoded-page ownership | `cuac_json_decoder_tests`, `cuac_json_root_array_decoder_tests`, `cuac_decoded_page_buffer_tests` |

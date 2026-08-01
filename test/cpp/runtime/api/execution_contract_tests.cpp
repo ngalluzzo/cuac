@@ -385,6 +385,38 @@ void TestFourWayTerminationDistinguishability() {
 	        "cancellation was not the distinct interruption marker type");
 }
 
+void TestScanProfilingContract() {
+	CanonicalDiagnosticsStream stream;
+	const auto snapshot = stream.Diagnostics();
+	Require(snapshot.outcome == cuac::ScanOutcome::NOT_STARTED && snapshot.elapsed_milliseconds == 0 &&
+	            snapshot.remote_requests == 0 && snapshot.aggregate_attempts == 0 && snapshot.current_step == 0 &&
+	            snapshot.rows_decoded == 0 && snapshot.rows_returned == 0 && snapshot.response_header_bytes == 0 &&
+	            snapshot.wire_response_bytes == 0 && snapshot.decompressed_response_bytes == 0 &&
+	            snapshot.serialized_request_body_bytes == 0 && snapshot.peak_decoded_memory_bytes == 0 &&
+	            snapshot.cumulative_waiting_milliseconds == 0 && !snapshot.has_terminal_failure,
+	        "canonical stream diagnostics did not initialize the complete scan profile closed");
+
+	struct OutcomeNameCase {
+		cuac::ScanOutcome outcome;
+		const char *name;
+	};
+	const OutcomeNameCase cases[] = {
+	    {cuac::ScanOutcome::NOT_STARTED, "not_started"}, {cuac::ScanOutcome::RUNNING, "running"},
+	    {cuac::ScanOutcome::SUCCEEDED, "succeeded"},     {cuac::ScanOutcome::FAILED, "failed"},
+	    {cuac::ScanOutcome::CANCELLED, "cancelled"},     {cuac::ScanOutcome::CLOSED, "closed"}};
+	for (const auto &entry : cases) {
+		Require(std::string(cuac::ScanOutcomeName(entry.outcome)) == entry.name,
+		        "scan outcome name drifted from its closed profiling vocabulary");
+	}
+	bool rejected_unknown = false;
+	try {
+		(void)cuac::ScanOutcomeName(static_cast<cuac::ScanOutcome>(255));
+	} catch (const std::logic_error &) {
+		rejected_unknown = true;
+	}
+	Require(rejected_unknown, "scan profiling accepted an unknown outcome value");
+}
+
 void TestStructuredFieldRedaction() {
 	// RFC 0021: every structured FailureProperties field is a closed code or
 	// count; its name renders only the freeze vocabulary and must never echo
@@ -418,6 +450,7 @@ int main() {
 		TestStableErrorContract();
 		TestFailureClassification();
 		TestFourWayTerminationDistinguishability();
+		TestScanProfilingContract();
 		TestStructuredFieldRedaction();
 		std::cout << "execution contract tests passed" << std::endl;
 		return EXIT_SUCCESS;

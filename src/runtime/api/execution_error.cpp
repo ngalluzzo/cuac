@@ -442,6 +442,24 @@ const char *CacheStatusName(CacheStatus status) {
 	throw std::logic_error("unknown CacheStatus");
 }
 
+const char *ScanOutcomeName(ScanOutcome outcome) {
+	switch (outcome) {
+	case ScanOutcome::NOT_STARTED:
+		return "not_started";
+	case ScanOutcome::RUNNING:
+		return "running";
+	case ScanOutcome::SUCCEEDED:
+		return "succeeded";
+	case ScanOutcome::FAILED:
+		return "failed";
+	case ScanOutcome::CANCELLED:
+		return "cancelled";
+	case ScanOutcome::CLOSED:
+		return "closed";
+	}
+	throw std::logic_error("unknown ScanOutcome");
+}
+
 const char *FailurePhaseName(FailurePhase phase) {
 	switch (phase) {
 	case FailurePhase::BIND:
@@ -676,33 +694,7 @@ BatchStream::~BatchStream() noexcept {
 }
 
 ExecutionSnapshot BatchStream::Diagnostics() const noexcept {
-	return {1,
-	        1,
-	        0,
-	        0,
-	        0,
-	        0,
-	        0,
-	        ExposureState::UNACCEPTED,
-	        1,
-	        1,
-	        0,
-	        0,
-	        0,
-	        0,
-	        0,
-	        0,
-	        0,
-	        RateLimitReason::NONE,
-	        false,
-	        AdmissionReason::NONE,
-	        AdmissionScope::NONE,
-	        0,
-	        0,
-	        0,
-	        0,
-	        false,
-	        {}};
+	return ExecutionSnapshot();
 }
 
 ScanExecutor::~ScanExecutor() noexcept {

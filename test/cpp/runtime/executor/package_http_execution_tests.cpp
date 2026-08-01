@@ -353,7 +353,13 @@ void TestRetryCompilerGeneratedGraphqlRecovery(const std::string &repository_roo
 	            observations[0].max_request_body_bytes == 4096 && stream->Diagnostics().aggregate_attempts == 3 &&
 	            stream->Diagnostics().exposure_state == cuac::ExposureState::EXPOSED,
 	        "GraphQL retry changed the admitted request body, attempt ledger, or exposure state");
-	Require(!stream->Next(control, batch) && stream->Diagnostics().exposure_state == cuac::ExposureState::EXPOSED,
+	Require(!stream->Next(control, batch), "successful GraphQL recovery did not exhaust cleanly");
+	const auto terminal_profile = stream->Diagnostics();
+	Require(terminal_profile.exposure_state == cuac::ExposureState::EXPOSED &&
+	            terminal_profile.outcome == cuac::ScanOutcome::SUCCEEDED && terminal_profile.remote_requests == 3 &&
+	            terminal_profile.aggregate_attempts == 3 && terminal_profile.current_step == 1 &&
+	            terminal_profile.rows_decoded == 2 && terminal_profile.rows_returned == 2 &&
+	            terminal_profile.serialized_request_body_bytes > 0 && !terminal_profile.has_terminal_failure,
 	        "successful GraphQL exhaustion regressed the current step's exposed diagnostics");
 }
 

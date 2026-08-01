@@ -665,10 +665,18 @@ void TestLaterRestPageRetriesWithoutDuplicatingEarlierExposure() {
 	            diagnostics.aggregate_attempts == 4 && diagnostics.current_step == 2 &&
 	            diagnostics.exposure_state == cuac::ExposureState::EXPOSED,
 	        "later-page recovery changed credential identity, attempt accounting, or exposure state");
-	Require(!stream->Next(control, second) && stream->Diagnostics().exposure_state == cuac::ExposureState::EXPOSED,
+	Require(!stream->Next(control, second), "paginated REST stream did not exhaust after its recovered page");
+	const auto terminal_profile = stream->Diagnostics();
+	Require(terminal_profile.exposure_state == cuac::ExposureState::EXPOSED &&
+	            terminal_profile.outcome == cuac::ScanOutcome::SUCCEEDED && terminal_profile.remote_requests == 4 &&
+	            terminal_profile.aggregate_attempts == 4 && terminal_profile.current_step == 2 &&
+	            terminal_profile.rows_decoded == 2 && terminal_profile.rows_returned == 2 &&
+	            terminal_profile.cumulative_waiting_milliseconds == terminal_profile.cumulative_delay_milliseconds &&
+	            !terminal_profile.has_terminal_failure,
 	        "paginated REST exhaustion regressed the terminal step's exposed diagnostics");
 	stream->Cancel();
-	Require(stream->Diagnostics().exposure_state == cuac::ExposureState::EXPOSED,
+	Require(stream->Diagnostics().outcome == cuac::ScanOutcome::SUCCEEDED &&
+	            stream->Diagnostics().exposure_state == cuac::ExposureState::EXPOSED,
 	        "post-exhaustion paginated REST cancellation regressed exposed diagnostics");
 }
 

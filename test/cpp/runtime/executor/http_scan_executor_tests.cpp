@@ -96,6 +96,15 @@ void TestOneRequestAndSchemaAlignedBatches() {
 	Require(!stream->Next(control, batch) && batch.rows.empty() && batch.column_types.empty(),
 	        "stream did not exhaust cleanly");
 	Require(!stream->Next(control, batch), "cleanly exhausted stream did not remain exhausted");
+	const auto profile = stream->Diagnostics();
+	const auto response_bytes = static_cast<std::uint64_t>(ThreeHttpRows().size());
+	Require(profile.outcome == cuac::ScanOutcome::SUCCEEDED && profile.remote_requests == 1 &&
+	            profile.aggregate_attempts == 1 && profile.current_step == 1 && profile.rows_decoded == 3 &&
+	            profile.rows_returned == 3 && profile.response_header_bytes == 64 &&
+	            profile.wire_response_bytes == response_bytes &&
+	            profile.decompressed_response_bytes == response_bytes && profile.peak_decoded_memory_bytes > 0 &&
+	            profile.cumulative_waiting_milliseconds == 0 && !profile.has_terminal_failure,
+	        "successful scan did not retain its complete bounded terminal profile");
 
 	const auto observation = runtime->Observation();
 	Require(observation.request_count == 1, "batch pulls did not perform exactly one request");
@@ -134,7 +143,11 @@ void TestPostExposureFailureIsNeverReplayable() {
 		         error.Properties().rows_exposed == 2 &&
 		         error.Properties().replay_classification == cuac::ReplayClassification::NEVER_REPLAYABLE;
 	}
-	Require(failed && stream->Diagnostics().exposure_state == cuac::ExposureState::EXPOSED,
+	const auto profile = stream->Diagnostics();
+	Require(failed && profile.exposure_state == cuac::ExposureState::EXPOSED &&
+	            profile.outcome == cuac::ScanOutcome::FAILED && profile.has_terminal_failure &&
+	            profile.terminal_failure_class == cuac::FailureClass::RESOURCE_BUDGET && profile.remote_requests == 1 &&
+	            profile.rows_decoded == 3 && profile.rows_returned == 2,
 	        "post-exposure REST failure retained replay authority or regressed exposure diagnostics");
 }
 
@@ -422,6 +435,10 @@ void TestCancellationAndIdempotentClose() {
 	cuac::TypedBatch batch;
 	Require(!closed_stream->Next(control, batch) && closed_runtime->Observation().request_count == 0,
 	        "closed stream performed a request");
+	const auto closed_profile = closed_stream->Diagnostics();
+	Require(closed_profile.outcome == cuac::ScanOutcome::CLOSED && closed_profile.remote_requests == 0 &&
+	            closed_profile.rows_returned == 0,
+	        "direct close did not preserve a zero-work closed scan profile");
 
 	const auto blocked_runtime = cuac_test::BuildControlledHttpRuntime();
 	blocked_runtime->BlockUntilCancelled();
@@ -445,6 +462,10 @@ void TestCancellationAndIdempotentClose() {
 	Require(returned.load(std::memory_order_acquire) && observed_cancel.load(std::memory_order_acquire),
 	        "in-flight transport did not observe stream cancellation");
 	Require(blocked_runtime->Observation().request_count == 1, "cancelled request was replayed");
+	const auto cancelled_profile = blocked_stream->Diagnostics();
+	Require(cancelled_profile.outcome == cuac::ScanOutcome::CANCELLED && cancelled_profile.remote_requests == 1 &&
+	            !cancelled_profile.has_terminal_failure,
+	        "cancelled in-flight scan did not preserve its terminal outcome and remote-work count");
 }
 
 void TestDeadlinePersistsAcrossBatchPulls() {

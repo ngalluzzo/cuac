@@ -102,6 +102,7 @@ struct DecodedPageResourceUsage {
 
 struct ScanResourceCounters {
 	uint64_t request_attempts;
+	uint64_t remote_requests;
 	uint64_t pages;
 	uint64_t header_bytes;
 	uint64_t wire_response_bytes;
@@ -160,6 +161,10 @@ public:
 	void BeginStep(std::chrono::steady_clock::time_point now);
 	PageResourceAllowance BeginAttempt(std::chrono::steady_clock::time_point now);
 	void CommitRequestBody(uint64_t serialized_request_body_bytes);
+	// Records the exact point at which a fully materialized admitted request is
+	// handed to transport. This stays distinct from BeginAttempt so request
+	// construction failures do not masquerade as remote work.
+	void CommitRemoteRequest();
 	// Commits every observed byte from a failed attempt and returns to the same
 	// active traversal step without debiting another page.
 	void CommitAttemptFailure(const TransportResourceUsage &usage);
@@ -185,6 +190,7 @@ public:
 	ScanResourceState State() const noexcept;
 	bool DeadlineStarted() const noexcept;
 	std::chrono::steady_clock::time_point Deadline() const;
+	uint64_t ElapsedMilliseconds(std::chrono::steady_clock::time_point observed_at) const noexcept;
 	bool CanBeginRetryAttempt() const noexcept;
 	// A retry decision must prove that the next request can receive nonzero
 	// transport authority and, for a body-bearing protocol, can debit the full
@@ -201,10 +207,12 @@ private:
 	ScanResourceCounters counters;
 	ScanResourceState state;
 	bool deadline_started;
+	std::chrono::steady_clock::time_point started_at;
 	std::chrono::steady_clock::time_point deadline;
 	PageResourceAllowance active_allowance;
 	uint64_t current_step_attempts;
 	bool current_step_page_committed;
+	bool current_attempt_remote_committed;
 };
 
 } // namespace internal

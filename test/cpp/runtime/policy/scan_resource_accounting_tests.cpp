@@ -96,6 +96,7 @@ void TestRetryAttemptLifecycle() {
 	ScanResourceAccounting accounting(profile);
 	accounting.BeginStep(start);
 	const auto first = accounting.BeginAttempt(start);
+	accounting.CommitRemoteRequest();
 	accounting.CommitAttemptFailure({1, 2, 3});
 	Require(accounting.State() == ScanResourceState::STEP_ACTIVE && accounting.Counters().pages == 1 &&
 	            accounting.Counters().request_attempts == 1 && accounting.Counters().header_bytes == 1 &&
@@ -103,12 +104,14 @@ void TestRetryAttemptLifecycle() {
 	        "retryable attempt failure did not preserve one active page and cumulative usage");
 	accounting.CommitRetryWait(5);
 	const auto second = accounting.BeginAttempt(start + std::chrono::milliseconds(5));
+	accounting.CommitRemoteRequest();
 	Require(second.deadline == first.deadline && accounting.Counters().pages == 1 &&
 	            accounting.Counters().request_attempts == 2 && accounting.CurrentAttempt() == 2,
 	        "retry attempt reset the page, deadline, or attempt counters");
 	accounting.CommitAttemptFailure({2, 3, 4});
 	accounting.CommitRetryWait(5);
 	accounting.BeginAttempt(start + std::chrono::milliseconds(10));
+	accounting.CommitRemoteRequest();
 	accounting.CommitTransport({3, 4, 5});
 	accounting.CommitDecodedPage({2, 10});
 	accounting.CompletePage(true, start + std::chrono::milliseconds(11));
@@ -119,8 +122,9 @@ void TestRetryAttemptLifecycle() {
 	        "retry attempt accounting did not remain additive");
 	accounting.BeginStep(start + std::chrono::milliseconds(12));
 	accounting.BeginAttempt(start + std::chrono::milliseconds(12));
+	accounting.CommitRemoteRequest();
 	Require(accounting.Counters().pages == 2 && accounting.Counters().request_attempts == 4 &&
-	            accounting.CurrentAttempt() == 1,
+	            accounting.Counters().remote_requests == 4 && accounting.CurrentAttempt() == 1,
 	        "next traversal step inherited retry ordinal or debited the wrong aggregate");
 	accounting.AbortPage();
 }
@@ -185,6 +189,7 @@ void TestExactSequentialLifecycle() {
 		Require(accounting.State() == ScanResourceState::REQUEST_ACTIVE && accounting.Counters().active_requests == 1,
 		        "BeginAttempt did not reserve one request before returning authority");
 
+		accounting.CommitRemoteRequest();
 		accounting.CommitTransport({10, 20, 30});
 		Require(accounting.State() == ScanResourceState::TRANSPORT_COMMITTED &&
 		            accounting.Counters().active_requests == 0,
@@ -198,11 +203,31 @@ void TestExactSequentialLifecycle() {
 
 	const auto &counters = accounting.Counters();
 	Require(accounting.State() == ScanResourceState::EXHAUSTED, "final page did not exhaust accounting state");
-	Require(counters.request_attempts == 3 && counters.pages == 3 && counters.header_bytes == 30 &&
-	            counters.wire_response_bytes == 60 && counters.decompressed_response_bytes == 90 &&
-	            counters.decoded_records == 12 && counters.peak_decoded_memory_bytes == 30 &&
-	            counters.active_requests == 0 && counters.serialized_request_body_bytes == 0,
+	Require(counters.request_attempts == 3 && counters.remote_requests == 3 && counters.pages == 3 &&
+	            counters.header_bytes == 30 && counters.wire_response_bytes == 60 &&
+	            counters.decompressed_response_bytes == 90 && counters.decoded_records == 12 &&
+	            counters.peak_decoded_memory_bytes == 30 && counters.active_requests == 0 &&
+	            counters.serialized_request_body_bytes == 0,
 	        "exact-boundary counters drifted");
+}
+
+void TestRemoteRequestAndElapsedProfiling() {
+	const Clock::time_point start;
+	ScanResourceAccounting accounting(Profile());
+	Require(accounting.ElapsedMilliseconds(start + std::chrono::milliseconds(50)) == 0,
+	        "unstarted scan reported elapsed time");
+	accounting.BeginStep(start);
+	accounting.BeginAttempt(start);
+	Require(accounting.ElapsedMilliseconds(start - std::chrono::milliseconds(1)) == 0 &&
+	            accounting.ElapsedMilliseconds(start + std::chrono::milliseconds(17)) == 17 &&
+	            accounting.ElapsedMilliseconds(start + std::chrono::milliseconds(1000)) == 100,
+	        "scan elapsed time did not use its single bounded monotonic interval");
+	accounting.CommitRemoteRequest();
+	Require(accounting.Counters().remote_requests == 1, "transport handoff did not commit exactly one remote request");
+	RequireError([&]() { accounting.CommitRemoteRequest(); }, "resource_state",
+	             "duplicate transport handoff for one attempt");
+	Require(accounting.Counters().remote_requests == 1 && accounting.State() == ScanResourceState::FAILED,
+	        "duplicate remote-request accounting changed the committed count or remained executable");
 }
 
 void TestSerializedRequestBodyAccounting() {
@@ -497,6 +522,7 @@ int main() {
 		TestRetryAttemptLifecycle();
 		TestRetryRequiresRemainingByteAndBodyAuthority();
 		TestExactSequentialLifecycle();
+		TestRemoteRequestAndElapsedProfiling();
 		TestSerializedRequestBodyAccounting();
 		TestAdvertisedNextFailsAtScanCeilings();
 		TestPerPageCeilingsFailClosed();

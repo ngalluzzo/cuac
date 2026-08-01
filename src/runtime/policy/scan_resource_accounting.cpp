@@ -74,8 +74,9 @@ const std::string &ScanResourceError::SafeMessage() const noexcept {
 }
 
 ScanResourceAccounting::ScanResourceAccounting(const ScanResourceProfile &profile_p)
-    : profile(profile_p), counters {}, state(ScanResourceState::READY), deadline_started(false), deadline(),
-      active_allowance {0, 0, 0, 0, 0, 0, {}}, current_step_attempts(0), current_step_page_committed(false) {
+    : profile(profile_p), counters {}, state(ScanResourceState::READY), deadline_started(false), started_at(),
+      deadline(), active_allowance {0, 0, 0, 0, 0, 0, {}}, current_step_attempts(0), current_step_page_committed(false),
+      current_attempt_remote_committed(false) {
 	ValidateProfile(profile);
 }
 
@@ -127,6 +128,7 @@ void ScanResourceAccounting::BeginStep(std::chrono::steady_clock::time_point now
 			Fail("wall_milliseconds", "scan wall-time budget cannot be represented");
 		}
 		deadline = std::chrono::steady_clock::time_point(since_epoch + wall_time);
+		started_at = now;
 		deadline_started = true;
 	}
 	RequireReadyForNext(now);
@@ -181,6 +183,7 @@ PageResourceAllowance ScanResourceAccounting::BeginAttempt(std::chrono::steady_c
 		counters.pages = next_pages;
 		counters.active_requests = next_active_requests;
 		current_step_page_committed = true;
+		current_attempt_remote_committed = false;
 		active_allowance = allowance;
 		state = ScanResourceState::REQUEST_ACTIVE;
 		return active_allowance;
@@ -203,6 +206,22 @@ void ScanResourceAccounting::CommitRequestBody(uint64_t serialized_request_body_
 		    AddChecked(counters.serialized_request_body_bytes, serialized_request_body_bytes,
 		               profile.scan.serialized_request_body_bytes);
 		state = ScanResourceState::REQUEST_BODY_COMMITTED;
+	} catch (const ScanResourceError &error) {
+		Fail(error.Field(), error.SafeMessage());
+	}
+}
+
+void ScanResourceAccounting::CommitRemoteRequest() {
+	const bool bodyless_ready =
+	    state == ScanResourceState::REQUEST_ACTIVE && profile.page.serialized_request_body_bytes == 0;
+	const bool body_ready =
+	    state == ScanResourceState::REQUEST_BODY_COMMITTED && profile.page.serialized_request_body_bytes != 0;
+	if ((!bodyless_ready && !body_ready) || current_attempt_remote_committed) {
+		Fail("resource_state", "scan resource state cannot commit a remote request");
+	}
+	try {
+		counters.remote_requests = AddChecked(counters.remote_requests, 1, profile.scan.request_attempts);
+		current_attempt_remote_committed = true;
 	} catch (const ScanResourceError &error) {
 		Fail(error.Field(), error.SafeMessage());
 	}
@@ -361,6 +380,18 @@ std::chrono::steady_clock::time_point ScanResourceAccounting::Deadline() const {
 		throw ScanResourceError("resource_state", "scan deadline has not started");
 	}
 	return deadline;
+}
+
+uint64_t ScanResourceAccounting::ElapsedMilliseconds(std::chrono::steady_clock::time_point observed_at) const noexcept {
+	if (!deadline_started || observed_at <= started_at) {
+		return 0;
+	}
+	const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(observed_at - started_at).count();
+	if (elapsed <= 0) {
+		return 0;
+	}
+	const auto value = static_cast<uint64_t>(elapsed);
+	return std::min(value, profile.scan.max_wall_milliseconds);
 }
 
 bool ScanResourceAccounting::CanBeginRetryAttempt() const noexcept {
