@@ -19,6 +19,13 @@ headers mirror it under `src/include/cuac/internal/`. Tests mirror production
 under `test/cpp/`; `support/` and `service/` contain bounded test APIs, not an
 alternate product implementation.
 
+Connector Experience owns the checked-in API coverage corpus and the source
+classification for each proposed declaration. Under
+[RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md), an included
+classification is queued product direction, not permission to add dormant
+syntax. The responsible streams extend the one `cuac/v1` construction path in
+one vertical slice or leave the declaration absent.
+
 The root of a stream contains only its README and build inventories. A new
 production translation unit belongs in a named responsibility directory. Do
 not restore a flat stream root as a staging area.

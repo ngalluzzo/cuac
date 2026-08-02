@@ -5,6 +5,12 @@ packages. The sole accepted specification identifier is `cuac/v1`. It includes
 optional bounded safe-read retry and bounded reaction to declared remote quota
 responses. The schema below closes every source shape.
 
+The accepted pre-1.0 evolution policy and capability corpus are recorded in
+[RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md). That RFC
+classifies future declaration work; it does not make an included declaration
+valid before its complete schema, compiler, planning, execution, fixture, and
+compatibility slice lands in this document and the product.
+
 The specification describes immutable metadata. It does not grant network or
 credential authority by itself, and it does not contain DuckDB catalog state,
 scan plans, residual filters, execution state, or secret values.
@@ -35,6 +41,26 @@ Four identities remain distinct:
 | Project | The extension release version |
 | Package | Canonical author SemVer `MAJOR.MINOR.PATCH` in `connector.yaml` |
 | Generation | Specification, connector ID, package version, and package digest |
+
+## Pre-1.0 specification evolution
+
+CUAC accepts one specification identifier and maintains one construction path
+from `cuac/v1` source to an executable plan. Before `1.0.0`, an additive
+declaration may extend that path only when its source schema, diagnostics,
+compiled facts, planning, execution, fixtures, compatibility behavior, and
+independent-author evidence land together. The compiler does not reserve
+dormant syntax or retain a legacy interpretation.
+
+Existing valid package meaning is preserved by an additive extension. A newer
+declaration remains an unknown field or value to an older CUAC release and is
+rejected before catalog, credential, or network work. Unknown specification
+identifiers are also rejected; CUAC does not dispatch to a second compiler.
+
+RFC 0028's included classifications are delivery candidates, not accepted
+source syntax. Deferred and rejected classifications likewise grant no package
+or Runtime authority. A future change to existing `cuac/v1` meaning requires a
+separate RFC and one breaking cutover that removes the old compiler path rather
+than operating old and new paths in parallel.
 
 Package version components are unsigned 32-bit canonical decimals. Signs,
 leading zeroes, omitted components, prerelease labels, and build metadata are

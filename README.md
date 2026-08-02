@@ -107,6 +107,11 @@ The durable behavioral contracts are documented in
 matrix is recorded in
 [RESILIENCE_CERTIFICATION.md](docs/RESILIENCE_CERTIFICATION.md).
 
+[RFC 0028](docs/rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md) records the
+accepted coverage-driven evolution policy for the single `cuac/v1` path. Its
+included classifications are future delivery candidates, not capabilities in
+the current release.
+
 ## Versioning
 
 `version.txt` is the sole product-version source. CUAC follows Semantic
