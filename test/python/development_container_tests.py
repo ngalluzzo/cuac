@@ -58,6 +58,24 @@ class DevelopmentContainerTests(unittest.TestCase):
         )
         self.assertEqual(json.loads(completed.stdout), observed)
 
+    def test_top_level_shell_tools_are_executable_in_git(self) -> None:
+        tools = sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "scripts").glob("*.sh")
+        )
+        completed = subprocess.run(
+            ["git", "ls-files", "--stage", "--", *tools],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        modes = {}
+        for line in completed.stdout.splitlines():
+            metadata, relative = line.split("\t", 1)
+            modes[relative] = metadata.split(" ", 1)[0]
+        self.assertEqual(modes, {relative: "100755" for relative in tools})
+
     def test_manifest_rejects_floating_or_unknown_inputs(self) -> None:
         floating = copy.deepcopy(self.manifest)
         floating["base_image"] = "debian:bookworm-slim"
