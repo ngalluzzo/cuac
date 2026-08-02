@@ -26,8 +26,10 @@ jobs:
           docker run --rm --init \
             --user "$(id -u):$(id -g)" \
             --env CUAC_DEV_CONTAINER=1 \
-            --env CUAC_DEV_ROOT=/workspaces/cuac/.build/container \
+            --env CUAC_DEV_ROOT=/var/lib/cuac-dev/container \
+            --env CUAC_CCACHE_DIR=/var/lib/cuac-dev/ccache \
             --env HOME=/tmp/cuac-home \
+            --mount type=volume,target=/var/lib/cuac-dev \
             --volume "${GITHUB_WORKSPACE}:/workspaces/cuac" \
             --workdir /workspaces/cuac \
             "cuac-development:${GITHUB_SHA}" \

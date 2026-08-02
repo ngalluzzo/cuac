@@ -19,9 +19,9 @@ make demo
 ```
 
 The first command builds CUAC's digest-pinned, multi-architecture Linux
-development image and downloads the pinned DuckDB sources into an ignored local
-build directory. The demo builds the unsigned extension, loads the maintained
-GitHub connector package, and queries its anonymous REST relation.
+development image and downloads the pinned DuckDB sources into a persistent,
+Linux-backed Docker volume. The demo builds the unsigned extension, loads the
+maintained GitHub connector package, and queries its anonymous REST relation.
 Deterministic local services—not the live GitHub response—are the correctness
 oracle.
 
@@ -82,6 +82,11 @@ Use `PROFILE=release` for an optimized portable build. Start with
 [the source guide](src/README.md), [the ownership map](docs/SOURCE_BOUNDARIES.md),
 and [CONTRIBUTING.md](CONTRIBUTING.md).
 
+`make build` and `make test` reuse the per-checkout Docker volume reported as
+`developer_state_volume`, including a content-addressed compiler cache.
+`make verify` creates and removes an isolated build tree and compiler cache in
+that Linux-backed volume. It does not reuse developer build outputs.
+
 ## Limitations
 
 - CUAC is unsigned, source-built, and not published through DuckDB Community
@@ -98,7 +103,9 @@ and [CONTRIBUTING.md](CONTRIBUTING.md).
 The durable behavioral contracts are documented in
 [ARCHITECTURE.md](docs/ARCHITECTURE.md),
 [CONNECTOR_SPECIFICATIONS.md](docs/CONNECTOR_SPECIFICATIONS.md), and
-[RUNTIME_CONTRACTS.md](docs/RUNTIME_CONTRACTS.md).
+[RUNTIME_CONTRACTS.md](docs/RUNTIME_CONTRACTS.md). The release-gated incident
+matrix is recorded in
+[RESILIENCE_CERTIFICATION.md](docs/RESILIENCE_CERTIFICATION.md).
 
 ## Versioning
 

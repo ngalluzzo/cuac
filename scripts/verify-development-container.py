@@ -72,7 +72,7 @@ def validate_manifest(value: dict[str, Any]) -> dict[str, Any]:
     tools = value["tools"]
     exact_keys(
         tools,
-        {"clang_format", "cmake", "compiler", "ninja", "python"},
+        {"ccache", "clang_format", "cmake", "compiler", "ninja", "python"},
         "toolchain.tools",
     )
     if any(not isinstance(item, str) or not item for item in tools.values()):
@@ -165,6 +165,9 @@ def verify_environment(manifest: dict[str, Any]) -> dict[str, Any]:
         raise fail(f"unsupported development-container architecture: {architecture}")
     observed = {
         "architecture": architecture,
+        "ccache": version_after_prefix(
+            command_output(["ccache", "--version"]), "ccache version ", "ccache"
+        ),
         "clang_format": clang_format_version(
             command_output(["clang-format", "--version"])
         ),
@@ -187,7 +190,7 @@ def verify_environment(manifest: dict[str, Any]) -> dict[str, Any]:
         ),
     }
     expected_tools = manifest["tools"]
-    for name in ("cmake", "ninja", "python"):
+    for name in ("ccache", "cmake", "ninja", "python"):
         if observed[name] != expected_tools[name]:
             raise fail(
                 f"development container {name} drifted: expected "
@@ -217,6 +220,7 @@ def verify_repository(root: pathlib.Path, manifest: dict[str, Any]) -> dict[str,
         raise fail("development Dockerfile does not consume the frozen snapshot")
     for package in (
         "build-essential",
+        "ccache",
         "cmake",
         "libcurl4-openssl-dev",
         "ninja-build",
@@ -228,6 +232,13 @@ def verify_repository(root: pathlib.Path, manifest: dict[str, Any]) -> dict[str,
     for required in ("clang-format-requirements.txt", "--require-hashes"):
         if required not in dockerfile:
             raise fail(f"development Dockerfile omits {required!r}")
+    for required in (
+        "CUAC_DEV_ROOT=/var/lib/cuac-dev/container",
+        "CUAC_CCACHE_DIR=/var/lib/cuac-dev/ccache",
+        "install -d --mode=1777 /var/lib/cuac-dev",
+    ):
+        if required not in dockerfile:
+            raise fail(f"development Dockerfile omits state contract {required!r}")
 
     devcontainer = load_object(root / ".devcontainer/devcontainer.json", "devcontainer")
     build = devcontainer.get("build")
@@ -239,6 +250,14 @@ def verify_repository(root: pathlib.Path, manifest: dict[str, Any]) -> dict[str,
     environment = devcontainer.get("containerEnv")
     if not isinstance(environment, dict) or environment.get("CUAC_DEV_CONTAINER") != "1":
         raise fail("Dev Container does not declare the verified-container boundary")
+    if environment.get("CUAC_DEV_ROOT") != "/var/lib/cuac-dev/container":
+        raise fail("Dev Container build state is not outside the workspace mount")
+    if environment.get("CUAC_CCACHE_DIR") != "/var/lib/cuac-dev/ccache":
+        raise fail("Dev Container compiler cache is not persistent")
+    if devcontainer.get("mounts") != [
+        "source=cuac-development-state,target=/var/lib/cuac-dev,type=volume"
+    ]:
+        raise fail("Dev Container does not mount the canonical build-state volume")
 
     workflow = (root / ".github/workflows/repository-contracts.yml").read_text(
         encoding="utf-8"
@@ -246,10 +265,23 @@ def verify_repository(root: pathlib.Path, manifest: dict[str, Any]) -> dict[str,
     for required in (
         "containers/development/Dockerfile",
         "CUAC_DEV_CONTAINER=1",
+        "CUAC_DEV_ROOT=/var/lib/cuac-dev/container",
+        "target=/var/lib/cuac-dev",
         "make verify",
     ):
         if required not in workflow:
             raise fail(f"repository-contract workflow omits {required!r}")
+    build_script = (root / "scripts/lib/container-dev-build.sh").read_text(
+        encoding="utf-8"
+    )
+    for required in (
+        "CMAKE_C_COMPILER_LAUNCHER=ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER=ccache",
+        'CUAC_CCACHE_DIR="${verify_parent}/ccache"',
+        'mktemp -d "${DEV_ROOT}/verify.XXXXXX"',
+    ):
+        if required not in build_script:
+            raise fail(f"container build script omits {required!r}")
     cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
     expected_curl = f'set(CUAC_REQUIRED_CURL_VERSION "{manifest["libcurl"]["version"]}")'
     if cmake.count(expected_curl) != 1:

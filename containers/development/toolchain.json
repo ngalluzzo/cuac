@@ -19,6 +19,7 @@
   },
   "schema_version": 1,
   "tools": {
+    "ccache": "4.7.5",
     "clang_format": "17.0.6",
     "cmake": "3.25.1",
     "compiler": "12.",

@@ -5,9 +5,13 @@
     "dockerfile": "../containers/development/Dockerfile"
   },
   "containerEnv": {
+    "CUAC_CCACHE_DIR": "/var/lib/cuac-dev/ccache",
     "CUAC_DEV_CONTAINER": "1",
-    "CUAC_DEV_ROOT": "/workspaces/cuac/.build/container"
+    "CUAC_DEV_ROOT": "/var/lib/cuac-dev/container"
   },
+  "mounts": [
+    "source=cuac-development-state,target=/var/lib/cuac-dev,type=volume"
+  ],
   "postCreateCommand": "python3 -I -B scripts/verify-development-container.py environment containers/development/toolchain.json",
   "remoteUser": "cuac",
   "runArgs": [

@@ -37,6 +37,11 @@ class DevelopmentContainerTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertGreaterEqual(projection.count("version.txt"), 4)
+        self.assertIn("CMAKE_CXX_COMPILER_LAUNCHER=ccache", projection)
+        self.assertIn('CUAC_CCACHE_DIR="${verify_parent}/ccache"', projection)
+        container_router = (ROOT / "scripts/container.sh").read_text(encoding="utf-8")
+        self.assertIn("target=/var/lib/cuac-dev", container_router)
+        self.assertNotIn("/workspaces/cuac/.build/container", container_router)
         completed = subprocess.run(
             [
                 sys.executable,

@@ -4,7 +4,8 @@
 readonly PINS_FILE="${REPOSITORY_ROOT}/release/0.1.0/pins.json"
 readonly TOOLCHAIN_FILE="${REPOSITORY_ROOT}/containers/development/toolchain.json"
 readonly REQUIREMENTS_FILE="${REPOSITORY_ROOT}/test/python/requirements-linux-py311.txt"
-readonly DEFAULT_DEV_ROOT="${REPOSITORY_ROOT}/.build/container"
+readonly DEFAULT_DEV_ROOT="/var/lib/cuac-dev/container"
+readonly DEFAULT_CCACHE_DIR="/var/lib/cuac-dev/ccache"
 readonly TEMPLATE_URL="https://github.com/duckdb/extension-template.git"
 
 json_value() {
@@ -34,6 +35,8 @@ readonly DUCKDB_PLATFORM="$(json_value "${TOOLCHAIN_FILE}" "architectures.$(unam
 
 readonly DEV_ROOT="$(python3 -I -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' \
     "${CUAC_DEV_ROOT:-${DEFAULT_DEV_ROOT}}")"
+readonly CCACHE_ROOT="$(python3 -I -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' \
+    "${CUAC_CCACHE_DIR:-${DEFAULT_CCACHE_DIR}}")"
 readonly OWNER_MARKER="${DEV_ROOT}/.cuac-container-dev"
 readonly LOCK_FILE="${DEV_ROOT}/.lock"
 readonly TEMPLATE_ROOT="${DEV_ROOT}/extension-template"
@@ -64,7 +67,7 @@ initialize_dev_root() {
             exit 1
             ;;
     esac
-    mkdir -p "${DEV_ROOT}"
+    mkdir -p "${DEV_ROOT}" "${CCACHE_ROOT}"
     if [[ -e "${OWNER_MARKER}" ]]; then
         owner="$(sed -n 's/^repository=//p' "${OWNER_MARKER}")"
         if [[ "${owner}" != "${REPOSITORY_ROOT}" ]]; then

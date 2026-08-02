@@ -46,13 +46,15 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid "${USER_GID}" "${USERNAME}" \
     && useradd --uid "${USER_UID}" --gid "${USER_GID}" --create-home --shell /bin/bash "${USERNAME}" \
+    && install -d --mode=1777 /var/lib/cuac-dev \
     && printf '%s ALL=(root) NOPASSWD:ALL\n' "${USERNAME}" > "/etc/sudoers.d/${USERNAME}" \
     && chmod 0440 "/etc/sudoers.d/${USERNAME}"
 
 ENV CCACHE_COMPRESS=true \
-    CCACHE_MAXSIZE=400M \
+    CCACHE_MAXSIZE=5G \
     CUAC_DEV_CONTAINER=1 \
-    CUAC_DEV_ROOT=/workspaces/cuac/.build/container \
+    CUAC_DEV_ROOT=/var/lib/cuac-dev/container \
+    CUAC_CCACHE_DIR=/var/lib/cuac-dev/ccache \
     GEN=ninja \
     PATH=/opt/cuac-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

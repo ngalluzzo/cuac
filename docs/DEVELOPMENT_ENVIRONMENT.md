@@ -60,6 +60,21 @@ make shell
 From inside the Dev Container, use the same commands. The router detects the
 verified-container boundary and executes directly instead of nesting Docker.
 
-`make build`, `make test`, and `make demo` reuse `.build/container` for a fast
-development loop. `make verify` allocates a new build root and does not reuse
-that state. Neither path is native release evidence.
+From a Docker host, generated state is stored in a per-checkout named volume
+mounted at `/var/lib/cuac-dev`; a Dev Container uses the same mount point with
+its own persistent volume. Keeping object files, archives, and linker output
+outside the bind-mounted workspace avoids host-filesystem translation costs on
+macOS and Windows. The host router prints the exact volume name as
+`developer_state_volume`. `CUAC_DEV_VOLUME` may override that name when a
+separately managed volume is required.
+
+`make build`, `make test`, and `make demo` reuse the `container` build cell and
+its explicitly configured `ccache` for the development loop. `make verify`
+allocates a new build root and a new compiler cache under the Linux-backed
+state volume, runs the complete product suite, and removes the temporary tree
+when it exits. Neither path is native release evidence.
+
+Successful commands emit `timing phase=... elapsed_seconds=...` records for
+environment preparation, source preflight, native compilation, each broad test
+layer, image construction, and the complete container command. Native builds
+also report direct cache hits, preprocessed hits, misses, and cache size.

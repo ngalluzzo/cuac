@@ -1,6 +1,30 @@
 # Source synchronization, incremental build, and consumer operations for the
 # verified Linux development container.
 
+phase_seconds() {
+    date +%s
+}
+
+report_phase() {
+    local phase="$1"
+    local started_at="$2"
+    printf 'timing phase=%s elapsed_seconds=%s\n' \
+        "${phase}" "$(( $(phase_seconds) - started_at ))"
+}
+
+print_compiler_cache_stats() {
+    CCACHE_DIR="${CCACHE_ROOT}" ccache --print-stats | awk -F '\t' '
+        $1 == "direct_cache_hit" { direct_hits = $2 }
+        $1 == "preprocessed_cache_hit" { preprocessed_hits = $2 }
+        $1 == "cache_miss" { misses = $2 }
+        $1 == "cache_size_kibibyte" { size = $2 }
+        END {
+            printf "ccache direct_hits=%d preprocessed_hits=%d misses=%d size_kibibytes=%d\n", \
+                direct_hits, preprocessed_hits, misses, size
+        }
+    '
+}
+
 tree_digest() {
     python3 -I - "$1" <<'PY'
 import hashlib
@@ -89,11 +113,16 @@ build_paths() {
 run_build() {
     local extra_flags_name
     local profile="$1"
+    local started_at
+    started_at="$(phase_seconds)"
     prepare_cell
+    report_phase environment_prepare "${started_at}"
     build_paths "${profile}"
+    started_at="$(phase_seconds)"
     python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-source-boundaries.py" >/dev/null
     python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-source-identities.py" >/dev/null
     "${REPOSITORY_ROOT}/scripts/check-native-format.sh"
+    report_phase source_preflight "${started_at}"
     if [[ "${profile}" == "debug" ]]; then
         extra_flags_name="EXT_DEBUG_FLAGS"
     else
@@ -104,15 +133,21 @@ run_build() {
             -name 'cuac_controlled.duckdb_extension' \
             ! -path "${CONTROLLED_ARTIFACT}" -delete
     fi
+    CCACHE_DIR="${CCACHE_ROOT}" ccache --zero-stats >/dev/null
+    started_at="$(phase_seconds)"
     env -i HOME="${DEV_ROOT}/home" TMPDIR="${DEV_ROOT}/tmp" \
-        XDG_CACHE_HOME="${DEV_ROOT}/cache" CCACHE_DIR="${DEV_ROOT}/cache/ccache" \
+        XDG_CACHE_HOME="${DEV_ROOT}/cache" CCACHE_DIR="${CCACHE_ROOT}" \
+        CCACHE_BASEDIR="${TEMPLATE_ROOT}" CCACHE_COMPRESS=true \
+        CCACHE_MAXSIZE="${CUAC_CCACHE_MAXSIZE:-5G}" \
         CUAC_DEV_CONTAINER=1 \
         PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
         GEN=ninja DISABLE_SANITIZER=1 DUCKDB_PLATFORM="${DUCKDB_PLATFORM}" \
         OVERRIDE_GIT_DESCRIBE="${DUCKDB_GIT_DESCRIBE}" \
         make -C "${TEMPLATE_ROOT}" \
-            "${extra_flags_name}=-DCMAKE_CXX_STANDARD=11 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCUAC_PORTABLE_BUILD=ON" \
+            "${extra_flags_name}=-DCMAKE_CXX_STANDARD=11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCUAC_PORTABLE_BUILD=ON" \
             "${profile}"
+    report_phase native_build "${started_at}"
+    print_compiler_cache_stats
     if [[ ! -x "${STATIC_TEST_CLI}" ]]; then
         echo "container build did not produce expected static test CLI: ${STATIC_TEST_CLI}" >&2
         exit 1
@@ -134,6 +169,7 @@ run_build() {
 print_paths() {
     printf 'profile=%s\n' "${PROFILE}"
     printf 'dev_root=%s\n' "${DEV_ROOT}"
+    printf 'ccache_root=%s\n' "${CCACHE_ROOT}"
     printf 'source_root=%s\n' "${TEMPLATE_ROOT}"
     printf 'build_root=%s\n' "${BUILD_ROOT}"
     printf 'pinned_python=%s\n' "${PINNED_PYTHON}"
@@ -146,15 +182,23 @@ print_paths() {
 
 run_tests() {
     local contract="${REPOSITORY_ROOT}/test/python/source_demo_contract.py"
+    local started_at
+    started_at="$(phase_seconds)"
     python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-public-surface-inventory.py"
     python3 -I -B "${REPOSITORY_ROOT}/test/python/public_surface_inventory_tests.py"
     python3 -I -B "${REPOSITORY_ROOT}/scripts/test-native-dependencies.py"
     python3 -I -B "${REPOSITORY_ROOT}/test/python/development_container_tests.py"
+    report_phase repository_contracts "${started_at}"
+    started_at="$(phase_seconds)"
     run_native_test_binaries "${NATIVE_TEST_ROOT}" "${REPOSITORY_ROOT}" "${PINNED_PYTHON}"
+    report_phase native_contracts "${started_at}"
+    started_at="$(phase_seconds)"
     (
         cd "${TEMPLATE_ROOT}"
         "./build/${PROFILE}/test/unittest" --require cuac 'test/*'
     )
+    report_phase sql_contracts "${started_at}"
+    started_at="$(phase_seconds)"
     "${REPOSITORY_ROOT}/scripts/verify-loadable-inventory.sh" "${ARTIFACT}"
     "${PINNED_PYTHON}" -I \
         "${REPOSITORY_ROOT}/test/python/artifact_contract.py" "${ARTIFACT}"
@@ -167,11 +211,14 @@ run_tests() {
     "${PINNED_PYTHON}" -I -B \
         "${REPOSITORY_ROOT}/test/python/repository_pagination_product_contract.py" \
         "${CONTROLLED_ARTIFACT}"
+    report_phase artifact_contracts "${started_at}"
     if [[ ! -f "${contract}" ]]; then
         echo "required Query Experience demo contract is missing: ${contract}" >&2
         exit 1
     fi
+    started_at="$(phase_seconds)"
     python3 -I "${contract}" "${PINNED_PYTHON}" "${ARTIFACT}"
+    report_phase demo_contract "${started_at}"
 }
 
 run_demo() {
@@ -194,11 +241,17 @@ run_verify() {
     local profile="$1"
     local verify_parent
     local verify_root
-    mkdir -p "${REPOSITORY_ROOT}/.build"
-    verify_parent="$(mktemp -d "${REPOSITORY_ROOT}/.build/verify.XXXXXX")"
+    local started_at
+    mkdir -p "${DEV_ROOT}"
+    verify_parent="$(mktemp -d "${DEV_ROOT}/verify.XXXXXX")"
+    TEMP_ROOTS+=("${verify_parent}")
     verify_root="${verify_parent}/build"
     echo "fresh_build_root=${verify_root}"
     echo "developer_cache_reused=false"
+    echo "compiler_cache_reused=false"
+    started_at="$(phase_seconds)"
     env CUAC_DEV_CONTAINER=1 CUAC_DEV_ROOT="${verify_root}" \
+        CUAC_CCACHE_DIR="${verify_parent}/ccache" \
         bash "${REPOSITORY_ROOT}/scripts/container-dev.sh" test "${profile}"
+    report_phase clean_verification "${started_at}"
 }
