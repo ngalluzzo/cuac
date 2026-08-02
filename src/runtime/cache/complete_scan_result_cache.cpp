@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -25,20 +26,50 @@ std::shared_ptr<CacheClock> NewSystemCacheClock() {
 	return std::make_shared<SystemCacheClock>();
 }
 
-CacheCredentialTag CacheCredentialTag::Anonymous() {
-	return CacheCredentialTag(0, true);
+struct CacheCredentialTag::OpaqueIdentity {
+	OpaqueIdentity(CredentialAuthorityIdentity authority_p, CredentialRevisionIdentity revision_p)
+	    : authority(std::move(authority_p)), revision(std::move(revision_p)) {
+	}
+
+	CredentialAuthorityIdentity authority;
+	CredentialRevisionIdentity revision;
+};
+
+CacheCredentialTag::CacheCredentialTag() noexcept : identity() {
 }
 
-CacheCredentialTag CacheCredentialTag::Opaque(std::size_t authority_revision_hash) {
-	return CacheCredentialTag(authority_revision_hash, false);
+CacheCredentialTag::CacheCredentialTag(std::shared_ptr<const OpaqueIdentity> identity_p) noexcept
+    : identity(std::move(identity_p)) {
+}
+
+CacheCredentialTag CacheCredentialTag::Anonymous() {
+	return CacheCredentialTag();
+}
+
+CacheCredentialTag CacheCredentialTag::Opaque(CredentialAuthorityIdentity authority,
+                                              CredentialRevisionIdentity revision) {
+	return CacheCredentialTag(std::make_shared<OpaqueIdentity>(std::move(authority), std::move(revision)));
 }
 
 bool CacheCredentialTag::operator==(const CacheCredentialTag &other) const noexcept {
-	return anonymous == other.anonymous && tag == other.tag;
+	if (!identity || !other.identity) {
+		return !identity && !other.identity;
+	}
+	return identity->authority == other.identity->authority && identity->revision == other.identity->revision;
 }
 
 bool CacheCredentialTag::operator!=(const CacheCredentialTag &other) const noexcept {
 	return !(*this == other);
+}
+
+std::size_t CacheCredentialTag::Hash() const noexcept {
+	if (!identity) {
+		return 0;
+	}
+	auto result = identity->authority.Hash();
+	const auto revision = identity->revision.Hash();
+	result ^= revision + static_cast<std::size_t>(0x9e3779b9U) + (result << 6) + (result >> 2);
+	return result;
 }
 
 CacheKey::CacheKey(std::shared_ptr<const CacheSemanticIdentity> semantic_p, CacheCredentialTag credential_p)
@@ -58,7 +89,7 @@ bool CacheKey::operator!=(const CacheKey &other) const noexcept {
 
 std::size_t CacheKey::Hash() const noexcept {
 	std::size_t h = semantic->Hash();
-	h ^= credential.tag + 0x9e3779b9 + (h << 6) + (h >> 2);
+	h ^= credential.Hash() + static_cast<std::size_t>(0x9e3779b9U) + (h << 6) + (h >> 2);
 	return h;
 }
 
@@ -97,13 +128,19 @@ CacheLookupResult CompleteScanResultCache::Lookup(const CacheKey &key, const Fre
 		return CacheLookupResult::MISS;
 	}
 	const auto now = clock->NowMilliseconds();
-	const auto age = now - it->second.entry->stored_at_milliseconds;
+	const auto stored_at = it->second.entry->stored_at_milliseconds;
+	const auto age = now >= stored_at ? now - stored_at : std::numeric_limits<std::uint64_t>::max();
 	*age_milliseconds = age;
 	if (age < policy.FreshMilliseconds()) {
 		*entry = it->second.entry;
 		return CacheLookupResult::FRESH_HIT;
 	}
-	if (policy.Mode() == CacheMode::STALE_IF_ERROR && age < policy.FreshMilliseconds() + policy.StaleMilliseconds()) {
+	const auto fresh = policy.FreshMilliseconds();
+	const auto stale = policy.StaleMilliseconds();
+	const auto stale_limit = stale > std::numeric_limits<std::uint64_t>::max() - fresh
+	                             ? std::numeric_limits<std::uint64_t>::max()
+	                             : fresh + stale;
+	if (policy.Mode() == CacheMode::STALE_IF_ERROR && age < stale_limit) {
 		*entry = it->second.entry;
 		return CacheLookupResult::STALE_CANDIDATE;
 	}
@@ -121,7 +158,7 @@ bool CompleteScanResultCache::CanFit(std::uint64_t entry_bytes) const {
 }
 
 void CompleteScanResultCache::EvictIfNeeded() {
-	while ((entries.size() >= max_entries || resident_bytes > max_bytes) && !entries.empty()) {
+	while ((entries.size() > max_entries || resident_bytes > max_bytes) && !entries.empty()) {
 		auto oldest = entries.begin();
 		for (auto it = entries.begin(); it != entries.end(); ++it) {
 			if (it->second.insertion_order < oldest->second.insertion_order) {
@@ -134,27 +171,60 @@ void CompleteScanResultCache::EvictIfNeeded() {
 }
 
 bool CompleteScanResultCache::Publish(const CacheKey &key, std::vector<TypedBatch> batches, std::uint64_t size_bytes) {
-	std::lock_guard<std::mutex> guard(mutex);
-	if (closed) {
+	AdmissionController::Permit permit;
+	std::shared_ptr<const CacheEntry> published_entry;
+	return PublishReserved(key, &batches, size_bytes, &permit, &published_entry);
+}
+
+bool CompleteScanResultCache::PublishReserved(const CacheKey &key, std::vector<TypedBatch> *batches,
+                                              std::uint64_t size_bytes, AdmissionController::Permit *permit,
+                                              std::shared_ptr<const CacheEntry> *published_entry) noexcept {
+	if (batches == nullptr || permit == nullptr || published_entry == nullptr) {
 		return false;
 	}
+	published_entry->reset();
 	if (!CanFit(size_bytes)) {
 		return false;
 	}
-	auto entry = std::make_shared<CacheEntry>();
-	entry->batches = std::move(batches);
-	entry->stored_at_milliseconds = clock->NowMilliseconds();
-	entry->size_bytes = size_bytes;
 
-	auto existing = entries.find(key);
-	if (existing != entries.end()) {
-		resident_bytes -= existing->second.entry->size_bytes;
+	std::shared_ptr<CacheEntry> candidate;
+	try {
+		candidate = std::make_shared<CacheEntry>();
+		std::lock_guard<std::mutex> guard(mutex);
+		if (closed) {
+			return false;
+		}
+
+		candidate->stored_at_milliseconds = clock->NowMilliseconds();
+		candidate->size_bytes = size_bytes;
+		candidate->batches = std::move(*batches);
+		candidate->admission_permit = std::move(*permit);
+
+		auto existing = entries.find(key);
+		if (existing != entries.end()) {
+			const auto replaced_bytes = existing->second.entry->size_bytes;
+			existing->second = MapEntry {candidate, next_insertion_order++};
+			resident_bytes -= replaced_bytes;
+		} else {
+			try {
+				entries.emplace(key, MapEntry {candidate, next_insertion_order++});
+			} catch (...) {
+				*batches = std::move(candidate->batches);
+				*permit = std::move(candidate->admission_permit);
+				return false;
+			}
+		}
+		resident_bytes += size_bytes;
+		EvictIfNeeded();
+		*published_entry = std::move(candidate);
+		return true;
+	} catch (...) {
+		if (candidate) {
+			*batches = std::move(candidate->batches);
+			*permit = std::move(candidate->admission_permit);
+		}
+		return false;
 	}
-	entries[key] = MapEntry {entry, next_insertion_order++};
-	resident_bytes += size_bytes;
-
-	EvictIfNeeded();
-	return true;
 }
 
 void CompleteScanResultCache::Close() noexcept {

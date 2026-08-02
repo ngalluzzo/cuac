@@ -3,8 +3,10 @@
 #include "cuac/runtime/execution.hpp"
 #include "support/require.hpp"
 
+#include <array>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -18,6 +20,24 @@ using cuac::internal::CacheLookupResult;
 using cuac::internal::CompleteScanResultCache;
 using cuac_test::Require;
 
+std::array<std::uint8_t, 16> Identity(std::uint8_t marker) {
+	std::array<std::uint8_t, 16> result {};
+	result[0] = marker;
+	result[15] = static_cast<std::uint8_t>(marker ^ 0x5aU);
+	return result;
+}
+
+class CacheIdentityFixture final : public cuac::CredentialProvider {
+public:
+	static cuac::CredentialSnapshot Make(std::uint8_t marker) {
+		return StaticCredential(std::string("cache-test-token"), Identity(0x11), Identity(marker));
+	}
+
+	cuac::CredentialSnapshot Resolve(const cuac::PlannedSecretReference &, cuac::ExecutionControl &) const override {
+		return Make(1);
+	}
+};
+
 class FakeClock : public CacheClock {
 public:
 	std::uint64_t NowMilliseconds() const override {
@@ -26,7 +46,7 @@ public:
 	void Advance(std::uint64_t ms) {
 		now_ms += ms;
 	}
-	std::uint64_t now_ms;
+	std::uint64_t now_ms = 0;
 };
 
 cuac::TypedBatch MakeBatch(std::int64_t id, const std::string &text) {
@@ -49,7 +69,8 @@ CacheKey MakeKey(std::size_t seed) {
 CacheKey MakeKeyWithCredential(std::size_t seed, std::size_t credential_tag) {
 	std::shared_ptr<const cuac::CacheSemanticIdentity> identity(
 	    new cuac::CacheSemanticIdentity(cuac::CacheSemanticIdentity::TestIdentity(seed)));
-	return CacheKey(identity, CacheCredentialTag::Opaque(credential_tag));
+	auto snapshot = CacheIdentityFixture::Make(static_cast<std::uint8_t>(credential_tag));
+	return CacheKey(identity, CacheCredentialTag::Opaque(snapshot.AuthorityIdentity(), snapshot.RevisionIdentity()));
 }
 
 void TestBasicStoreAndLookup() {
@@ -96,6 +117,24 @@ void TestOffPolicyAlwaysMisses() {
 	std::uint64_t age = 0;
 	Require(cache.Lookup(key, cuac::FreshnessPolicy(), &entry, &age) == CacheLookupResult::MISS,
 	        "OFF policy did not bypass the cache");
+}
+
+void TestRegressedClockFailsClosed() {
+	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	clock->now_ms = 100;
+	CompleteScanResultCache cache(clock);
+	CacheKey key = MakeKey(17);
+	std::vector<cuac::TypedBatch> batches;
+	batches.push_back(MakeBatch(1, "clock-regression"));
+	Require(cache.Publish(key, std::move(batches), 100), "clock-regression fixture did not publish");
+
+	clock->now_ms = 99;
+	std::shared_ptr<const CacheEntry> entry;
+	std::uint64_t age = 0;
+	Require(cache.Lookup(key, cuac::FreshnessPolicy::StaleIfError(60000, 60000), &entry, &age) ==
+	                CacheLookupResult::EXPIRED &&
+	            entry == nullptr && age == std::numeric_limits<std::uint64_t>::max(),
+	        "regressed monotonic clock did not fail closed as an expired cache entry");
 }
 
 void TestStaleIfErrorCandidate() {
@@ -242,6 +281,8 @@ void TestCredentialIsolation() {
 
 	CacheKey key_anon = MakeKey(0);
 	CacheKey key_opaque = MakeKeyWithCredential(0, 42);
+	CacheKey key_opaque_same = MakeKeyWithCredential(0, 42);
+	CacheKey key_opaque_rotated = MakeKeyWithCredential(0, 43);
 
 	std::vector<cuac::TypedBatch> batches;
 	batches.push_back(MakeBatch(1, "alpha"));
@@ -251,6 +292,13 @@ void TestCredentialIsolation() {
 	std::uint64_t age = 0;
 	Require(cache.Lookup(key_opaque, policy, &entry, &age) == CacheLookupResult::MISS,
 	        "different credential tag hit the cache");
+	std::vector<cuac::TypedBatch> credential_batches;
+	credential_batches.push_back(MakeBatch(2, "credential"));
+	Require(cache.Publish(key_opaque, std::move(credential_batches), 100), "credential-keyed entry was not published");
+	Require(cache.Lookup(key_opaque_same, policy, &entry, &age) == CacheLookupResult::FRESH_HIT,
+	        "exact opaque authority and revision did not compare equal");
+	Require(cache.Lookup(key_opaque_rotated, policy, &entry, &age) == CacheLookupResult::MISS,
+	        "rotated opaque credential revision reused the prior cache entry");
 }
 
 } // namespace
@@ -259,6 +307,7 @@ int main() {
 	try {
 		TestBasicStoreAndLookup();
 		TestOffPolicyAlwaysMisses();
+		TestRegressedClockFailsClosed();
 		TestStaleIfErrorCandidate();
 		TestInsertionOrderEviction();
 		TestAtomicReplacement();

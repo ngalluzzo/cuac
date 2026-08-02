@@ -1,0 +1,122 @@
+{
+  "excluded_capabilities": [
+    "circuit_breaking",
+    "result_single_flight",
+    "successor_spec_compatibility"
+  ],
+  "incidents": [
+    {
+      "evidence": [
+        "exact_sql_result",
+        "opaque_authority_revision_cache_separation",
+        "terminal_profile",
+        "zero_retained_streams"
+      ],
+      "id": "credential_rotation",
+      "test": "TestCredentialRotationSeparatesCacheIdentityAndFreshHitsRemainBounded"
+    },
+    {
+      "evidence": [
+        "exact_duplicate_sql_bag",
+        "exact_attempt_count",
+        "terminal_profile",
+        "zero_retained_streams"
+      ],
+      "id": "retry_recovery",
+      "test": "TestRetryRecoveryPreservesActualDuckdbRelationalResults"
+    },
+    {
+      "evidence": [
+        "exact_duplicate_sql_bag",
+        "bounded_reactive_wait",
+        "terminal_profile",
+        "unrelated_work_progress"
+      ],
+      "id": "reactive_rate_limit_wait",
+      "test": "TestActualDuckdbMixedResiliencePressureClosesPublicStreams"
+    },
+    {
+      "evidence": [
+        "zero_transport_for_local_rejection",
+        "terminal_profile",
+        "unrelated_work_progress",
+        "zero_retained_streams"
+      ],
+      "id": "admission_isolation",
+      "test": "TestActualDuckdbAdmissionBulkheadIsolation"
+    },
+    {
+      "evidence": [
+        "exact_sql_result",
+        "zero_remote_work_on_hit",
+        "terminal_profile",
+        "bounded_repeated_streams"
+      ],
+      "id": "fresh_cache_hit",
+      "test": "TestCredentialRotationSeparatesCacheIdentityAndFreshHitsRemainBounded"
+    },
+    {
+      "evidence": [
+        "exact_stale_sql_result",
+        "failed_refresh_profile",
+        "bounded_stale_age",
+        "zero_retained_streams"
+      ],
+      "id": "stale_fallback",
+      "test": "TestStaleFallbackPreservesExactSqlAndFailedRefreshProfile"
+    },
+    {
+      "evidence": [
+        "interrupt_translation",
+        "cancelled_terminal_profile",
+        "unrelated_work_progress",
+        "zero_active_next_calls"
+      ],
+      "id": "cancellation",
+      "test": "TestActualDuckdbMixedResiliencePressureClosesPublicStreams"
+    },
+    {
+      "evidence": [
+        "safe_sql_failure",
+        "one_exposed_row",
+        "failed_terminal_profile",
+        "zero_retained_streams"
+      ],
+      "id": "post_exposure_failure",
+      "test": "TestPostExposureFailureRetainsTerminalProfile"
+    },
+    {
+      "evidence": [
+        "database_instance_teardown",
+        "idempotent_executor_close",
+        "zero_retained_streams"
+      ],
+      "id": "shutdown",
+      "test": "TestDatabaseTeardownClosesRuntimeExecutor"
+    },
+    {
+      "evidence": [
+        "sixteen_sequential_scans",
+        "one_peak_retained_stream",
+        "bounded_terminal_profile_retention",
+        "zero_profile_overflow"
+      ],
+      "id": "resource_stability",
+      "test": "TestCredentialRotationSeparatesCacheIdentityAndFreshHitsRemainBounded"
+    }
+  ],
+  "schema": "cuac/resilience-certification-v1",
+  "specification": "cuac/v1",
+  "supporting_targets": [
+    "cuac_complete_scan_result_cache_tests",
+    "cuac_cached_scan_stream_tests",
+    "cuac_controlled_runtime_scenario_tests"
+  ],
+  "target": "cuac_package_product_contract_tests",
+  "verification_gates": [
+    "make test",
+    "make verify",
+    "scripts/run-macos-product-tests.sh"
+  ],
+  "version": "0.1.0"
+}

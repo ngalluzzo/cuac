@@ -2,6 +2,7 @@
 
 #include "cuac/internal/runtime/authentication/api_key_authenticator.hpp"
 #include "cuac/internal/runtime/authentication/bearer_authenticator.hpp"
+#include "cuac/internal/runtime/cache/cached_scan_stream.hpp"
 #include "cuac/internal/runtime/executor/graphql_paginated_scan.hpp"
 #include "cuac/internal/runtime/admission/graphql_plan_admission.hpp"
 #include "cuac/internal/runtime/executor/http_paginated_scan.hpp"
@@ -271,7 +272,8 @@ public:
 	      scan_permit(std::move(scan_permit_p)), resilience_state(), current_step_exposure(ExposureState::UNACCEPTED),
 	      terminal_exposure(ExposureState::UNACCEPTED), has_terminal_exposure(false),
 	      profile_outcome(ScanOutcome::NOT_STARTED), profile_finished(false), profile_finished_at(),
-	      has_terminal_failure(false), terminal_failure_class(FailureClass::INTERNAL) {
+	      has_terminal_failure(false), terminal_failure_class(FailureClass::INTERNAL),
+	      has_terminal_failure_properties(false), terminal_failure_properties {} {
 		for (const auto &column : admitted_profile->Columns()) {
 			column_types.push_back(column.type);
 		}
@@ -477,10 +479,11 @@ public:
 				}
 				std::unique_lock<std::mutex> state_guard(state_mutex, std::try_to_lock);
 				if (state_guard.owns_lock()) {
-					return BuildExecutionSnapshot(admitted_profile->RetryPolicy(), admitted_profile->RateLimitPolicy(),
-					                              admitted_profile->ResiliencePolicy(), accounting, resilience_state,
-					                              CurrentExposure(), rows_emitted, CurrentProfileOutcome(),
-					                              has_terminal_failure, terminal_failure_class, ProfileObservedAt());
+					return BuildExecutionSnapshot(
+					    admitted_profile->RetryPolicy(), admitted_profile->RateLimitPolicy(),
+					    admitted_profile->ResiliencePolicy(), accounting, resilience_state, CurrentExposure(),
+					    rows_emitted, CurrentProfileOutcome(), has_terminal_failure, terminal_failure_class,
+					    ProfileObservedAt(), has_terminal_failure_properties ? &terminal_failure_properties : nullptr);
 				}
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
@@ -541,9 +544,12 @@ private:
 			try {
 				std::rethrow_exception(terminal_exception);
 			} catch (const ExecutionError &error) {
-				terminal_failure_class = FailurePropertiesFromError(error).failure_class;
+				terminal_failure_properties = FailurePropertiesFromError(error);
+				terminal_failure_class = terminal_failure_properties.failure_class;
+				has_terminal_failure_properties = true;
 			} catch (...) {
 				terminal_failure_class = FailureClass::INTERNAL;
+				has_terminal_failure_properties = false;
 			}
 		}
 		FinishProfile(outcome);
@@ -602,6 +608,8 @@ private:
 	std::chrono::steady_clock::time_point profile_finished_at;
 	bool has_terminal_failure;
 	FailureClass terminal_failure_class;
+	bool has_terminal_failure_properties;
+	FailureProperties terminal_failure_properties;
 };
 
 class HttpScanExecutor final : public ScanExecutor {
@@ -609,7 +617,8 @@ public:
 	HttpScanExecutor(std::shared_ptr<const HttpTransport> transport_p, HttpExecutionProfile profile_p)
 	    : transport(std::move(transport_p)), profile(std::move(profile_p)), clock(NewSystemRateLimitClock()),
 	      coordinator(std::make_shared<RateLimitCoordinator>(RateLimitCoordinator::HardLimits(), clock)),
-	      admission(std::make_shared<AdmissionController>(profile.admission_profile, clock)) {
+	      admission(std::make_shared<AdmissionController>(profile.admission_profile, clock)),
+	      cache_clock(NewSystemCacheClock()), cache(std::make_shared<CompleteScanResultCache>(cache_clock)) {
 	}
 
 	~HttpScanExecutor() noexcept override {
@@ -619,6 +628,7 @@ public:
 	void Close() const noexcept override {
 		admission->Close();
 		coordinator->Close();
+		cache->Close();
 	}
 
 	std::unique_ptr<BatchStream> Open(const ScanPlan &plan, ExecutionControl &control) const override {
@@ -637,10 +647,13 @@ public:
 				auto admission_runtime = BuildAdmissionRuntimeContext(admission, plan, *graphql_profile,
 				                                                      AdmissionPrincipalToken::Anonymous());
 				auto scan_permit = AcquireScan(admission_runtime, control);
+				auto cache_admission = CacheAdmission(plan, admission_runtime);
 				auto rate_context = BuildRateLimitContext(graphql_profile->RateLimitPolicy(), false, nullptr);
-				return OpenGraphqlPaginatedScan(std::move(graphql_profile), ScanAuthorization::Anonymous(), transport,
-				                                profile.max_wall_milliseconds, std::move(rate_context),
-				                                std::move(admission_runtime), std::move(scan_permit), control);
+				auto stream =
+				    OpenGraphqlPaginatedScan(std::move(graphql_profile), ScanAuthorization::Anonymous(), transport,
+				                             profile.max_wall_milliseconds, std::move(rate_context),
+				                             std::move(admission_runtime), std::move(scan_permit), control);
+				return WrapCache(plan, CacheCredentialTag::Anonymous(), std::move(cache_admission), std::move(stream));
 			}
 		} catch (const ExecutionCancelled &) {
 			throw;
@@ -658,10 +671,12 @@ public:
 			auto admission_runtime =
 			    BuildAdmissionRuntimeContext(admission, plan, *paginated, AdmissionPrincipalToken::Anonymous());
 			auto scan_permit = AcquireScan(admission_runtime, control);
+			auto cache_admission = CacheAdmission(plan, admission_runtime);
 			auto rate_context = BuildRateLimitContext(paginated->RateLimitPolicy(), false, nullptr);
-			return OpenPaginatedRestScan(std::move(paginated), ScanAuthorization::Anonymous(), transport,
-			                             profile.max_wall_milliseconds, std::move(rate_context),
-			                             std::move(admission_runtime), std::move(scan_permit), control);
+			auto stream = OpenPaginatedRestScan(std::move(paginated), ScanAuthorization::Anonymous(), transport,
+			                                    profile.max_wall_milliseconds, std::move(rate_context),
+			                                    std::move(admission_runtime), std::move(scan_permit), control);
+			return WrapCache(plan, CacheCredentialTag::Anonymous(), std::move(cache_admission), std::move(stream));
 		}
 		auto admitted = TryAdmitSingleResponseHttpPlan(plan, profile);
 		if (!admitted) {
@@ -674,9 +689,11 @@ public:
 		auto admission_runtime =
 		    BuildAdmissionRuntimeContext(admission, plan, *admitted, AdmissionPrincipalToken::Anonymous());
 		auto scan_permit = AcquireScan(admission_runtime, control);
+		auto cache_admission = CacheAdmission(plan, admission_runtime);
 		auto rate_context = BuildRateLimitContext(admitted->RateLimitPolicy(), false, nullptr);
-		return OpenSingle(std::move(admitted), ScanAuthorization::Anonymous(), std::move(rate_context),
-		                  std::move(admission_runtime), std::move(scan_permit), control);
+		auto stream = OpenSingle(std::move(admitted), ScanAuthorization::Anonymous(), std::move(rate_context),
+		                         std::move(admission_runtime), std::move(scan_permit), control);
+		return WrapCache(plan, CacheCredentialTag::Anonymous(), std::move(cache_admission), std::move(stream));
 	}
 
 protected:
@@ -763,14 +780,18 @@ protected:
 				    AcquireCredentialResolution(BuildPreliminaryAdmissionIdentity(plan, *graphql_profile), control);
 				auto resolved = ResolveCredentialWithAuthorityAfterAdmission(plan, provider, control);
 				provider_permit.Release();
+				const auto cache_tag = CredentialTag(plan, resolved);
 				auto admission_runtime = BuildAdmissionRuntimeContext(admission, plan, *graphql_profile,
 				                                                      ProviderAdmissionPrincipal(resolved.authority));
 				auto scan_permit = AcquireScan(admission_runtime, control);
+				auto cache_admission = CacheAdmission(plan, admission_runtime);
 				auto rate_context =
 				    BuildRateLimitContext(graphql_profile->RateLimitPolicy(), true, &resolved.authority);
-				return OpenGraphqlPaginatedScan(std::move(graphql_profile), std::move(resolved.authorization),
-				                                transport, profile.max_wall_milliseconds, std::move(rate_context),
-				                                std::move(admission_runtime), std::move(scan_permit), control);
+				auto stream =
+				    OpenGraphqlPaginatedScan(std::move(graphql_profile), std::move(resolved.authorization), transport,
+				                             profile.max_wall_milliseconds, std::move(rate_context),
+				                             std::move(admission_runtime), std::move(scan_permit), control);
+				return WrapCache(plan, cache_tag, std::move(cache_admission), std::move(stream));
 			}
 		} catch (const ExecutionCancelled &) {
 			throw;
@@ -790,13 +811,16 @@ protected:
 			    AcquireCredentialResolution(BuildPreliminaryAdmissionIdentity(plan, *paginated_profile), control);
 			auto resolved = ResolveCredentialWithAuthorityAfterAdmission(plan, provider, control);
 			provider_permit.Release();
+			const auto cache_tag = CredentialTag(plan, resolved);
 			auto admission_runtime = BuildAdmissionRuntimeContext(admission, plan, *paginated_profile,
 			                                                      ProviderAdmissionPrincipal(resolved.authority));
 			auto scan_permit = AcquireScan(admission_runtime, control);
+			auto cache_admission = CacheAdmission(plan, admission_runtime);
 			auto rate_context = BuildRateLimitContext(paginated_profile->RateLimitPolicy(), true, &resolved.authority);
-			return OpenPaginatedRestScan(std::move(paginated_profile), std::move(resolved.authorization), transport,
-			                             profile.max_wall_milliseconds, std::move(rate_context),
-			                             std::move(admission_runtime), std::move(scan_permit), control);
+			auto stream = OpenPaginatedRestScan(std::move(paginated_profile), std::move(resolved.authorization),
+			                                    transport, profile.max_wall_milliseconds, std::move(rate_context),
+			                                    std::move(admission_runtime), std::move(scan_permit), control);
+			return WrapCache(plan, cache_tag, std::move(cache_admission), std::move(stream));
 		}
 		auto admitted = TryAdmitSingleResponseHttpPlan(plan, profile);
 		if (!admitted) {
@@ -809,15 +833,67 @@ protected:
 		auto provider_permit = AcquireCredentialResolution(BuildPreliminaryAdmissionIdentity(plan, *admitted), control);
 		auto resolved = ResolveCredentialWithAuthorityAfterAdmission(plan, provider, control);
 		provider_permit.Release();
+		const auto cache_tag = CredentialTag(plan, resolved);
 		auto admission_runtime =
 		    BuildAdmissionRuntimeContext(admission, plan, *admitted, ProviderAdmissionPrincipal(resolved.authority));
 		auto scan_permit = AcquireScan(admission_runtime, control);
+		auto cache_admission = CacheAdmission(plan, admission_runtime);
 		auto rate_context = BuildRateLimitContext(admitted->RateLimitPolicy(), true, &resolved.authority);
-		return OpenSingle(std::move(admitted), std::move(resolved.authorization), std::move(rate_context),
-		                  std::move(admission_runtime), std::move(scan_permit), control);
+		auto stream = OpenSingle(std::move(admitted), std::move(resolved.authorization), std::move(rate_context),
+		                         std::move(admission_runtime), std::move(scan_permit), control);
+		return WrapCache(plan, cache_tag, std::move(cache_admission), std::move(stream));
 	}
 
 private:
+	static CacheCredentialTag CredentialTag(const ScanPlan &plan, const ResolvedCredential &credential) {
+		if (!plan.Freshness().IsEnabled()) {
+			return CacheCredentialTag::Anonymous();
+		}
+		try {
+			return CacheCredentialTag::Opaque(credential.authority, credential.revision);
+		} catch (const std::bad_alloc &) {
+			throw ExecutionError(ErrorStage::RESOURCE, "decoded_memory_bytes",
+			                     "cache identity could not be allocated within its memory budget");
+		}
+	}
+
+	static std::shared_ptr<const AdmissionRuntimeContext> CacheAdmission(const ScanPlan &plan,
+	                                                                     const AdmissionRuntimeContext &runtime) {
+		if (!plan.Freshness().IsEnabled()) {
+			return {};
+		}
+		try {
+			return std::make_shared<const AdmissionRuntimeContext>(runtime);
+		} catch (const std::bad_alloc &) {
+			throw ExecutionError(ErrorStage::RESOURCE, "decoded_memory_bytes",
+			                     "cache admission identity could not be allocated within its memory budget");
+		}
+	}
+
+	std::unique_ptr<BatchStream> WrapCache(const ScanPlan &plan, CacheCredentialTag credential,
+	                                       std::shared_ptr<const AdmissionRuntimeContext> cache_admission,
+	                                       std::unique_ptr<BatchStream> stream) const {
+		if (!plan.Freshness().IsEnabled()) {
+			return stream;
+		}
+		if (!plan.HasCacheIdentity()) {
+			throw ExecutionError(ErrorStage::INTERNAL, "", "cache-enabled scan plan has no semantic identity");
+		}
+		try {
+			std::shared_ptr<const CacheSemanticIdentity> semantic(new CacheSemanticIdentity(plan.CacheIdentity()));
+			return std::unique_ptr<BatchStream>(new CachedScanStream(
+			    std::move(stream), cache, CacheKey(std::move(semantic), std::move(credential)), plan.Freshness(),
+			    cache_clock, CompleteScanResultCache::HARD_MAX_ENTRY_BYTES, std::move(cache_admission)));
+		} catch (const ExecutionError &) {
+			throw;
+		} catch (const std::bad_alloc &) {
+			throw ExecutionError(ErrorStage::RESOURCE, "decoded_memory_bytes",
+			                     "cache stream could not be allocated within its memory budget");
+		} catch (...) {
+			throw ExecutionError(ErrorStage::INTERNAL, "", "cache stream initialization failed");
+		}
+	}
+
 	AdmissionPrincipalToken DirectAdmissionPrincipal(const ScanAuthorization &authorization) const {
 		switch (AlternativeOf(authorization)) {
 		case AuthorizationAlternative::ANONYMOUS:
@@ -891,6 +967,8 @@ private:
 	const std::shared_ptr<const RateLimitClock> clock;
 	const std::shared_ptr<RateLimitCoordinator> coordinator;
 	const std::shared_ptr<AdmissionController> admission;
+	const std::shared_ptr<CacheClock> cache_clock;
+	const std::shared_ptr<CompleteScanResultCache> cache;
 };
 
 } // namespace

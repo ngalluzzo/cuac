@@ -38,6 +38,23 @@ CONTROLLED_PUBLIC_EXCLUDED_UNITS = {
     "src/query/duckdb/extension/entrypoint.cpp",
     "src/query/composition/product_composition.cpp",
 }
+RESILIENCE_INCIDENTS = (
+    "credential_rotation",
+    "retry_recovery",
+    "reactive_rate_limit_wait",
+    "admission_isolation",
+    "fresh_cache_hit",
+    "stale_fallback",
+    "cancellation",
+    "post_exposure_failure",
+    "shutdown",
+    "resource_stability",
+)
+RESILIENCE_EXCLUSIONS = (
+    "circuit_breaking",
+    "result_single_flight",
+    "successor_spec_compatibility",
+)
 
 
 def canonical_digest(value: object) -> str:
@@ -125,6 +142,7 @@ def verify(root: pathlib.Path = ROOT) -> dict[str, str]:
     release_root = f"release/{version}"
     pins = reader.read_json(f"{release_root}/pins.json")
     contract = reader.read_json(f"{release_root}/public_contract.json")
+    certification = reader.read_json(f"{release_root}/resilience_certification.json")
     if pins.get("project") != project_identity(version):
         raise AssertionError("project identity differs from version.txt")
     if contract.get("extension") != ["cuac", version]:
@@ -148,6 +166,48 @@ def verify(root: pathlib.Path = ROOT) -> dict[str, str]:
     if public_identity.get("canonical_json_sha256") != canonical_digest(contract):
         raise AssertionError("public contract digest differs")
 
+    certification_identity = identities.get("resilience_certification")
+    if (
+        not isinstance(certification_identity, dict)
+        or certification_identity.get("path") != f"{release_root}/resilience_certification.json"
+    ):
+        raise AssertionError("resilience certification path identity differs")
+    if certification_identity.get("canonical_json_sha256") != canonical_digest(certification):
+        raise AssertionError("resilience certification digest differs")
+    if (
+        certification.get("schema") != "cuac/resilience-certification-v1"
+        or certification.get("version") != version
+        or certification.get("specification") != "cuac/v1"
+        or certification.get("target") != "cuac_package_product_contract_tests"
+        or tuple(certification.get("supporting_targets", ()))
+        != (
+            "cuac_complete_scan_result_cache_tests",
+            "cuac_cached_scan_stream_tests",
+            "cuac_controlled_runtime_scenario_tests",
+        )
+        or tuple(certification.get("verification_gates", ()))
+        != ("make test", "make verify", "scripts/run-macos-product-tests.sh")
+        or tuple(certification.get("excluded_capabilities", ())) != RESILIENCE_EXCLUSIONS
+    ):
+        raise AssertionError("resilience certification boundary differs")
+    incidents = certification.get("incidents")
+    if not isinstance(incidents, list) or tuple(item.get("id") for item in incidents) != RESILIENCE_INCIDENTS:
+        raise AssertionError("resilience certification incident matrix differs")
+    certification_source = reader.read_bytes("test/cpp/query/integration/package_product_contract_tests.cpp").decode()
+    for item in incidents:
+        if set(item) != {"evidence", "id", "test"} or not isinstance(item["evidence"], list) or not item["evidence"]:
+            raise AssertionError("resilience certification evidence is malformed")
+        if len(item["evidence"]) != len(set(item["evidence"])) or item["test"] not in certification_source:
+            raise AssertionError("resilience certification evidence target differs")
+    target_declaration = (
+        reader.read_bytes("test/cpp/query/targets.cmake")
+        + reader.read_bytes("test/cpp/runtime/targets.cmake")
+    ).decode()
+    native_gate = reader.read_bytes("scripts/lib/native-test-suite.sh").decode()
+    for target in (certification["target"], *certification["supporting_targets"]):
+        if target not in target_declaration or native_gate.count(target) < 2:
+            raise AssertionError("resilience certification target is outside a verification gate")
+
     graph = identities.get("build_graph")
     if not isinstance(graph, dict):
         raise AssertionError("build graph identity is absent")
@@ -170,6 +230,7 @@ def verify(root: pathlib.Path = ROOT) -> dict[str, str]:
         "native_sha256": identities["native_product_sources"]["sha256"],
         "connector_sha256": identities["repository_connector_package"]["sha256"],
         "public_contract_sha256": public_identity["canonical_json_sha256"],
+        "resilience_certification_sha256": certification_identity["canonical_json_sha256"],
     }
 
 

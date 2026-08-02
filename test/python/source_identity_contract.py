@@ -26,7 +26,11 @@ class SourceIdentityContractTests(unittest.TestCase):
     def copy(self) -> tuple[tempfile.TemporaryDirectory[str], pathlib.Path]:
         temporary = tempfile.TemporaryDirectory()
         root = pathlib.Path(temporary.name) / "cuac"
-        shutil.copytree(REPOSITORY, root)
+        shutil.copytree(
+            REPOSITORY,
+            root,
+            ignore=shutil.ignore_patterns(".build", ".git", "__pycache__"),
+        )
         return temporary, root
 
     def test_version_drift_fails_closed(self) -> None:
@@ -85,6 +89,27 @@ class SourceIdentityContractTests(unittest.TestCase):
             value["added_settings"].append("synthetic_setting")
             path.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaisesRegex(AssertionError, "public contract digest"):
+                VERIFIER.verify(root)
+
+    def test_resilience_certification_change_fails(self) -> None:
+        temporary, root = self.copy()
+        with temporary:
+            path = root / "release/0.1.0/resilience_certification.json"
+            value = json.loads(path.read_text())
+            value["incidents"].pop()
+            path.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "resilience certification digest"):
+                VERIFIER.verify(root)
+
+    def test_resilience_target_must_remain_in_release_gate(self) -> None:
+        temporary, root = self.copy()
+        with temporary:
+            path = root / "scripts/lib/native-test-suite.sh"
+            path.write_text(
+                path.read_text().replace("cuac_package_product_contract_tests", "removed_certification_target"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(AssertionError, "outside a verification gate"):
                 VERIFIER.verify(root)
 
     def test_build_graph_omission_fails(self) -> None:

@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace cuac_test {
 
@@ -22,6 +23,8 @@ enum class ControlledRuntimeScenarioId {
 	ADMISSION_REST_SATURATION,
 	ADMISSION_GRAPHQL_SATURATION,
 	MIXED_RESILIENCE_PRESSURE,
+	CREDENTIAL_ROTATION_CACHE,
+	CACHE_STALE_FALLBACK,
 	BLOCK_UNTIL_CANCEL
 };
 
@@ -48,6 +51,8 @@ struct ControlledRuntimeScenarioObservation {
 	uint64_t healthy_request_count;
 	uint64_t healthy_during_resilience_pressure_count;
 	uint64_t unexpected_request_count;
+	uint64_t terminal_profile_count;
+	uint64_t terminal_profile_overflow_count;
 };
 
 // Test-only Runtime service. Its sole execution surface is the public
@@ -57,9 +62,11 @@ struct ControlledRuntimeScenarioObservation {
 class ControlledRuntimeScenario {
 public:
 	struct State;
+	static constexpr uint64_t MAX_TERMINAL_PROFILES = 64;
 
 	std::shared_ptr<const cuac::ScanExecutor> Executor() const;
 	ControlledRuntimeScenarioObservation Observation() const;
+	std::vector<cuac::ExecutionSnapshot> TerminalProfiles() const;
 	bool WaitForRequestCount(uint64_t count, uint64_t timeout_milliseconds) const;
 
 private:

@@ -29,7 +29,7 @@ struct ControlledRuntimeScenario::State {
 	      closed_stream_count(0), local_admission_rejection_count(0), slow_request_count(0),
 	      ordinary_retry_failure_count(0), rate_limited_response_count(0), rate_limit_recovery_delay_milliseconds(0),
 	      recovered_request_count(0), healthy_request_count(0), healthy_during_resilience_pressure_count(0),
-	      unexpected_request_count(0) {
+	      unexpected_request_count(0), terminal_profile_overflow_count(0) {
 	}
 
 	std::shared_ptr<ControlledHttpRuntime> runtime;
@@ -55,8 +55,11 @@ struct ControlledRuntimeScenario::State {
 	std::atomic<uint64_t> healthy_request_count;
 	std::atomic<uint64_t> healthy_during_resilience_pressure_count;
 	std::atomic<uint64_t> unexpected_request_count;
+	std::atomic<uint64_t> terminal_profile_overflow_count;
 	mutable std::mutex request_mutex;
 	std::condition_variable request_condition;
+	mutable std::mutex profile_mutex;
+	std::vector<cuac::ExecutionSnapshot> terminal_profiles;
 };
 
 namespace {
@@ -153,6 +156,16 @@ public:
 			// AdmissionController tests own proof that every permit dimension drains.
 			state->retained_stream_count.fetch_sub(1, std::memory_order_relaxed);
 			inner->Close();
+			const auto profile = inner->Diagnostics();
+			try {
+				std::lock_guard<std::mutex> guard(state->profile_mutex);
+				if (state->terminal_profiles.size() < ControlledRuntimeScenario::MAX_TERMINAL_PROFILES) {
+					state->terminal_profiles.push_back(profile);
+					return;
+				}
+			} catch (...) {
+			}
+			state->terminal_profile_overflow_count.fetch_add(1, std::memory_order_relaxed);
 		}
 	}
 
@@ -402,6 +415,11 @@ std::shared_ptr<const cuac::ScanExecutor> ControlledRuntimeScenario::Executor() 
 ControlledRuntimeScenarioObservation ControlledRuntimeScenario::Observation() const {
 	const auto requests = state->runtime ? static_cast<uint64_t>(state->runtime->Observations().size())
 	                                     : state->request_count.load(std::memory_order_relaxed);
+	uint64_t terminal_profile_count = 0;
+	{
+		std::lock_guard<std::mutex> guard(state->profile_mutex);
+		terminal_profile_count = static_cast<uint64_t>(state->terminal_profiles.size());
+	}
 	return {requests,
 	        state->expected_request_count,
 	        state->has_terminal_stage,
@@ -423,7 +441,14 @@ ControlledRuntimeScenarioObservation ControlledRuntimeScenario::Observation() co
 	        state->recovered_request_count.load(std::memory_order_relaxed),
 	        state->healthy_request_count.load(std::memory_order_relaxed),
 	        state->healthy_during_resilience_pressure_count.load(std::memory_order_relaxed),
-	        state->unexpected_request_count.load(std::memory_order_relaxed)};
+	        state->unexpected_request_count.load(std::memory_order_relaxed),
+	        terminal_profile_count,
+	        state->terminal_profile_overflow_count.load(std::memory_order_relaxed)};
+}
+
+std::vector<cuac::ExecutionSnapshot> ControlledRuntimeScenario::TerminalProfiles() const {
+	std::lock_guard<std::mutex> guard(state->profile_mutex);
+	return state->terminal_profiles;
 }
 
 bool ControlledRuntimeScenario::WaitForRequestCount(uint64_t count, uint64_t timeout_milliseconds) const {
@@ -522,6 +547,18 @@ std::shared_ptr<ControlledRuntimeScenario> BuildControlledRuntimeScenario(Contro
 		    {ControlledResponse(503, ""), transient, page, ControlledResponse(503, ""), transient, page});
 		break;
 	}
+	case ControlledRuntimeScenarioId::CREDENTIAL_ROTATION_CACHE:
+		expected_request_count = 2;
+		runtime->RespondSequence(
+		    {ControlledResponse(200, "{\"id\":11,\"login\":\"before-rotation\",\"site_admin\":false}"),
+		     ControlledResponse(200, "{\"id\":12,\"login\":\"after-rotation\",\"site_admin\":true}")});
+		break;
+	case ControlledRuntimeScenarioId::CACHE_STALE_FALLBACK:
+		expected_request_count = 2;
+		runtime->RespondSequence(
+		    {ControlledResponse(200, "{\"id\":21,\"login\":\"stale-founding\",\"site_admin\":false}"),
+		     ControlledTransientTransportFailure(cuac::internal::HttpTransportFailureKind::RECEIVE_FAILED)});
+		break;
 	case ControlledRuntimeScenarioId::ADMISSION_REST_SATURATION:
 	case ControlledRuntimeScenarioId::ADMISSION_GRAPHQL_SATURATION:
 		expected_request_count = 2;

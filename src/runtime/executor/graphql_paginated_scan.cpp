@@ -145,7 +145,8 @@ public:
 	      scan_permit(std::move(scan_permit_p)), resilience_state(), current_step_exposure(ExposureState::UNACCEPTED),
 	      terminal_exposure(ExposureState::UNACCEPTED), has_terminal_exposure(false),
 	      profile_outcome(ScanOutcome::NOT_STARTED), profile_finished(false), profile_finished_at(),
-	      has_terminal_failure(false), terminal_failure_class(FailureClass::INTERNAL) {
+	      has_terminal_failure(false), terminal_failure_class(FailureClass::INTERNAL),
+	      has_terminal_failure_properties(false), terminal_failure_properties {} {
 	}
 
 	~GraphqlBatchStream() noexcept override {
@@ -286,10 +287,11 @@ public:
 				}
 				std::unique_lock<std::mutex> guard(mutex, std::try_to_lock);
 				if (guard.owns_lock()) {
-					return BuildExecutionSnapshot(admitted_profile->RetryPolicy(), admitted_profile->RateLimitPolicy(),
-					                              admitted_profile->ResiliencePolicy(), accounting, resilience_state,
-					                              CurrentExposure(), rows_emitted, CurrentProfileOutcome(),
-					                              has_terminal_failure, terminal_failure_class, ProfileObservedAt());
+					return BuildExecutionSnapshot(
+					    admitted_profile->RetryPolicy(), admitted_profile->RateLimitPolicy(),
+					    admitted_profile->ResiliencePolicy(), accounting, resilience_state, CurrentExposure(),
+					    rows_emitted, CurrentProfileOutcome(), has_terminal_failure, terminal_failure_class,
+					    ProfileObservedAt(), has_terminal_failure_properties ? &terminal_failure_properties : nullptr);
 				}
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
@@ -460,9 +462,12 @@ private:
 			try {
 				std::rethrow_exception(terminal_exception);
 			} catch (const ExecutionError &error) {
-				terminal_failure_class = FailurePropertiesFromError(error).failure_class;
+				terminal_failure_properties = FailurePropertiesFromError(error);
+				terminal_failure_class = terminal_failure_properties.failure_class;
+				has_terminal_failure_properties = true;
 			} catch (...) {
 				terminal_failure_class = FailureClass::INTERNAL;
+				has_terminal_failure_properties = false;
 			}
 		}
 		FinishProfile(outcome);
@@ -525,6 +530,8 @@ private:
 	std::chrono::steady_clock::time_point profile_finished_at;
 	bool has_terminal_failure;
 	FailureClass terminal_failure_class;
+	bool has_terminal_failure_properties;
+	FailureProperties terminal_failure_properties;
 };
 
 } // namespace

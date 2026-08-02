@@ -49,7 +49,8 @@ public:
 	// destroyed on construction.
 	CachedScanStream(std::unique_ptr<BatchStream> underlying, std::shared_ptr<CompleteScanResultCache> cache,
 	                 CacheKey key, FreshnessPolicy policy, std::shared_ptr<CacheClock> clock = NewSystemCacheClock(),
-	                 std::uint64_t max_candidate_bytes = CompleteScanResultCache::HARD_MAX_ENTRY_BYTES);
+	                 std::uint64_t max_candidate_bytes = CompleteScanResultCache::HARD_MAX_ENTRY_BYTES,
+	                 std::shared_ptr<const AdmissionRuntimeContext> admission_runtime = {});
 
 	~CachedScanStream() noexcept;
 
@@ -78,6 +79,11 @@ private:
 	bool ServeBarrierDrainEmit(ExecutionControl &control, TypedBatch &batch);
 	bool ServeBarrierDrainedUncached(ExecutionControl &control, TypedBatch &batch);
 	bool ServeStale(TypedBatch &batch);
+	bool RetainCandidateBatch(const TypedBatch &batch);
+	bool ReserveCandidateBytes(std::uint64_t size_bytes) noexcept;
+	void RollBackCandidateReservation(std::uint64_t size_bytes) noexcept;
+	void ClearCandidate() noexcept;
+	void ClearReplayEntries() noexcept;
 	void PublishCandidate();
 	void CaptureUnderlyingDiagnostics() noexcept;
 	void StartProfile() noexcept;
@@ -89,12 +95,14 @@ private:
 	std::unique_ptr<BatchStream> underlying;
 	std::shared_ptr<CompleteScanResultCache> cache;
 	std::shared_ptr<CacheClock> clock;
+	std::shared_ptr<const AdmissionRuntimeContext> admission_runtime;
 	CacheKey key;
 	FreshnessPolicy policy;
 	Mode mode;
 
+	std::shared_ptr<const CacheEntry> replay_entry;
+	std::shared_ptr<const CacheEntry> stale_entry;
 	std::vector<TypedBatch> cached_batches;
-	std::vector<TypedBatch> stale_batches;
 	TypedBatch pending_uncached_batch;
 	bool has_pending_uncached_batch;
 	std::size_t replay_index;
@@ -102,6 +110,8 @@ private:
 	std::uint64_t hit_stored_at_milliseconds;
 	std::uint64_t delivery_age_milliseconds;
 	std::uint64_t candidate_size_bytes;
+	AdmissionController::Permit candidate_permit;
+	bool candidate_cacheable;
 	CacheStatus diagnostics_status;
 	bool diagnostics_refresh_attempted;
 	FailureClass stale_cause_failure_class;

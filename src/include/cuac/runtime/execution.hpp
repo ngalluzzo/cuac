@@ -598,16 +598,19 @@ protected:
 		return std::move(snapshot.authorization);
 	}
 
-	// Runtime's quota identity needs the provider-minted authority value
-	// alongside the move-only authorization while keeping revision and secret
-	// bytes out of the coordinator.
+	// Runtime's quota and cache identities need the provider-minted authority
+	// and revision values alongside the move-only authorization while keeping
+	// identity bytes and secret bytes out of the coordinator.
 	struct ResolvedCredential {
-		ResolvedCredential(ScanAuthorization authorization_p, CredentialAuthorityIdentity authority_p)
-		    : authorization(std::move(authorization_p)), authority(std::move(authority_p)) {
+		ResolvedCredential(ScanAuthorization authorization_p, CredentialAuthorityIdentity authority_p,
+		                   CredentialRevisionIdentity revision_p)
+		    : authorization(std::move(authorization_p)), authority(std::move(authority_p)),
+		      revision(std::move(revision_p)) {
 		}
 
 		ScanAuthorization authorization;
 		CredentialAuthorityIdentity authority;
+		CredentialRevisionIdentity revision;
 	};
 
 	static ResolvedCredential TakeResolvedCredential(CredentialSnapshot &&snapshot) {
@@ -616,8 +619,9 @@ protected:
 			                     "credential provider returned an invalid snapshot");
 		}
 		auto authority = snapshot.AuthorityIdentity();
+		auto revision = snapshot.RevisionIdentity();
 		snapshot.valid = false;
-		return ResolvedCredential(std::move(snapshot.authorization), std::move(authority));
+		return ResolvedCredential(std::move(snapshot.authorization), std::move(authority), std::move(revision));
 	}
 
 	// Shared post-admission provider boundary for concrete Runtime executors and

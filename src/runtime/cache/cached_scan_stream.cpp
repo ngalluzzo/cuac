@@ -7,14 +7,58 @@
 
 namespace cuac {
 namespace internal {
+namespace {
+
+void AddRetainedBytes(std::uint64_t &total, std::uint64_t additional) {
+	if (additional > std::numeric_limits<std::uint64_t>::max() - total) {
+		throw std::overflow_error("cache candidate size overflow");
+	}
+	total += additional;
+}
+
+template <class T>
+void AddVectorStorage(std::uint64_t &total, const std::vector<T> &values) {
+	const auto capacity = static_cast<std::uint64_t>(values.capacity());
+	if (capacity != 0 && capacity > std::numeric_limits<std::uint64_t>::max() / sizeof(T)) {
+		throw std::overflow_error("cache candidate size overflow");
+	}
+	AddRetainedBytes(total, capacity * sizeof(T));
+}
+
+void AddStringStorage(std::uint64_t &total, const std::string &value) {
+	const auto capacity = static_cast<std::uint64_t>(value.capacity());
+	AddRetainedBytes(total, capacity == std::numeric_limits<std::uint64_t>::max() ? capacity : capacity + 1);
+}
+
+std::uint64_t RetainedBatchBytes(const TypedBatch &batch) {
+	std::uint64_t total = sizeof(TypedBatch);
+	AddVectorStorage(total, batch.column_types);
+	AddVectorStorage(total, batch.rows);
+	for (const auto &row : batch.rows) {
+		AddVectorStorage(total, row.values);
+		for (const auto &value : row.values) {
+			AddStringStorage(total, value.varchar_value);
+			AddVectorStorage(total, value.elements);
+			for (const auto &element : value.elements) {
+				AddStringStorage(total, element.varchar_value);
+			}
+		}
+	}
+	return total;
+}
+
+} // namespace
+
 CachedScanStream::CachedScanStream(std::unique_ptr<BatchStream> underlying_p,
                                    std::shared_ptr<CompleteScanResultCache> cache_p, CacheKey key_p,
                                    FreshnessPolicy policy_p, std::shared_ptr<CacheClock> clock_p,
-                                   std::uint64_t max_candidate_bytes_p)
-    : underlying(std::move(underlying_p)), cache(std::move(cache_p)), clock(std::move(clock_p)), key(std::move(key_p)),
-      policy(std::move(policy_p)), mode(Mode::ACCUMULATING_MISS), has_pending_uncached_batch(false), replay_index(0),
-      hit_age_milliseconds(0), hit_stored_at_milliseconds(0), delivery_age_milliseconds(0), candidate_size_bytes(0),
-      diagnostics_status(CacheStatus::MISS), diagnostics_refresh_attempted(false),
+                                   std::uint64_t max_candidate_bytes_p,
+                                   std::shared_ptr<const AdmissionRuntimeContext> admission_runtime_p)
+    : underlying(std::move(underlying_p)), cache(std::move(cache_p)), clock(std::move(clock_p)),
+      admission_runtime(std::move(admission_runtime_p)), key(std::move(key_p)), policy(std::move(policy_p)),
+      mode(Mode::ACCUMULATING_MISS), has_pending_uncached_batch(false), replay_index(0), hit_age_milliseconds(0),
+      hit_stored_at_milliseconds(0), delivery_age_milliseconds(0), candidate_size_bytes(0), candidate_permit(),
+      candidate_cacheable(true), diagnostics_status(CacheStatus::MISS), diagnostics_refresh_attempted(false),
       stale_cause_failure_class(FailureClass::INTERNAL), max_candidate_bytes(max_candidate_bytes_p), rows_returned(0),
       profile_outcome(ScanOutcome::NOT_STARTED), profile_started(false), profile_finished(false), profile_started_at(),
       profile_finished_at(), has_terminal_failure(false), terminal_failure_class(FailureClass::INTERNAL),
@@ -27,16 +71,16 @@ CachedScanStream::CachedScanStream(std::unique_ptr<BatchStream> underlying_p,
 	std::uint64_t age = 0;
 	const auto result = cache->Lookup(key, policy, &entry, &age);
 	if (result == CacheLookupResult::FRESH_HIT && entry) {
-		cached_batches = entry->batches;
+		replay_entry = std::move(entry);
 		hit_age_milliseconds = age;
-		hit_stored_at_milliseconds = entry->stored_at_milliseconds;
+		hit_stored_at_milliseconds = replay_entry->stored_at_milliseconds;
 		diagnostics_status = CacheStatus::FRESH_HIT;
 		mode = Mode::FRESH_HIT_REPLAY;
 		underlying.reset();
 	} else if (result == CacheLookupResult::STALE_CANDIDATE && entry) {
-		stale_batches = entry->batches;
+		stale_entry = std::move(entry);
 		hit_age_milliseconds = age;
-		hit_stored_at_milliseconds = entry->stored_at_milliseconds;
+		hit_stored_at_milliseconds = stale_entry->stored_at_milliseconds;
 		diagnostics_status = CacheStatus::MISS;
 		diagnostics_refresh_attempted = true;
 		mode = Mode::BARRIER_BUFFERING;
@@ -49,11 +93,12 @@ CachedScanStream::~CachedScanStream() noexcept {
 }
 
 bool CachedScanStream::ServeFreshHit(TypedBatch &batch) {
-	if (replay_index >= cached_batches.size()) {
+	if (!replay_entry || replay_index >= replay_entry->batches.size()) {
+		replay_entry.reset();
 		mode = Mode::DRAINED;
 		return false;
 	}
-	batch = cached_batches[replay_index];
+	batch = replay_entry->batches[replay_index];
 	++replay_index;
 	return true;
 }
@@ -69,28 +114,100 @@ bool CachedScanStream::ServeAccumulatingMiss(ExecutionControl &control, TypedBat
 		mode = Mode::DRAINED;
 		return false;
 	}
-	try {
-		candidate_size_bytes += batch.rows.size() * batch.column_types.size() * 32;
-		cached_batches.push_back(batch);
-	} catch (...) {
+	if (candidate_cacheable && !RetainCandidateBatch(batch)) {
 		diagnostics_status = CacheStatus::STORE_BYPASSED_CAPACITY;
-		cached_batches.clear();
-		candidate_size_bytes = 0;
+		ClearCandidate();
+		candidate_cacheable = false;
 	}
 	return true;
 }
 
-void CachedScanStream::PublishCandidate() {
-	if (cached_batches.empty()) {
+bool CachedScanStream::ReserveCandidateBytes(std::uint64_t size_bytes) noexcept {
+	if (!admission_runtime) {
+		return true;
+	}
+	try {
+		AdmissionObservation observation {};
+		const auto status =
+		    candidate_permit.IsValid()
+		        ? admission_runtime->controller->ResizeCacheResidentBytes(&candidate_permit, size_bytes, &observation)
+		        : admission_runtime->controller->ReserveCacheResidentBytes(admission_runtime->identity, size_bytes,
+		                                                                   &candidate_permit, &observation);
+		return status == AdmissionAcquireStatus::ACQUIRED;
+	} catch (...) {
+		return false;
+	}
+}
+
+void CachedScanStream::RollBackCandidateReservation(std::uint64_t size_bytes) noexcept {
+	if (!candidate_permit.IsValid()) {
 		return;
 	}
-	const auto published = cache->Publish(key, cached_batches, candidate_size_bytes);
+	if (size_bytes == 0) {
+		candidate_permit.Release();
+		return;
+	}
+	try {
+		AdmissionObservation observation {};
+		if (admission_runtime->controller->ResizeCacheResidentBytes(&candidate_permit, size_bytes, &observation) !=
+		    AdmissionAcquireStatus::ACQUIRED) {
+			candidate_permit.Release();
+		}
+	} catch (...) {
+		candidate_permit.Release();
+	}
+}
+
+bool CachedScanStream::RetainCandidateBatch(const TypedBatch &batch) {
+	std::uint64_t batch_size = 0;
+	try {
+		batch_size = RetainedBatchBytes(batch);
+	} catch (...) {
+		return false;
+	}
+	if (batch_size > max_candidate_bytes || candidate_size_bytes > max_candidate_bytes - batch_size) {
+		return false;
+	}
+	const auto previous_size = candidate_size_bytes;
+	const auto next_size = previous_size + batch_size;
+	if (!ReserveCandidateBytes(next_size)) {
+		return false;
+	}
+	try {
+		cached_batches.push_back(batch);
+		candidate_size_bytes = next_size;
+		return true;
+	} catch (...) {
+		RollBackCandidateReservation(previous_size);
+		return false;
+	}
+}
+
+void CachedScanStream::ClearCandidate() noexcept {
+	cached_batches.clear();
+	candidate_size_bytes = 0;
+	candidate_permit.Release();
+}
+
+void CachedScanStream::ClearReplayEntries() noexcept {
+	replay_entry.reset();
+	stale_entry.reset();
+}
+
+void CachedScanStream::PublishCandidate() {
+	if (!candidate_cacheable) {
+		return;
+	}
+	std::shared_ptr<const CacheEntry> published_entry;
+	const auto published =
+	    cache->PublishReserved(key, &cached_batches, candidate_size_bytes, &candidate_permit, &published_entry);
 	if (published) {
 		diagnostics_status = CacheStatus::REFRESHED;
 	} else {
 		diagnostics_status = CacheStatus::STORE_BYPASSED_CAPACITY;
 	}
-	cached_batches.clear();
+	ClearCandidate();
+	candidate_cacheable = false;
 }
 
 bool CachedScanStream::Next(ExecutionControl &control, TypedBatch &batch) {
@@ -157,18 +274,24 @@ bool CachedScanStream::Next(ExecutionControl &control, TypedBatch &batch) {
 			underlying->Cancel();
 		}
 		CaptureUnderlyingDiagnostics();
+		ClearCandidate();
+		ClearReplayEntries();
 		FinishProfile(ScanOutcome::CANCELLED);
 		throw;
 	} catch (const ExecutionError &error) {
 		terminal_exception = std::current_exception();
 		mode = Mode::FAILED;
 		CaptureUnderlyingDiagnostics();
+		ClearCandidate();
+		ClearReplayEntries();
 		FinishProfile(ScanOutcome::FAILED, true, FailurePropertiesFromError(error).failure_class);
 		throw;
 	} catch (...) {
 		terminal_exception = std::current_exception();
 		mode = Mode::FAILED;
 		CaptureUnderlyingDiagnostics();
+		ClearCandidate();
+		ClearReplayEntries();
 		FinishProfile(ScanOutcome::FAILED, true, FailureClass::INTERNAL);
 		throw;
 	}
@@ -200,8 +323,7 @@ bool CachedScanStream::ServeBarrierBuffering(ExecutionControl &control, TypedBat
 				replay_index = 0;
 				CaptureUnderlyingDiagnostics();
 				underlying.reset();
-				cached_batches.clear();
-				candidate_size_bytes = 0;
+				ClearCandidate();
 				return ServeStale(batch);
 			}
 			diagnostics_status = CacheStatus::EXPIRED_DURING_REFRESH;
@@ -213,30 +335,23 @@ bool CachedScanStream::ServeBarrierBuffering(ExecutionControl &control, TypedBat
 		throw;
 	}
 	if (!has_next) {
-		const auto published_size = candidate_size_bytes;
-		const auto published = cache->Publish(key, cached_batches, published_size);
-		cached_batches.swap(stale_batches);
-		cached_batches.clear();
-		candidate_size_bytes = 0;
+		std::shared_ptr<const CacheEntry> published_entry;
+		const auto published =
+		    cache->PublishReserved(key, &cached_batches, candidate_size_bytes, &candidate_permit, &published_entry);
+		stale_entry.reset();
 		replay_index = 0;
 		diagnostics_status = published ? CacheStatus::REFRESHED : CacheStatus::STORE_BYPASSED_CAPACITY;
+		if (published) {
+			replay_entry = std::move(published_entry);
+			candidate_size_bytes = 0;
+		}
 		hit_age_milliseconds = 0;
 		mode = Mode::BARRIER_FRESH_SERVE;
 		CaptureUnderlyingDiagnostics();
 		underlying.reset();
 		return ServeBarrierFresh(batch);
 	}
-	bool stream_uncached = false;
-	try {
-		candidate_size_bytes += batch.rows.size() * batch.column_types.size() * 32;
-		if (candidate_size_bytes > max_candidate_bytes) {
-			stream_uncached = true;
-		} else {
-			cached_batches.push_back(batch);
-		}
-	} catch (...) {
-		stream_uncached = true;
-	}
+	const bool stream_uncached = !RetainCandidateBatch(batch);
 	if (stream_uncached) {
 		diagnostics_status = CacheStatus::REFRESH_STREAMED_CAPACITY;
 		// Replay the already-buffered prefix before this cap-crossing batch,
@@ -246,18 +361,21 @@ bool CachedScanStream::ServeBarrierBuffering(ExecutionControl &control, TypedBat
 		has_pending_uncached_batch = true;
 		replay_index = 0;
 		mode = Mode::BARRIER_DRAIN_EMIT;
-		stale_batches.clear();
+		stale_entry.reset();
 		return ServeBarrierDrainEmit(control, batch);
 	}
 	return ServeBarrierBuffering(control, batch);
 }
 
 bool CachedScanStream::ServeBarrierFresh(TypedBatch &batch) {
-	if (replay_index >= stale_batches.size()) {
+	const auto &batches = replay_entry ? replay_entry->batches : cached_batches;
+	if (replay_index >= batches.size()) {
+		replay_entry.reset();
+		ClearCandidate();
 		mode = Mode::DRAINED;
 		return false;
 	}
-	batch = stale_batches[replay_index];
+	batch = batches[replay_index];
 	++replay_index;
 	return true;
 }
@@ -268,8 +386,7 @@ bool CachedScanStream::ServeBarrierDrainEmit(ExecutionControl &control, TypedBat
 		++replay_index;
 		return true;
 	}
-	cached_batches.clear();
-	candidate_size_bytes = 0;
+	ClearCandidate();
 	replay_index = 0;
 	if (has_pending_uncached_batch) {
 		batch = std::move(pending_uncached_batch);
@@ -289,11 +406,12 @@ bool CachedScanStream::ServeBarrierDrainedUncached(ExecutionControl &control, Ty
 }
 
 bool CachedScanStream::ServeStale(TypedBatch &batch) {
-	if (replay_index >= stale_batches.size()) {
+	if (!stale_entry || replay_index >= stale_entry->batches.size()) {
+		stale_entry.reset();
 		mode = Mode::DRAINED;
 		return false;
 	}
-	batch = stale_batches[replay_index];
+	batch = stale_entry->batches[replay_index];
 	++replay_index;
 	return true;
 }
@@ -311,6 +429,10 @@ void CachedScanStream::Cancel() noexcept {
 	if (underlying) {
 		underlying->Cancel();
 	}
+	ClearCandidate();
+	ClearReplayEntries();
+	pending_uncached_batch = TypedBatch();
+	has_pending_uncached_batch = false;
 }
 
 void CachedScanStream::Close() noexcept {
@@ -324,10 +446,11 @@ void CachedScanStream::Close() noexcept {
 	if (underlying) {
 		underlying->Close();
 	}
-	cached_batches.clear();
+	ClearCandidate();
+	ClearReplayEntries();
 	pending_uncached_batch = TypedBatch();
 	has_pending_uncached_batch = false;
-	candidate_size_bytes = 0;
+	candidate_cacheable = false;
 	mode = Mode::DRAINED;
 }
 

@@ -123,7 +123,8 @@ BuildExecutionSnapshot(const RetryPlan &retry, const AdmittedRateLimitPolicy &ra
                        const ResilienceExecutionState &state, ExposureState exposure, uint64_t rows_returned = 0,
                        ScanOutcome outcome = ScanOutcome::RUNNING, bool has_terminal_failure = false,
                        FailureClass terminal_failure_class = FailureClass::INTERNAL,
-                       std::chrono::steady_clock::time_point observed_at = std::chrono::steady_clock::now()) noexcept {
+                       std::chrono::steady_clock::time_point observed_at = std::chrono::steady_clock::now(),
+                       const FailureProperties *terminal_failure_properties = nullptr) noexcept {
 	const auto &counters = accounting.Counters();
 	ExecutionSnapshot result;
 	result.effective_max_attempts_per_step = resilience.max_attempts_per_step;
@@ -162,6 +163,16 @@ BuildExecutionSnapshot(const RetryPlan &retry, const AdmittedRateLimitPolicy &ra
 	result.cumulative_waiting_milliseconds = counters.cumulative_waiting_milliseconds;
 	result.has_terminal_failure = has_terminal_failure;
 	result.terminal_failure_class = terminal_failure_class;
+	if (terminal_failure_properties != nullptr) {
+		result.admission_reason = terminal_failure_properties->admission_reason;
+		result.admission_scope = terminal_failure_properties->admission_scope;
+		result.admission_limit = terminal_failure_properties->admission_limit;
+		result.admission_observed = terminal_failure_properties->admission_observed;
+		result.admission_requested = terminal_failure_properties->admission_requested;
+		result.cumulative_admission_waiting_milliseconds =
+		    terminal_failure_properties->cumulative_admission_waiting_milliseconds;
+		result.admission_waiting = terminal_failure_properties->admission_waiting;
+	}
 	return result;
 }
 

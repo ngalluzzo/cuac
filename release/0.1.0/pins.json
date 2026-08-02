@@ -580,11 +580,15 @@
         "src/semantics/sources.cmake",
         "src/semantics/targets.cmake"
       ],
-      "sha256": "695e22773763ae55e43cd6c3d704d1d23ed7f5bebe8a896a80f89aa2f94dd3aa"
+      "sha256": "3e8936ecb6ef26bdc6d560a38550c292813154842165ed0202bdd2be6094453c"
     },
     "public_contract": {
       "canonical_json_sha256": "27713609f5a076199e5ab8825f98d97489f42c3de83b2412edc33c3c14ecf799",
       "path": "release/0.1.0/public_contract.json"
+    },
+    "resilience_certification": {
+      "canonical_json_sha256": "477a3da2c5fde9d6b870aa6ec13903170268e5043c4a47afdd501e368f5148d4",
+      "path": "release/0.1.0/resilience_certification.json"
     },
     "repository_connector_package": {
       "algorithm": "sha256-length-prefixed-path-and-bytes-v1",

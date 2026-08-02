@@ -43,8 +43,9 @@ target_link_libraries(
           Threads::Threads)
 
 # Complete-result caching is a separate Runtime capability. It consumes the
-# immutable plan/cache policy and stream interface, but it does not own request
-# admission, transport, credentials, or protocol execution.
+# immutable plan/cache policy, stream interface, and non-queuing cache-resident
+# admission authority, but it does not own request admission, transport,
+# credentials, or protocol execution.
 add_library(
   cuac_runtime_cache_service STATIC
   ${REMOTE_RUNTIME_CACHE_SOURCES})
@@ -52,7 +53,8 @@ configure_cuac_cpp_target(cuac_runtime_cache_service)
 target_link_libraries(
   cuac_runtime_cache_service
   PUBLIC cuac_runtime_interface_service
-         cuac_scan_plan_service)
+         cuac_scan_plan_service
+  PRIVATE cuac_runtime_admission_service)
 
 add_library(
   cuac_runtime_executor_service STATIC

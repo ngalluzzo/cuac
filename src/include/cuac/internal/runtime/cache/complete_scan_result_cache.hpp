@@ -1,6 +1,8 @@
 #pragma once
 
+#include "cuac/internal/runtime/admission/admission_controller.hpp"
 #include "cuac/semantics/cache_policy.hpp"
+#include "cuac/runtime/credential_provider.hpp"
 #include "cuac/runtime/execution.hpp"
 
 #include <cstddef>
@@ -25,23 +27,24 @@ public:
 std::shared_ptr<CacheClock> NewSystemCacheClock();
 
 // Opaque credential dimension of the cache key. Runtime supplies either an
-// anonymous tag or an opaque authority+revision hash after credential
-// resolution. The value participates through equality and hashing only; it
-// never renders, serializes, or grants placement authority.
-struct CacheCredentialTag {
-	std::size_t tag;
-	bool anonymous;
-
-	CacheCredentialTag() noexcept : tag(0), anonymous(true) {
-	}
-	CacheCredentialTag(std::size_t tag_p, bool anonymous_p) noexcept : tag(tag_p), anonymous(anonymous_p) {
-	}
-
+// anonymous tag or the exact opaque authority+revision identities after
+// credential resolution. The value participates through equality and hashing
+// only; it never renders, serializes, or grants placement authority.
+class CacheCredentialTag {
+public:
+	CacheCredentialTag() noexcept;
 	static CacheCredentialTag Anonymous();
-	static CacheCredentialTag Opaque(std::size_t authority_revision_hash);
+	static CacheCredentialTag Opaque(CredentialAuthorityIdentity authority, CredentialRevisionIdentity revision);
 
 	bool operator==(const CacheCredentialTag &other) const noexcept;
 	bool operator!=(const CacheCredentialTag &other) const noexcept;
+	std::size_t Hash() const noexcept;
+
+private:
+	struct OpaqueIdentity;
+	explicit CacheCredentialTag(std::shared_ptr<const OpaqueIdentity> identity_p) noexcept;
+
+	std::shared_ptr<const OpaqueIdentity> identity;
 };
 
 // Composite cache key combining semantic identity and credential tag. Two keys
@@ -70,6 +73,10 @@ struct CacheEntry {
 	std::vector<TypedBatch> batches;
 	std::uint64_t stored_at_milliseconds;
 	std::uint64_t size_bytes;
+	// The admission charge follows the immutable storage through map eviction
+	// and remains live until the final replaying stream releases its shared
+	// entry owner.
+	AdmissionController::Permit admission_permit;
 };
 
 // Freshness classification of a lookup against the cache.
@@ -109,6 +116,15 @@ public:
 	// (active shared_ptr owners) remain valid but are removed from the map.
 	// Returns false if the entry exceeds size limits or the cache is closed.
 	bool Publish(const CacheKey &key, std::vector<TypedBatch> batches, std::uint64_t size_bytes);
+
+	// Runtime publication boundary for an admission-charged candidate. On
+	// success, batches and permit move atomically into the immutable entry and
+	// published_entry receives shared replay ownership. On refusal or allocation
+	// failure, all caller-owned state is left intact so cache capacity can never
+	// turn a successful remote scan into a statement failure.
+	bool PublishReserved(const CacheKey &key, std::vector<TypedBatch> *batches, std::uint64_t size_bytes,
+	                     AdmissionController::Permit *permit,
+	                     std::shared_ptr<const CacheEntry> *published_entry) noexcept;
 
 	// Prevents future lookup and publication. Already returned entries remain
 	// release-safe. Non-throwing and idempotent.

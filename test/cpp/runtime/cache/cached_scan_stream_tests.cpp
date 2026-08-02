@@ -21,6 +21,18 @@ using cuac::internal::CacheLookupResult;
 using cuac::internal::CompleteScanResultCache;
 using cuac_test::Require;
 
+std::shared_ptr<cuac::internal::AdmissionRuntimeContext>
+MakeCacheAdmission(std::uint64_t limit, std::shared_ptr<cuac::internal::AdmissionController> *controller_out) {
+	auto profile = cuac::internal::AdmissionProfile::Hard();
+	profile.cache_resident_bytes = {limit, limit, limit, limit, limit};
+	auto controller = std::make_shared<cuac::internal::AdmissionController>(profile);
+	auto identity = cuac::internal::AdmissionIdentity::Complete("cache-test", {"https", "cache.example", 443}, "items",
+	                                                            cuac::internal::AdmissionProtocol::REST, "list-items",
+	                                                            cuac::internal::AdmissionPrincipalToken::Anonymous());
+	*controller_out = controller;
+	return std::make_shared<cuac::internal::AdmissionRuntimeContext>(std::move(controller), std::move(identity));
+}
+
 class FakeClock : public CacheClock {
 public:
 	std::uint64_t NowMilliseconds() const override {
@@ -29,7 +41,7 @@ public:
 	void Advance(std::uint64_t ms) {
 		now_ms += ms;
 	}
-	std::uint64_t now_ms;
+	std::uint64_t now_ms = 0;
 };
 
 class NoopCancellation : public cuac::ExecutionControl {
@@ -279,6 +291,83 @@ void TestStoreBypassedCapacityDoesNotFailTheScan() {
 	        "store-bypassed scan did not report STORE_BYPASSED_CAPACITY");
 }
 
+void TestMissStopsAccumulatingAfterCandidateCap() {
+	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock, 256, 4096, 1024);
+	CacheKey key = MakeKey(14);
+
+	std::vector<cuac::TypedBatch> remote_batches;
+	remote_batches.push_back(MakeBatch(1, "first"));
+	remote_batches.push_back(MakeBatch(2, "crosses-cap"));
+	remote_batches.push_back(MakeBatch(3, "must-not-form-a-suffix"));
+	std::unique_ptr<cuac::BatchStream> remote(new FakeStream(std::move(remote_batches)));
+	CachedScanStream stream(std::move(remote), cache, key, cuac::FreshnessPolicy::Fresh(60000), clock, 100);
+
+	NoopCancellation control;
+	cuac::TypedBatch batch;
+	for (std::int64_t expected = 1; expected <= 3; expected++) {
+		Require(stream.Next(control, batch) && batch.rows[0].values[0].bigint_value == expected,
+		        "capacity-bypassed miss changed its live row sequence");
+	}
+	Require(!stream.Next(control, batch), "capacity-bypassed miss did not exhaust cleanly");
+	Require(cache->ResidentEntries() == 0 &&
+	            stream.Diagnostics().cache_diagnostics.status == cuac::CacheStatus::STORE_BYPASSED_CAPACITY,
+	        "capacity-bypassed miss retained a partial or suffix cache entry");
+}
+
+void TestAdmissionChargeFollowsCandidateEntryAndPinnedReplay() {
+	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock, 256, 4096, 1024);
+	std::shared_ptr<cuac::internal::AdmissionController> controller;
+	auto admission = MakeCacheAdmission(4096, &controller);
+	CacheKey key = MakeKey(15);
+
+	std::vector<cuac::TypedBatch> founding_batches;
+	founding_batches.push_back(MakeBatch(1, "admission-accounted"));
+	std::unique_ptr<cuac::BatchStream> founding_remote(new FakeStream(std::move(founding_batches)));
+	CachedScanStream founding(std::move(founding_remote), cache, key, cuac::FreshnessPolicy::Fresh(60000), clock, 1024,
+	                          admission);
+	NoopCancellation control;
+	cuac::TypedBatch batch;
+	Require(founding.Next(control, batch) && controller->Usage().cache_resident_bytes > 0,
+	        "cache candidate did not acquire resident-byte admission");
+	const auto retained_bytes = controller->Usage().cache_resident_bytes;
+	Require(!founding.Next(control, batch) && cache->ResidentEntries() == 1 &&
+	            controller->Usage().cache_resident_bytes == retained_bytes,
+	        "candidate admission did not transfer exactly to the immutable cache entry");
+
+	std::unique_ptr<cuac::BatchStream> unused_remote(new FakeStream(std::vector<cuac::TypedBatch>()));
+	CachedScanStream replay(std::move(unused_remote), cache, key, cuac::FreshnessPolicy::Fresh(60000), clock, 1024,
+	                        admission);
+	Require(replay.Next(control, batch), "admission-accounted cache replay did not return its batch");
+	cache->Close();
+	Require(controller->Usage().cache_resident_bytes == retained_bytes,
+	        "cache close released admission while a replay stream still pinned the entry");
+	Require(!replay.Next(control, batch) && controller->Usage().cache_resident_bytes == 0,
+	        "final replay owner did not release cache-resident admission exactly once");
+}
+
+void TestAdmissionRefusalBypassesStoreWithoutFailingRows() {
+	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
+	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock, 256, 4096, 1024);
+	std::shared_ptr<cuac::internal::AdmissionController> controller;
+	auto admission = MakeCacheAdmission(1, &controller);
+	CacheKey key = MakeKey(16);
+
+	std::vector<cuac::TypedBatch> remote_batches;
+	remote_batches.push_back(MakeBatch(1, "must-remain-visible"));
+	std::unique_ptr<cuac::BatchStream> remote(new FakeStream(std::move(remote_batches)));
+	CachedScanStream stream(std::move(remote), cache, key, cuac::FreshnessPolicy::Fresh(60000), clock, 1024, admission);
+	NoopCancellation control;
+	cuac::TypedBatch batch;
+	Require(stream.Next(control, batch) && batch.rows[0].values[0].bigint_value == 1,
+	        "cache admission refusal changed the successful remote row");
+	Require(!stream.Next(control, batch) && cache->ResidentEntries() == 0 &&
+	            controller->Usage().cache_resident_bytes == 0 &&
+	            stream.Diagnostics().cache_diagnostics.status == cuac::CacheStatus::STORE_BYPASSED_CAPACITY,
+	        "cache admission refusal failed to bypass storage with zero retained charge");
+}
+
 void TestExpiredEntryCausesMiss() {
 	std::shared_ptr<FakeClock> clock = std::make_shared<FakeClock>();
 	std::shared_ptr<CompleteScanResultCache> cache = std::make_shared<CompleteScanResultCache>(clock);
@@ -509,6 +598,9 @@ int main() {
 		TestPartialFailureDiscardsCandidate();
 		TestOffPolicyBypassesCache();
 		TestStoreBypassedCapacityDoesNotFailTheScan();
+		TestMissStopsAccumulatingAfterCandidateCap();
+		TestAdmissionChargeFollowsCandidateEntryAndPinnedReplay();
+		TestAdmissionRefusalBypassesStoreWithoutFailingRows();
 		TestExpiredEntryCausesMiss();
 		TestStaleIfErrorBarrierServesStaleOnEligibleLateFailure();
 		TestStaleIfErrorExpiresWhileRefreshIsRunning();

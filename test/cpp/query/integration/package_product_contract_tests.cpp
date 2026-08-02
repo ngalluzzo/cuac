@@ -1,4 +1,5 @@
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "cuac/query/duckdb_secret.hpp"
@@ -23,6 +24,18 @@
 namespace {
 
 using cuac_test::Require;
+
+void RegisterCacheSettings(duckdb::ExtensionLoader &loader) {
+	auto &config = duckdb::DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.AddExtensionOption("cuac_cache_mode", "Cache mode: off, fresh, or stale_if_error. Default off.",
+	                          duckdb::LogicalType::VARCHAR, duckdb::Value("off"));
+	config.AddExtensionOption("cuac_cache_fresh_milliseconds",
+	                          "Fresh window in milliseconds. Zero disables caching until mode is enabled.",
+	                          duckdb::LogicalType::UBIGINT, duckdb::Value::UBIGINT(0));
+	config.AddExtensionOption("cuac_cache_stale_milliseconds",
+	                          "Additional stale window in milliseconds for stale_if_error mode.",
+	                          duckdb::LogicalType::UBIGINT, duckdb::Value::UBIGINT(0));
+}
 
 void LoadRepositoryPackage(duckdb::Connection &connection, const std::string &repository_root) {
 	auto load = connection.Query("CALL system.main.cuac_load_connector(package_root := '" + repository_root +
@@ -58,6 +71,24 @@ void CreatePackageRuntimeSecret(duckdb::Connection &connection) {
 	Require(!secret->HasError(), "actual DuckDB could not create the package Runtime secret");
 }
 
+void ConfigureCache(duckdb::Connection &connection, const std::string &mode, std::uint64_t fresh_milliseconds,
+                    std::uint64_t stale_milliseconds) {
+	auto fresh = connection.Query("SET cuac_cache_fresh_milliseconds = " + std::to_string(fresh_milliseconds));
+	auto stale = connection.Query("SET cuac_cache_stale_milliseconds = " + std::to_string(stale_milliseconds));
+	auto selected = connection.Query("SET cuac_cache_mode = '" + mode + "'");
+	Require(!fresh->HasError() && !stale->HasError() && !selected->HasError(),
+	        "actual DuckDB could not configure the deterministic cache policy");
+}
+
+void RequireAuthenticatedUser(duckdb::Connection &connection, std::int64_t id, const std::string &login,
+                              bool site_admin) {
+	auto result = connection.Query(
+	    "SELECT id, login, site_admin FROM system.main.github_authenticated_user(secret := 'package_runtime')");
+	Require(!result->HasError() && result->RowCount() == 1 && result->GetValue(0, 0).GetValue<int64_t>() == id &&
+	            result->GetValue(1, 0).ToString() == login && result->GetValue(2, 0).GetValue<bool>() == site_admin,
+	        "actual-DuckDB authenticated cache scan changed its exact SQL result");
+}
+
 uint64_t DiagnosticCount(const std::string &diagnostic, const std::string &field) {
 	const auto begin = diagnostic.find(field);
 	if (begin == std::string::npos) {
@@ -72,6 +103,21 @@ uint64_t DiagnosticCount(const std::string &diagnostic, const std::string &field
 		throw std::runtime_error("local-admission diagnostic has a non-numeric " + field + ": " + diagnostic);
 	}
 	return std::stoull(diagnostic.substr(value_begin, value_end - value_begin));
+}
+
+std::string ProfileBagSummary(const std::vector<cuac::ExecutionSnapshot> &profiles) {
+	std::string result;
+	for (const auto &profile : profiles) {
+		result += " {outcome=" + std::to_string(static_cast<unsigned>(profile.outcome));
+		result += ",requests=" + std::to_string(profile.remote_requests);
+		result += ",attempts=" + std::to_string(profile.aggregate_attempts);
+		result += ",decoded=" + std::to_string(profile.rows_decoded);
+		result += ",returned=" + std::to_string(profile.rows_returned);
+		result += ",terminal=" + std::to_string(profile.has_terminal_failure ? 1 : 0);
+		result += ",failure=" + std::to_string(static_cast<unsigned>(profile.terminal_failure_class));
+		result += ",admission=" + std::to_string(static_cast<unsigned>(profile.admission_reason)) + "}";
+	}
+	return result;
 }
 
 cuac::ValueKind KindFor(const std::string &logical_type) {
@@ -518,6 +564,137 @@ void TestGeneratedRelationsExecuteThroughRuntime(const std::string &repository_r
 	}
 }
 
+void TestCredentialRotationSeparatesCacheIdentityAndFreshHitsRemainBounded(const std::string &repository_root) {
+	auto scenario =
+	    cuac_test::BuildControlledRuntimeScenario(cuac_test::ControlledRuntimeScenarioId::CREDENTIAL_ROTATION_CACHE);
+	duckdb::DuckDB database(nullptr);
+	cuac_test::ConfigureIsolatedCredentialRoot(database);
+	duckdb::ExtensionLoader loader(*database.instance, "cuac_credential_rotation_cache_product_test");
+	duckdb::RegisterCuacSecrets(loader);
+	RegisterCacheSettings(loader);
+	duckdb::RegisterCuacPackageSurface(loader, cuac::BuildPackageGenerationComposition(scenario->Executor()));
+	duckdb::Connection connection(database);
+	LoadRepositoryPackage(connection, repository_root);
+	CreatePackageRuntimeSecret(connection);
+	ConfigureCache(connection, "fresh", 60000, 0);
+	auto explained = connection.Query(
+	    "EXPLAIN (FORMAT JSON) SELECT id FROM system.main.github_authenticated_user(secret := 'package_runtime')");
+	Require(!explained->HasError() &&
+	            explained->ToString().find("cache_mode=fresh;fresh_ms=60000;stale_ms=0") != std::string::npos,
+	        "actual EXPLAIN did not publish the bound cache policy");
+
+	RequireAuthenticatedUser(connection, 11, "before-rotation", false);
+	auto replaced = connection.Query("CREATE OR REPLACE TEMPORARY SECRET package_runtime "
+	                                 "(TYPE cuac, PROVIDER config, TOKEN 'package-runtime-token-rotated')");
+	Require(!replaced->HasError(), "actual DuckDB could not rotate the cache certification credential");
+	RequireAuthenticatedUser(connection, 12, "after-rotation", true);
+	for (std::uint64_t repeat = 0; repeat < 14; repeat++) {
+		RequireAuthenticatedUser(connection, 12, "after-rotation", true);
+	}
+
+	const auto observation = scenario->Observation();
+	Require(observation.request_count == observation.expected_request_count && observation.request_count == 2 &&
+	            observation.opened_stream_count == 16 && observation.completed_stream_count == 16 &&
+	            observation.closed_stream_count == 16 && observation.retained_stream_count == 0 &&
+	            observation.active_next_count == 0 && observation.peak_retained_stream_count == 1 &&
+	            observation.peak_active_next_count == 1 && observation.terminal_profile_count == 16 &&
+	            observation.terminal_profile_overflow_count == 0,
+	        "credential rotation and repeated fresh hits did not preserve bounded stream/resource state");
+	const auto profiles = scenario->TerminalProfiles();
+	Require(profiles.size() == 16, "credential rotation certification lost terminal profiles");
+	for (std::size_t index = 0; index < profiles.size(); index++) {
+		const auto &profile = profiles[index];
+		const bool remote_miss = index < 2;
+		Require(profile.outcome == cuac::ScanOutcome::SUCCEEDED && profile.rows_returned == 1 &&
+		            profile.remote_requests == (remote_miss ? 1 : 0) &&
+		            profile.aggregate_attempts == (remote_miss ? 1 : 0) &&
+		            profile.cache_diagnostics.status ==
+		                (remote_miss ? cuac::CacheStatus::REFRESHED : cuac::CacheStatus::FRESH_HIT) &&
+		            !profile.has_terminal_failure,
+		        "credential rotation/fresh-hit terminal profile drifted");
+	}
+}
+
+void TestStaleFallbackPreservesExactSqlAndFailedRefreshProfile(const std::string &repository_root) {
+	auto scenario =
+	    cuac_test::BuildControlledRuntimeScenario(cuac_test::ControlledRuntimeScenarioId::CACHE_STALE_FALLBACK);
+	duckdb::DuckDB database(nullptr);
+	cuac_test::ConfigureIsolatedCredentialRoot(database);
+	duckdb::ExtensionLoader loader(*database.instance, "cuac_stale_fallback_product_test");
+	duckdb::RegisterCuacSecrets(loader);
+	RegisterCacheSettings(loader);
+	duckdb::RegisterCuacPackageSurface(loader, cuac::BuildPackageGenerationComposition(scenario->Executor()));
+	duckdb::Connection connection(database);
+	LoadRepositoryPackage(connection, repository_root);
+	CreatePackageRuntimeSecret(connection);
+	ConfigureCache(connection, "stale_if_error", 1, 60000);
+
+	RequireAuthenticatedUser(connection, 21, "stale-founding", false);
+	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	RequireAuthenticatedUser(connection, 21, "stale-founding", false);
+
+	const auto observation = scenario->Observation();
+	Require(observation.request_count == observation.expected_request_count && observation.request_count == 2 &&
+	            observation.opened_stream_count == 2 && observation.completed_stream_count == 2 &&
+	            observation.closed_stream_count == 2 && observation.retained_stream_count == 0 &&
+	            observation.active_next_count == 0 && observation.terminal_profile_count == 2 &&
+	            observation.terminal_profile_overflow_count == 0,
+	        "stale fallback did not cleanly settle both product streams");
+	const auto profiles = scenario->TerminalProfiles();
+	Require(profiles.size() == 2 && profiles[0].outcome == cuac::ScanOutcome::SUCCEEDED &&
+	            profiles[0].remote_requests == 1 && profiles[0].rows_returned == 1 &&
+	            profiles[0].cache_diagnostics.status == cuac::CacheStatus::REFRESHED,
+	        "stale fallback founding profile drifted");
+	Require(profiles[1].outcome == cuac::ScanOutcome::SUCCEEDED && profiles[1].remote_requests == 1 &&
+	            profiles[1].aggregate_attempts == 1 && profiles[1].rows_decoded == 0 &&
+	            profiles[1].rows_returned == 1 && !profiles[1].has_terminal_failure &&
+	            profiles[1].cache_diagnostics.status == cuac::CacheStatus::STALE_SERVED &&
+	            profiles[1].cache_diagnostics.refresh_attempted &&
+	            profiles[1].cache_diagnostics.stale_cause_failure_class == cuac::FailureClass::TRANSPORT &&
+	            profiles[1].cache_diagnostics.age_milliseconds >= 1 &&
+	            profiles[1].cache_diagnostics.age_milliseconds < 60001,
+	        "stale fallback did not retain the failed refresh and successful stale-delivery profile");
+}
+
+void TestPostExposureFailureRetainsTerminalProfile(const std::string &repository_root) {
+	auto scenario =
+	    cuac_test::BuildControlledRuntimeScenario(cuac_test::ControlledRuntimeScenarioId::GRAPHQL_LATE_HTTP_STATUS);
+	duckdb::DuckDB database(nullptr);
+	cuac_test::ConfigureIsolatedCredentialRoot(database);
+	duckdb::ExtensionLoader loader(*database.instance, "cuac_post_exposure_failure_product_test");
+	duckdb::RegisterCuacSecrets(loader);
+	duckdb::RegisterCuacPackageSurface(loader, cuac::BuildPackageGenerationComposition(scenario->Executor()));
+	duckdb::Connection connection(database);
+	LoadRepositoryPackage(connection, repository_root);
+	CreatePackageRuntimeSecret(connection);
+
+	auto result = connection.Query("SELECT id, primary_language FROM system.main.github_viewer_repository_metrics("
+	                               "secret := 'package_runtime') ORDER BY primary_language NULLS FIRST");
+	const auto error = result->GetError();
+	Require(result->HasError() &&
+	            error.find("[cuac][http_status] connector=github relation=viewer_repository_metrics") !=
+	                std::string::npos &&
+	            error.find("exposure=unaccepted rows_exposed=1") != std::string::npos &&
+	            error.find("runtime-owned") == std::string::npos &&
+	            error.find("package-runtime-token") == std::string::npos,
+	        "post-exposure GraphQL failure changed its exact safe SQL diagnostic: " + error);
+	const auto observation = scenario->Observation();
+	const auto profiles = scenario->TerminalProfiles();
+	Require(observation.request_count == observation.expected_request_count && observation.request_count == 2 &&
+	            observation.opened_stream_count == 1 && observation.closed_stream_count == 1 &&
+	            observation.retained_stream_count == 0 && observation.active_next_count == 0 &&
+	            observation.terminal_profile_count == 1 && observation.terminal_profile_overflow_count == 0 &&
+	            profiles.size() == 1,
+	        "post-exposure failure did not settle one bounded product stream");
+	const auto &profile = profiles[0];
+	Require(profile.outcome == cuac::ScanOutcome::FAILED && profile.remote_requests == 2 &&
+	            profile.aggregate_attempts == 2 && profile.current_step == 2 && profile.rows_decoded == 1 &&
+	            profile.rows_returned == 1 && profile.exposure_state == cuac::ExposureState::UNACCEPTED &&
+	            profile.has_terminal_failure && profile.terminal_failure_class == cuac::FailureClass::RATE_LIMIT &&
+	            profile.cache_diagnostics.status == cuac::CacheStatus::OFF,
+	        "post-exposure failure terminal profile lost accepted rows or its terminal class");
+}
+
 void TestRetryRecoveryPreservesActualDuckdbRelationalResults(const std::string &repository_root) {
 	auto scenario = cuac_test::BuildControlledRuntimeScenario(
 	    cuac_test::ControlledRuntimeScenarioId::REST_RETRY_TRANSIENT_DUPLICATE);
@@ -557,6 +734,17 @@ void TestRetryRecoveryPreservesActualDuckdbRelationalResults(const std::string &
 	const auto observation = scenario->Observation();
 	Require(observation.request_count == observation.expected_request_count && observation.request_count == 6,
 	        "actual-DuckDB equivalence queries did not each execute the 503/reset/success retry transcript");
+	const auto profiles = scenario->TerminalProfiles();
+	Require(profiles.size() == 2 && observation.terminal_profile_count == 2 &&
+	            observation.terminal_profile_overflow_count == 0,
+	        "retry recovery did not retain exactly two bounded terminal profiles");
+	for (const auto &profile : profiles) {
+		Require(profile.outcome == cuac::ScanOutcome::SUCCEEDED && profile.remote_requests == 3 &&
+		            profile.aggregate_attempts == 3 && profile.current_step == 1 && profile.rows_decoded == 3 &&
+		            profile.rows_returned == 3 && profile.exposure_state == cuac::ExposureState::EXPOSED &&
+		            profile.cache_diagnostics.status == cuac::CacheStatus::OFF && !profile.has_terminal_failure,
+		        "retry recovery terminal profile drifted from the exact three-attempt successful scan");
+	}
 }
 
 void TestActualDuckdbAdmissionBulkheadIsolation(const std::string &repository_root) {
@@ -648,6 +836,32 @@ void TestActualDuckdbAdmissionBulkheadIsolation(const std::string &repository_ro
 		            observation.local_admission_rejection_count == 1 && observation.retained_stream_count == 0 &&
 		            observation.active_next_count == 0,
 		        "bulkhead isolation did not preserve public stream lifecycle counts and zero rejected transport");
+		const auto profiles = scenario->TerminalProfiles();
+		std::uint64_t rejected_profiles = 0;
+		std::uint64_t cancelled_profiles = 0;
+		std::uint64_t healthy_profiles = 0;
+		for (const auto &profile : profiles) {
+			if (profile.outcome == cuac::ScanOutcome::FAILED && profile.remote_requests == 0 &&
+			    profile.rows_returned == 0 && profile.has_terminal_failure &&
+			    profile.terminal_failure_class == cuac::FailureClass::LOCAL_ADMISSION &&
+			    profile.admission_reason == cuac::AdmissionReason::BUFFERED_BYTES_EXHAUSTED &&
+			    profile.admission_scope == cuac::AdmissionScope::BULKHEAD && profile.admission_limit == limit &&
+			    profile.admission_observed == observed && profile.admission_requested == requested &&
+			    profile.cumulative_admission_waiting_milliseconds == 0 && !profile.admission_waiting) {
+				rejected_profiles++;
+			} else if (profile.outcome == cuac::ScanOutcome::CANCELLED && profile.remote_requests == 1 &&
+			           profile.rows_returned == 0) {
+				cancelled_profiles++;
+			} else if (profile.outcome == cuac::ScanOutcome::SUCCEEDED && profile.remote_requests == 1 &&
+			           profile.rows_decoded == 1 && profile.rows_returned == 1) {
+				healthy_profiles++;
+			}
+		}
+		Require(profiles.size() == 3 && observation.terminal_profile_count == 3 &&
+		            observation.terminal_profile_overflow_count == 0 && rejected_profiles == 1 &&
+		            cancelled_profiles == 1 && healthy_profiles == 1,
+		        "bulkhead isolation terminal profile bag did not distinguish reject, cancel, and healthy completion:" +
+		            ProfileBagSummary(profiles));
 	}
 }
 
@@ -749,6 +963,29 @@ void TestActualDuckdbMixedResiliencePressureClosesPublicStreams(const std::strin
 	            drained.local_admission_rejection_count == 0 && drained.retained_stream_count == 0 &&
 	            drained.active_next_count == 0,
 	        "mixed-pressure cancellation/completion did not preserve bounded public stream lifecycle counts");
+	const auto profiles = scenario->TerminalProfiles();
+	std::uint64_t cancelled_profiles = 0;
+	std::uint64_t resilient_profiles = 0;
+	std::uint64_t healthy_profiles = 0;
+	for (const auto &profile : profiles) {
+		if (profile.outcome == cuac::ScanOutcome::CANCELLED && profile.remote_requests == 1 &&
+		    profile.rows_returned == 0) {
+			cancelled_profiles++;
+		} else if (profile.outcome == cuac::ScanOutcome::SUCCEEDED && profile.remote_requests == 3 &&
+		           profile.aggregate_attempts == 3 && profile.rows_decoded == 3 && profile.rows_returned == 3 &&
+		           profile.rate_limit_events == 1 && profile.rate_limit_waits == 1 &&
+		           profile.cumulative_rate_limit_waiting_milliseconds >= 900 &&
+		           profile.exposure_state == cuac::ExposureState::EXPOSED) {
+			resilient_profiles++;
+		} else if (profile.outcome == cuac::ScanOutcome::SUCCEEDED && profile.remote_requests == 1 &&
+		           profile.aggregate_attempts == 1 && profile.rows_decoded == 1 && profile.rows_returned == 1) {
+			healthy_profiles++;
+		}
+	}
+	Require(profiles.size() == 3 && drained.terminal_profile_count == 3 &&
+	            drained.terminal_profile_overflow_count == 0 && cancelled_profiles == 1 && resilient_profiles == 1 &&
+	            healthy_profiles == 1,
+	        "mixed-pressure terminal profile bag did not certify cancellation, rate-limit recovery, and isolation");
 	scenario->Executor()->Close();
 	scenario->Executor()->Close();
 	Require(scenario->Observation().executor_close_count == 1,
@@ -785,6 +1022,9 @@ int main(int argc, char **argv) {
 		TestRateLimitPlanReachesRealExplainOutput(argv[1]);
 		TestDoubleColumnReachesRealDescribeAndSelectOutput(argv[1]);
 		TestGeneratedRelationsExecuteThroughRuntime(argv[1]);
+		TestCredentialRotationSeparatesCacheIdentityAndFreshHitsRemainBounded(argv[1]);
+		TestStaleFallbackPreservesExactSqlAndFailedRefreshProfile(argv[1]);
+		TestPostExposureFailureRetainsTerminalProfile(argv[1]);
 		TestRetryRecoveryPreservesActualDuckdbRelationalResults(argv[1]);
 		TestActualDuckdbAdmissionBulkheadIsolation(argv[1]);
 		TestActualDuckdbMixedResiliencePressureClosesPublicStreams(argv[1]);

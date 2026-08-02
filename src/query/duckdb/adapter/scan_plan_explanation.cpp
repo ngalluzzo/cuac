@@ -449,7 +449,7 @@ InsertionOrderPreservingMap<string> ExplainSelectedScan(const cuac::ScanRequest 
 	result["Retry"] = PlannedRetryPolicy(plan);
 	result["Rate-Limit Waiting"] = PlannedRateLimitPolicy(plan);
 	result["Resilience"] = PlannedResiliencePolicy(plan);
-	result["Cache"] = "disabled";
+	result["Cache"] = plan.Freshness().Snapshot();
 	return result;
 }
 

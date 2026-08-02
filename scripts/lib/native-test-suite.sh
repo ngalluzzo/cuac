@@ -50,6 +50,8 @@ CURL_FREE_LINKAGE_TARGETS=(
     cuac_json_root_array_decoder_tests
     cuac_graphql_response_decoder_tests
     cuac_graphql_cursor_pagination_tests
+    cuac_complete_scan_result_cache_tests
+    cuac_cached_scan_stream_tests
     cuac_controlled_runtime_scenario_tests
     cuac_http_scan_executor_tests
     cuac_http_scan_pagination_tests
@@ -239,6 +241,8 @@ run_native_test_binaries() {
     "${native_test_root}/cuac_json_root_array_decoder_tests"
     "${native_test_root}/cuac_graphql_response_decoder_tests"
     "${native_test_root}/cuac_graphql_cursor_pagination_tests"
+    "${native_test_root}/cuac_complete_scan_result_cache_tests"
+    "${native_test_root}/cuac_cached_scan_stream_tests"
     "${native_test_root}/cuac_controlled_runtime_scenario_tests"
     "${native_test_root}/cuac_http_scan_executor_tests"
     "${native_test_root}/cuac_http_scan_pagination_tests"
