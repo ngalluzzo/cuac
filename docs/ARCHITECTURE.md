@@ -20,6 +20,13 @@ Each transition has one owner. Source syntax cannot become runtime authority,
 SQL names cannot become relational meaning, and received network data cannot
 widen a compiled plan.
 
+Package-language evolution extends this same chain vertically; it never adds a
+parallel schema, compiler, model, planner, or Runtime route. The accepted
+pre-1.0 policy and API coverage corpus are defined by
+[RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md). A capability
+classified as included there remains absent until every permanent transition
+and its deterministic evidence are implemented together.
+
 ## Product surface
 
 An author explicitly loads an absolute local package root:

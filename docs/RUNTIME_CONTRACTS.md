@@ -10,6 +10,13 @@ Names in this document describe responsibilities and value shapes, not a
 stable public ABI. A future implementation may change layout or language while
 preserving these observable contracts.
 
+[RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md) classifies the
+next package-language capabilities, but classification is not execution
+authority. Until an included capability has a complete source-to-fixture
+implementation, its declarations are unknown and fail before planning,
+credential materialization, or network work. Runtime receives no dormant
+profile and there is no compatibility branch for a future declaration.
+
 ## Contract chain
 
 ```text

@@ -42,6 +42,11 @@ remain network-free; remote restrictions must remain conservative; credentials
 and network policy must only narrow authority; execution must remain bounded,
 cancelable, and immutable for an active scan.
 
+Use the [RFC process](docs/RFC_PROCESS.md) before changing a durable package,
+public SQL, ownership, authority, compatibility, or lifecycle boundary. An
+accepted capability classification does not authorize schema-only or dormant
+implementation work; the complete vertical contract must land together.
+
 Update the public-surface inventory whenever a project-owned SQL function or
 setting is added, changed, deprecated, or removed.
 
@@ -50,6 +55,7 @@ Run the ownership and repository contract checks before the native build:
 ```sh
 python3 -I -B scripts/verify-source-boundaries.py
 python3 -I -B scripts/verify-public-surface-inventory.py
+python3 -I -B scripts/verify-specification-evolution.py
 python3 -I -B scripts/verify-source-identities.py
 ```
 

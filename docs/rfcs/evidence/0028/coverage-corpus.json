@@ -1,0 +1,416 @@
+{
+  "schema": "cuac/coverage-corpus-v1",
+  "rfc": "0028",
+  "status": "accepted",
+  "specification_policy": {
+    "accepted_source_identifiers": [
+      "cuac/v1"
+    ],
+    "active_compiler_paths": 1,
+    "evolution": "additive-in-place-before-1.0",
+    "existing_package_semantics": "preserved",
+    "unknown_declarations": "reject",
+    "older_cuac_behavior_for_new_declarations": "reject-as-unknown",
+    "breaking_replacement": "future-rfc-single-cutover",
+    "parallel_legacy_paths": false
+  },
+  "vertical_evidence": [
+    "source_schema",
+    "diagnostics",
+    "compiled_facts",
+    "planning",
+    "execution",
+    "fixtures",
+    "compatibility",
+    "independent_author"
+  ],
+  "classifications": [
+    {
+      "id": "structural_rest_path_segments",
+      "decision": "included",
+      "delivery_order": 1,
+      "issue_refs": [12],
+      "corpus_refs": [
+        "github_repository_issues_rest",
+        "gitlab_project_issues",
+        "kubernetes_namespace_pods",
+        "notion_data_source_pages"
+      ],
+      "rationale": "Resource-addressed read-only relations require typed values to fill complete path segments without changing origin or path shape."
+    },
+    {
+      "id": "timestamptz_scalar",
+      "decision": "included",
+      "delivery_order": 2,
+      "issue_refs": [16],
+      "corpus_refs": [
+        "github_repository_issues_rest",
+        "github_repository_issues_graphql",
+        "gitlab_project_issues",
+        "kubernetes_namespace_pods",
+        "notion_data_source_pages"
+      ],
+      "rationale": "ISO-8601 instants are common output and request values and should not remain lossy VARCHAR facts."
+    },
+    {
+      "id": "flat_scalar_list_outputs",
+      "decision": "included",
+      "delivery_order": 0,
+      "issue_refs": [17],
+      "corpus_refs": [
+        "github_repository_issues_rest",
+        "github_repository_issues_graphql",
+        "gitlab_project_issues",
+        "kubernetes_namespace_pods"
+      ],
+      "rationale": "CUAC already supports bounded flat scalar ARRAY columns; the corpus retains that capability and its one-object-one-row law."
+    },
+    {
+      "id": "flat_scalar_list_inputs",
+      "decision": "included",
+      "delivery_order": 3,
+      "issue_refs": [17],
+      "corpus_refs": [
+        "github_repository_issues_graphql",
+        "gitlab_project_issues",
+        "notion_data_source_pages"
+      ],
+      "rationale": "Typed list inputs are the shared value service needed by collection query fields and GraphQL list variables."
+    },
+    {
+      "id": "collection_query_values",
+      "decision": "included",
+      "delivery_order": 4,
+      "issue_refs": [13],
+      "corpus_refs": [
+        "github_repository_issues_rest",
+        "gitlab_project_issues",
+        "notion_data_source_pages"
+      ],
+      "rationale": "Named relations require repeated or delimited list values with preserved order and duplicates, not caller-preencoded strings."
+    },
+    {
+      "id": "graphql_caller_variables",
+      "decision": "included",
+      "delivery_order": 5,
+      "issue_refs": [14],
+      "corpus_refs": [
+        "github_repository_issues_graphql"
+      ],
+      "rationale": "Compiler-generated query documents need typed caller values while retaining complete package ownership of document structure."
+    },
+    {
+      "id": "deterministic_read_only_json_bodies",
+      "decision": "included",
+      "delivery_order": 6,
+      "issue_refs": [15],
+      "corpus_refs": [
+        "notion_data_source_pages"
+      ],
+      "rationale": "Some query-only APIs use POST with a fixed JSON shape; canonical typed construction can support them without admitting writes or templates."
+    },
+    {
+      "id": "response_query_continuation",
+      "decision": "included",
+      "delivery_order": 7,
+      "issue_refs": [18],
+      "corpus_refs": [
+        "kubernetes_namespace_pods",
+        "slack_conversation_history"
+      ],
+      "rationale": "Opaque response tokens can safely change one declared query value on a reconstructed request while every other authority fact stays fixed."
+    },
+    {
+      "id": "deterministic_presence_selectors",
+      "decision": "included",
+      "delivery_order": 8,
+      "issue_refs": [19],
+      "corpus_refs": [
+        "github_repository_issues_rest"
+      ],
+      "rationale": "A closed all-present/all-absent selector algebra supports equivalent get-one and list operations without priority or declaration-order routing."
+    },
+    {
+      "id": "scalar_order_comparisons",
+      "decision": "included",
+      "delivery_order": 9,
+      "issue_refs": [20],
+      "corpus_refs": [
+        "gitlab_project_issues",
+        "notion_data_source_pages"
+      ],
+      "rationale": "One typed comparison mapped to one operation-local input materially narrows remote scans while DuckDB retains the full residual."
+    },
+    {
+      "id": "caller_selected_public_headers",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [13],
+      "corpus_refs": [],
+      "rationale": "No corpus relation requires caller-controlled headers; API-version and media headers remain fixed package facts and credentials retain their dedicated authority path."
+    },
+    {
+      "id": "date_and_local_timestamp_scalars",
+      "decision": "deferred",
+      "delivery_order": null,
+      "issue_refs": [16],
+      "corpus_refs": [],
+      "rationale": "The first temporal slice is an exact instant; timezone-free DATE and TIMESTAMP need separate named outcomes and conversion laws."
+    },
+    {
+      "id": "response_body_or_path_continuation",
+      "decision": "deferred",
+      "delivery_order": null,
+      "issue_refs": [18],
+      "corpus_refs": [
+        "notion_data_source_pages"
+      ],
+      "rationale": "Notion demonstrates body-carried continuation demand, but the first continuation service is deliberately limited to one query binding."
+    },
+    {
+      "id": "conjunctive_predicate_mappings",
+      "decision": "deferred",
+      "delivery_order": null,
+      "issue_refs": [21],
+      "corpus_refs": [
+        "gitlab_project_issues",
+        "notion_data_source_pages"
+      ],
+      "rationale": "Pairwise-safe atoms do not prove conjunction safety; composition waits for the single-comparison proof service and its occurrence-bag evidence."
+    },
+    {
+      "id": "offline_openapi_importer",
+      "decision": "deferred",
+      "delivery_order": null,
+      "issue_refs": [22],
+      "corpus_refs": [],
+      "rationale": "Generation tooling follows a stable implemented declaration set and must not become an importer-specific compiler or runtime path."
+    },
+    {
+      "id": "dynamic_schemas_and_discovery",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11],
+      "corpus_refs": [],
+      "rationale": "CUAC remains static-schema and offline-bind; response or remote introspection cannot define DuckDB catalog shape."
+    },
+    {
+      "id": "write_operations_and_transactions",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11],
+      "corpus_refs": [],
+      "rationale": "The product remains read-only and does not infer safety from HTTP method spelling or request shape."
+    },
+    {
+      "id": "raw_graphql_and_arbitrary_request_templates",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11, 14, 15],
+      "corpus_refs": [],
+      "rationale": "Packages declare typed structure; they do not provide executable templates, raw documents, interpolation, or parser programs."
+    },
+    {
+      "id": "custom_code_protocol_abi_jq_and_wasm",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11],
+      "corpus_refs": [],
+      "rationale": "Custom executable code would create another runtime and trust path outside the declarative compiler."
+    },
+    {
+      "id": "providers_enrichment_partitions_and_parallel_traversal",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11],
+      "corpus_refs": [],
+      "rationale": "These profiles widen lifecycle, authority, and relational behavior without a named corpus outcome in this program."
+    },
+    {
+      "id": "remote_projection_order_limit_and_offset",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11],
+      "corpus_refs": [],
+      "rationale": "DuckDB retains projection, ordering, limit, and offset ownership; this corpus does not supply equivalence evidence to move it."
+    },
+    {
+      "id": "connection_profiles_and_caller_origins",
+      "decision": "rejected",
+      "delivery_order": null,
+      "issue_refs": [11, 12],
+      "corpus_refs": [],
+      "rationale": "Origin and destination authority remain explicit immutable package facts and cannot become caller-selected state."
+    },
+    {
+      "id": "distribution_registry_and_automatic_activation",
+      "decision": "deferred",
+      "delivery_order": null,
+      "issue_refs": [11],
+      "corpus_refs": [],
+      "rationale": "Distribution is owned by the separate composition and package-ecosystem sequence and cannot alter package-language execution paths."
+    }
+  ],
+  "corpus": [
+    {
+      "id": "github_repository_issues_rest",
+      "provider": "GitHub",
+      "operation": "List or retrieve repository issues through one typed relation",
+      "protocol": "rest",
+      "method": "GET",
+      "official_sources": [
+        "https://docs.github.com/en/rest/issues/issues#list-repository-issues",
+        "https://docs.github.com/en/rest/issues/issues#get-an-issue"
+      ],
+      "read_only": true,
+      "static_projection": [
+        "number:BIGINT",
+        "title:VARCHAR",
+        "updated_at:TIMESTAMPTZ",
+        "labels:LIST<VARCHAR>"
+      ],
+      "required_capabilities": [
+        "structural_rest_path_segments",
+        "timestamptz_scalar",
+        "flat_scalar_list_outputs",
+        "collection_query_values",
+        "deterministic_presence_selectors"
+      ],
+      "deferred_capabilities": [],
+      "current_v1_boundary": "Fixed REST paths, scalar query values, VARCHAR timestamps, and the required-input/fallback selector cannot express this complete relation."
+    },
+    {
+      "id": "github_repository_issues_graphql",
+      "provider": "GitHub",
+      "operation": "Query repository issues with typed owner, name, state, and label variables",
+      "protocol": "graphql",
+      "method": "POST_QUERY",
+      "official_sources": [
+        "https://docs.github.com/en/graphql/guides/forming-calls-with-graphql#working-with-variables",
+        "https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api"
+      ],
+      "read_only": true,
+      "static_projection": [
+        "number:BIGINT",
+        "title:VARCHAR",
+        "updated_at:TIMESTAMPTZ",
+        "labels:LIST<VARCHAR>"
+      ],
+      "required_capabilities": [
+        "timestamptz_scalar",
+        "flat_scalar_list_outputs",
+        "flat_scalar_list_inputs",
+        "graphql_caller_variables"
+      ],
+      "deferred_capabilities": [],
+      "current_v1_boundary": "GraphQL documents are compiler-generated, but caller variables are limited to Runtime-owned pagination values and timestamps remain VARCHAR."
+    },
+    {
+      "id": "gitlab_project_issues",
+      "provider": "GitLab",
+      "operation": "List project issues by project, labels, and update bounds",
+      "protocol": "rest",
+      "method": "GET",
+      "official_sources": [
+        "https://docs.gitlab.com/api/issues/#list-project-issues"
+      ],
+      "read_only": true,
+      "static_projection": [
+        "iid:BIGINT",
+        "title:VARCHAR",
+        "updated_at:TIMESTAMPTZ",
+        "labels:LIST<VARCHAR>"
+      ],
+      "required_capabilities": [
+        "structural_rest_path_segments",
+        "timestamptz_scalar",
+        "flat_scalar_list_outputs",
+        "flat_scalar_list_inputs",
+        "collection_query_values",
+        "scalar_order_comparisons"
+      ],
+      "deferred_capabilities": [
+        "conjunctive_predicate_mappings"
+      ],
+      "current_v1_boundary": "The project path, typed label collection, native timestamps, and lower/upper comparison mappings are outside the current grammar."
+    },
+    {
+      "id": "kubernetes_namespace_pods",
+      "provider": "Kubernetes",
+      "operation": "List namespace pods with an opaque response continuation token",
+      "protocol": "rest",
+      "method": "GET",
+      "official_sources": [
+        "https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/",
+        "https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks"
+      ],
+      "read_only": true,
+      "static_projection": [
+        "uid:VARCHAR",
+        "name:VARCHAR",
+        "creation_timestamp:TIMESTAMPTZ",
+        "container_names:LIST<VARCHAR>"
+      ],
+      "required_capabilities": [
+        "structural_rest_path_segments",
+        "timestamptz_scalar",
+        "flat_scalar_list_outputs",
+        "response_query_continuation"
+      ],
+      "deferred_capabilities": [],
+      "current_v1_boundary": "The namespace path segment and response metadata continue token cannot be bound into reconstructed requests."
+    },
+    {
+      "id": "notion_data_source_pages",
+      "provider": "Notion",
+      "operation": "Query a data source for a static page identity and timestamp projection",
+      "protocol": "rest",
+      "method": "POST_QUERY",
+      "official_sources": [
+        "https://developers.notion.com/reference/query-a-data-source",
+        "https://developers.notion.com/reference/intro#pagination"
+      ],
+      "read_only": true,
+      "static_projection": [
+        "id:VARCHAR",
+        "created_time:TIMESTAMPTZ",
+        "last_edited_time:TIMESTAMPTZ",
+        "archived:BOOLEAN"
+      ],
+      "required_capabilities": [
+        "structural_rest_path_segments",
+        "timestamptz_scalar",
+        "flat_scalar_list_inputs",
+        "collection_query_values",
+        "deterministic_read_only_json_bodies",
+        "scalar_order_comparisons"
+      ],
+      "deferred_capabilities": [
+        "response_body_or_path_continuation",
+        "conjunctive_predicate_mappings"
+      ],
+      "current_v1_boundary": "The data-source path, repeated filter_properties, canonical query body, temporal projection, and body-carried cursor exceed the current fixed GET/GraphQL profiles."
+    },
+    {
+      "id": "slack_conversation_history",
+      "provider": "Slack",
+      "operation": "Read conversation history through an opaque response cursor",
+      "protocol": "rest",
+      "method": "GET",
+      "official_sources": [
+        "https://api.slack.com/methods/conversations.history"
+      ],
+      "read_only": true,
+      "static_projection": [
+        "message_timestamp:VARCHAR",
+        "user_id:VARCHAR",
+        "text:VARCHAR"
+      ],
+      "required_capabilities": [
+        "response_query_continuation"
+      ],
+      "deferred_capabilities": [],
+      "current_v1_boundary": "The response_metadata.next_cursor value cannot populate the next request cursor field under the current pagination strategies."
+    }
+  ]
+}

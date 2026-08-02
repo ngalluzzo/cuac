@@ -19,6 +19,8 @@ jobs:
         run: |
           python3 -I -B scripts/verify-development-container.py repository containers/development/toolchain.json
           python3 -I -B test/python/development_container_tests.py
+          python3 -I -B scripts/verify-specification-evolution.py
+          python3 -I -B test/python/specification_evolution_contract.py
       - name: Build verified development image
         run: docker build --file containers/development/Dockerfile --tag "cuac-development:${GITHUB_SHA}" .
       - name: Run portable product verification
