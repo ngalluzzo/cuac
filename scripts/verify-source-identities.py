@@ -107,6 +107,10 @@ def path_bound_digest(reader: RepositoryReader, paths: tuple[str, ...]) -> str:
     for relative in paths:
         encoded = relative.encode("utf-8")
         content = reader.read_bytes(relative)
+        if b"\r" in content:
+            raise AssertionError(
+                f"source identity path is not LF-normalized: {relative}"
+            )
         result.update(len(encoded).to_bytes(8, "big"))
         result.update(encoded)
         result.update(len(content).to_bytes(8, "big"))

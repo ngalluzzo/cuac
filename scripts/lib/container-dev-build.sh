@@ -119,8 +119,8 @@ run_build() {
     report_phase environment_prepare "${started_at}"
     build_paths "${profile}"
     started_at="$(phase_seconds)"
-    python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-source-boundaries.py" >/dev/null
-    python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-source-identities.py" >/dev/null
+    python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-source-boundaries.py"
+    python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-source-identities.py"
     "${REPOSITORY_ROOT}/scripts/check-native-format.sh"
     report_phase source_preflight "${started_at}"
     if [[ "${profile}" == "debug" ]]; then

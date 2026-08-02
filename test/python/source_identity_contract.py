@@ -66,6 +66,14 @@ class SourceIdentityContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "native product source digest"):
                 VERIFIER.verify(root)
 
+    def test_native_crlf_fails_before_digest_comparison(self) -> None:
+        temporary, root = self.copy()
+        with temporary:
+            path = root / "src/query/request/scan_request.cpp"
+            path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+            with self.assertRaisesRegex(AssertionError, "not LF-normalized"):
+                VERIFIER.verify(root)
+
     def test_native_file_addition_fails(self) -> None:
         temporary, root = self.copy()
         with temporary:
