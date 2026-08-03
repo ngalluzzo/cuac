@@ -1,6 +1,7 @@
 #include "query/support/query_runtime_scenarios.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <stdexcept>
 #include <utility>
 
@@ -17,7 +18,7 @@ cuac::TypedRow Row(int64_t id, const std::string &login, bool site_admin) {
 
 cuac::TypedRow GraphqlRow(const std::string &id, const std::string &full_name, const std::string &owner_login,
                           int64_t stars, cuac::TypedValue primary_language, bool private_repository, bool archived,
-                          const std::string &updated_at) {
+                          std::int64_t updated_at) {
 	cuac::TypedRow result;
 	result.values.push_back(cuac::TypedValue::Varchar(id));
 	result.values.push_back(cuac::TypedValue::Varchar(full_name));
@@ -26,7 +27,7 @@ cuac::TypedRow GraphqlRow(const std::string &id, const std::string &full_name, c
 	result.values.push_back(std::move(primary_language));
 	result.values.push_back(cuac::TypedValue::Boolean(private_repository));
 	result.values.push_back(cuac::TypedValue::Boolean(archived));
-	result.values.push_back(cuac::TypedValue::Varchar(updated_at));
+	result.values.push_back(cuac::TypedValue::Timestamptz(updated_at));
 	return result;
 }
 
@@ -96,18 +97,18 @@ public:
 			if (!authenticated || protocol != cuac::PlannedProtocol::GRAPHQL) {
 				throw std::logic_error("GraphQL Query fixture received the wrong public provider alternatives");
 			}
-			batch.column_types = {cuac::ValueKind::VARCHAR, cuac::ValueKind::VARCHAR, cuac::ValueKind::VARCHAR,
-			                      cuac::ValueKind::BIGINT,  cuac::ValueKind::VARCHAR, cuac::ValueKind::BOOLEAN,
-			                      cuac::ValueKind::BOOLEAN, cuac::ValueKind::VARCHAR};
+			batch.column_types = {cuac::ValueKind::VARCHAR, cuac::ValueKind::VARCHAR,    cuac::ValueKind::VARCHAR,
+			                      cuac::ValueKind::BIGINT,  cuac::ValueKind::VARCHAR,    cuac::ValueKind::BOOLEAN,
+			                      cuac::ValueKind::BOOLEAN, cuac::ValueKind::TIMESTAMPTZ};
 			if (offset != 0) {
 				exhausted = true;
 				return false;
 			}
 			batch.rows.push_back(GraphqlRow("NODE-A", "fixture/zero", "fixture", 0,
 			                                cuac::TypedValue::Null(cuac::ValueKind::VARCHAR), false, false,
-			                                "2026-07-19T00:00:00Z"));
+			                                INT64_C(1784419200000000)));
 			batch.rows.push_back(GraphqlRow("NODE-B", "fixture/typed", "fixture", 9, cuac::TypedValue::Varchar("C++"),
-			                                true, true, "2026-07-18T00:00:00Z"));
+			                                true, true, INT64_C(1784332800000000)));
 			offset = batch.rows.size();
 			probe->batches.fetch_add(1, std::memory_order_relaxed);
 			probe->rows.fetch_add(batch.rows.size(), std::memory_order_relaxed);

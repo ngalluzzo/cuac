@@ -5,6 +5,7 @@
 #include "cuac/internal/connector/model/protocol_operation_declaration.hpp"
 #include "cuac/internal/connector/model/resource_ceiling_declaration.hpp"
 
+#include <cstdio>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -47,6 +48,7 @@ void ValidateScalarType(CompiledScalarType type) {
 	case CompiledScalarType::BIGINT:
 	case CompiledScalarType::VARCHAR:
 	case CompiledScalarType::DOUBLE:
+	case CompiledScalarType::TIMESTAMPTZ:
 		return;
 	}
 	throw std::invalid_argument("compiled value contains an unknown scalar type");
@@ -64,6 +66,9 @@ CompiledScalarType ScalarTypeFromName(const std::string &logical_type) {
 	}
 	if (logical_type == "DOUBLE") {
 		return CompiledScalarType::DOUBLE;
+	}
+	if (logical_type == "TIMESTAMPTZ") {
+		return CompiledScalarType::TIMESTAMPTZ;
 	}
 	throw std::invalid_argument("compiled relation contains an unsupported logical type");
 }
@@ -244,6 +249,142 @@ void ValidateNetworkPolicy(const CompiledNetworkPolicy &policy) {
 
 } // namespace
 
+bool IsTimestamptzMicroseconds(std::int64_t value) noexcept {
+	return value >= -INT64_C(62135596800000000) && value <= INT64_C(253402300799999999);
+}
+
+bool ParseTimestamptz(const std::string &value, std::int64_t &result) noexcept {
+	const auto is_digit = [](char character) {
+		return character >= '0' && character <= '9';
+	};
+	const auto parse_digits = [&value](std::size_t begin, std::size_t count) {
+		unsigned parsed = 0;
+		for (std::size_t index = begin; index < begin + count; index++) {
+			parsed = parsed * 10U + static_cast<unsigned>(value[index] - '0');
+		}
+		return parsed;
+	};
+	if (value.size() < 20 || value.size() > 32) {
+		return false;
+	}
+	static const std::size_t DIGIT_POSITIONS[] = {0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18};
+	for (const auto index : DIGIT_POSITIONS) {
+		if (!is_digit(value[index])) {
+			return false;
+		}
+	}
+	if (value[4] != '-' || value[7] != '-' || value[10] != 'T' || value[13] != ':' || value[16] != ':') {
+		return false;
+	}
+	const unsigned year = parse_digits(0, 4);
+	const unsigned month = parse_digits(5, 2);
+	const unsigned day = parse_digits(8, 2);
+	const unsigned hour = parse_digits(11, 2);
+	const unsigned minute = parse_digits(14, 2);
+	const unsigned second = parse_digits(17, 2);
+	const bool leap_year = year % 4U == 0U && (year % 100U != 0U || year % 400U == 0U);
+	static const unsigned DAYS[] = {31U, 28U, 31U, 30U, 31U, 30U, 31U, 31U, 30U, 31U, 30U, 31U};
+	if (year == 0 || month == 0 || month > 12 || day == 0 ||
+	    day > (month == 2U && leap_year ? 29U : DAYS[month - 1U]) || hour > 23 || minute > 59 || second > 59) {
+		return false;
+	}
+	std::size_t cursor = 19;
+	std::int64_t fraction = 0;
+	if (cursor < value.size() && value[cursor] == '.') {
+		const std::size_t begin = ++cursor;
+		while (cursor < value.size() && is_digit(value[cursor])) {
+			cursor++;
+		}
+		const std::size_t digits = cursor - begin;
+		if (digits == 0 || digits > 6) {
+			return false;
+		}
+		fraction = static_cast<std::int64_t>(parse_digits(begin, digits));
+		for (std::size_t index = digits; index < 6; index++) {
+			fraction *= 10;
+		}
+	}
+	std::int64_t offset_seconds = 0;
+	if (cursor < value.size() && value[cursor] == 'Z') {
+		cursor++;
+	} else if (cursor + 6 == value.size() && (value[cursor] == '+' || value[cursor] == '-') &&
+	           is_digit(value[cursor + 1]) && is_digit(value[cursor + 2]) && value[cursor + 3] == ':' &&
+	           is_digit(value[cursor + 4]) && is_digit(value[cursor + 5])) {
+		const bool negative = value[cursor] == '-';
+		const unsigned offset_hour = parse_digits(cursor + 1, 2);
+		const unsigned offset_minute = parse_digits(cursor + 4, 2);
+		if (offset_hour > 14 || offset_minute > 59 || (offset_hour == 14 && offset_minute != 0) ||
+		    (negative && offset_hour == 0 && offset_minute == 0)) {
+			return false;
+		}
+		offset_seconds = static_cast<std::int64_t>(offset_hour * 3600U + offset_minute * 60U);
+		if (negative) {
+			offset_seconds = -offset_seconds;
+		}
+		cursor += 6;
+	} else {
+		return false;
+	}
+	if (cursor != value.size()) {
+		return false;
+	}
+	std::int64_t adjusted_year = static_cast<std::int64_t>(year) - (month <= 2U);
+	const std::int64_t era = (adjusted_year >= 0 ? adjusted_year : adjusted_year - 399) / 400;
+	const unsigned year_of_era = static_cast<unsigned>(adjusted_year - era * 400);
+	const unsigned adjusted_month = month > 2U ? month - 3U : month + 9U;
+	const unsigned day_of_year = (153U * adjusted_month + 2U) / 5U + day - 1U;
+	const unsigned day_of_era = year_of_era * 365U + year_of_era / 4U - year_of_era / 100U + day_of_year;
+	const std::int64_t days = era * INT64_C(146097) + static_cast<std::int64_t>(day_of_era) - INT64_C(719468);
+	const std::int64_t local_seconds =
+	    days * INT64_C(86400) + static_cast<std::int64_t>(hour * 3600U + minute * 60U + second);
+	const std::int64_t candidate = (local_seconds - offset_seconds) * INT64_C(1000000) + fraction;
+	if (!IsTimestamptzMicroseconds(candidate)) {
+		return false;
+	}
+	result = candidate;
+	return true;
+}
+
+std::string CanonicalTimestamptz(std::int64_t value) {
+	if (!IsTimestamptzMicroseconds(value)) {
+		throw std::invalid_argument("TIMESTAMPTZ microseconds are outside the CUAC profile");
+	}
+	std::int64_t seconds = value / INT64_C(1000000);
+	std::int64_t microseconds = value % INT64_C(1000000);
+	if (microseconds < 0) {
+		microseconds += INT64_C(1000000);
+		seconds--;
+	}
+	std::int64_t days = seconds / INT64_C(86400);
+	std::int64_t second_of_day = seconds % INT64_C(86400);
+	if (second_of_day < 0) {
+		second_of_day += INT64_C(86400);
+		days--;
+	}
+	const std::int64_t shifted_days = days + INT64_C(719468);
+	const std::int64_t era = (shifted_days >= 0 ? shifted_days : shifted_days - INT64_C(146096)) / INT64_C(146097);
+	const std::uint64_t day_of_era = static_cast<std::uint64_t>(shifted_days - era * INT64_C(146097));
+	const std::uint64_t year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146096) / 365;
+	std::int64_t year = static_cast<std::int64_t>(year_of_era) + era * 400;
+	const std::uint64_t day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+	const std::uint64_t month_prime = (5 * day_of_year + 2) / 153;
+	const std::uint64_t day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+	const unsigned month = static_cast<unsigned>(month_prime < 10 ? month_prime + 3 : month_prime - 9);
+	year += month <= 2;
+	const std::int64_t hour = second_of_day / 3600;
+	const std::int64_t minute = (second_of_day % 3600) / 60;
+	const std::int64_t second = second_of_day % 60;
+	char result[32];
+	const int written = std::snprintf(result, sizeof(result), "%04lld-%02u-%02lluT%02lld:%02lld:%02lld.%06lldZ",
+	                                  static_cast<long long>(year), month, static_cast<unsigned long long>(day),
+	                                  static_cast<long long>(hour), static_cast<long long>(minute),
+	                                  static_cast<long long>(second), static_cast<long long>(microseconds));
+	if (written != 27) {
+		throw std::logic_error("TIMESTAMPTZ canonical formatting failed");
+	}
+	return std::string(result, static_cast<std::size_t>(written));
+}
+
 const char *CompiledScalarTypeName(CompiledScalarType type) {
 	switch (type) {
 	case CompiledScalarType::BOOLEAN:
@@ -254,18 +395,22 @@ const char *CompiledScalarTypeName(CompiledScalarType type) {
 		return "VARCHAR";
 	case CompiledScalarType::DOUBLE:
 		return "DOUBLE";
+	case CompiledScalarType::TIMESTAMPTZ:
+		return "TIMESTAMPTZ";
 	}
 	throw std::logic_error("compiled value contains an unknown scalar type");
 }
 
 CompiledScalarValue::CompiledScalarValue(CompiledScalarType type_p, bool is_null_p, bool boolean_value_p,
                                          std::int64_t bigint_value_p, std::string varchar_value_p,
-                                         double double_value_p)
+                                         double double_value_p, std::int64_t timestamptz_microseconds_p)
     : type(type_p), is_null(is_null_p), boolean_value(boolean_value_p), bigint_value(bigint_value_p),
-      varchar_value(std::move(varchar_value_p)), double_value(double_value_p) {
+      varchar_value(std::move(varchar_value_p)), double_value(double_value_p),
+      timestamptz_microseconds(timestamptz_microseconds_p) {
 	ValidateScalarType(type);
 	if (is_null) {
-		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || double_value != 0.0) {
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 ||
+		    timestamptz_microseconds != 0) {
 			throw std::invalid_argument("compiled NULL scalar contains a concrete payload");
 		}
 		return;
@@ -273,8 +418,12 @@ CompiledScalarValue::CompiledScalarValue(CompiledScalarType type_p, bool is_null
 	if ((type != CompiledScalarType::BOOLEAN && boolean_value) ||
 	    (type != CompiledScalarType::BIGINT && bigint_value != 0) ||
 	    (type != CompiledScalarType::VARCHAR && !varchar_value.empty()) ||
-	    (type != CompiledScalarType::DOUBLE && double_value != 0.0)) {
+	    (type != CompiledScalarType::DOUBLE && double_value != 0.0) ||
+	    (type != CompiledScalarType::TIMESTAMPTZ && timestamptz_microseconds != 0)) {
 		throw std::invalid_argument("compiled scalar contains a payload for another type");
+	}
+	if (type == CompiledScalarType::TIMESTAMPTZ && !IsTimestamptzMicroseconds(timestamptz_microseconds)) {
+		throw std::invalid_argument("compiled TIMESTAMPTZ is outside the CUAC profile");
 	}
 }
 
@@ -312,6 +461,13 @@ double CompiledScalarValue::Double() const {
 		throw std::logic_error("compiled scalar is not a concrete DOUBLE");
 	}
 	return double_value;
+}
+
+std::int64_t CompiledScalarValue::TimestamptzMicroseconds() const {
+	if (is_null || type != CompiledScalarType::TIMESTAMPTZ) {
+		throw std::logic_error("compiled scalar is not a concrete TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
 }
 
 CompiledInputDefault::CompiledInputDefault() : has_default(false), value() {

@@ -1,5 +1,7 @@
 #include "cuac/semantics/relational_predicate.hpp"
 
+#include "cuac/internal/semantics/timestamptz.hpp"
+
 #include <algorithm>
 #include <locale>
 #include <sstream>
@@ -20,6 +22,8 @@ const char *ValueKindName(RequestedPredicateValueKind kind) {
 		return "boolean";
 	case RequestedPredicateValueKind::DOUBLE:
 		return "double";
+	case RequestedPredicateValueKind::TIMESTAMPTZ:
+		return "timestamptz";
 	}
 	throw std::logic_error("requested predicate contains an unknown value kind");
 }
@@ -48,23 +52,31 @@ std::string HexEncode(const std::string &value) {
 
 RequestedPredicateValue::RequestedPredicateValue(std::int64_t value)
     : kind(RequestedPredicateValueKind::BIGINT), bigint_value(value), varchar_value(), boolean_value(false),
-      double_value(0.0) {
+      double_value(0.0), timestamptz_microseconds(0) {
 }
 
 RequestedPredicateValue::RequestedPredicateValue(std::string value)
     : kind(RequestedPredicateValueKind::VARCHAR), bigint_value(0), varchar_value(std::move(value)),
-      boolean_value(false), double_value(0.0) {
+      boolean_value(false), double_value(0.0), timestamptz_microseconds(0) {
 }
 
 RequestedPredicateValue::RequestedPredicateValue(bool value)
     : kind(RequestedPredicateValueKind::BOOLEAN), bigint_value(0), varchar_value(), boolean_value(value),
-      double_value(0.0) {
+      double_value(0.0), timestamptz_microseconds(0) {
 }
 
 RequestedPredicateValue::RequestedPredicateValue(double value)
     : kind(RequestedPredicateValueKind::DOUBLE), bigint_value(0), varchar_value(), boolean_value(false),
       // RFC 0020: -0.0 is normalized to 0.0 so every consumer sees one canonical zero.
-      double_value(value == 0.0 ? 0.0 : value) {
+      double_value(value == 0.0 ? 0.0 : value), timestamptz_microseconds(0) {
+}
+
+RequestedPredicateValue::RequestedPredicateValue(RequestedPredicateValueKind kind_p, std::int64_t value)
+    : kind(kind_p), bigint_value(0), varchar_value(), boolean_value(false), double_value(0.0),
+      timestamptz_microseconds(value) {
+	if (kind != RequestedPredicateValueKind::TIMESTAMPTZ || !semantics_internal::IsTimestamptzMicroseconds(value)) {
+		throw std::invalid_argument("requested TIMESTAMPTZ predicate is outside the CUAC profile");
+	}
 }
 
 RequestedPredicateValue RequestedPredicateValue::BigInt(std::int64_t value) {
@@ -81,6 +93,10 @@ RequestedPredicateValue RequestedPredicateValue::Boolean(bool value) {
 
 RequestedPredicateValue RequestedPredicateValue::Double(double value) {
 	return RequestedPredicateValue(value);
+}
+
+RequestedPredicateValue RequestedPredicateValue::Timestamptz(std::int64_t microseconds) {
+	return RequestedPredicateValue(RequestedPredicateValueKind::TIMESTAMPTZ, microseconds);
 }
 
 RequestedPredicateValueKind RequestedPredicateValue::Kind() const noexcept {
@@ -115,9 +131,17 @@ double RequestedPredicateValue::DoubleValue() const {
 	return double_value;
 }
 
+std::int64_t RequestedPredicateValue::TimestamptzMicroseconds() const {
+	if (kind != RequestedPredicateValueKind::TIMESTAMPTZ) {
+		throw std::logic_error("requested predicate value is not TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
+}
+
 bool RequestedPredicateValue::operator==(const RequestedPredicateValue &other) const noexcept {
 	return kind == other.kind && bigint_value == other.bigint_value && varchar_value == other.varchar_value &&
-	       boolean_value == other.boolean_value && double_value == other.double_value;
+	       boolean_value == other.boolean_value && double_value == other.double_value &&
+	       timestamptz_microseconds == other.timestamptz_microseconds;
 }
 
 bool RequestedPredicateValue::operator!=(const RequestedPredicateValue &other) const noexcept {
@@ -141,6 +165,9 @@ std::string RequestedPredicateValue::Snapshot() const {
 	case RequestedPredicateValueKind::DOUBLE:
 		result.precision(17);
 		result << double_value;
+		break;
+	case RequestedPredicateValueKind::TIMESTAMPTZ:
+		result << semantics_internal::CanonicalTimestamptz(timestamptz_microseconds);
 		break;
 	}
 	return result.str();

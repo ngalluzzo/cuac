@@ -406,6 +406,123 @@ operations:
 	        "compiler lost a DOUBLE boundary value's exact bits");
 }
 
+std::string TimestamptzRelation() {
+	return R"YAML(api_version: cuac/v1
+kind: relation
+id: events
+schema: static
+columns:
+  - {id: occurred_at, type: TIMESTAMPTZ, nullable: false, extract: $.occurred_at}
+  - {id: observed_at, type: ARRAY, element_type: TIMESTAMPTZ, element_nullable: true, nullable: false, extract: $.observed_at}
+inputs:
+  - {id: since, type: TIMESTAMPTZ, nullable: false, default: {kind: value, value: "2026-07-01T01:30:00+01:30"}}
+auth: {mode: anonymous}
+resources:
+  max_response_bytes_per_page: 4096
+  max_response_bytes_per_scan: 4096
+  max_records_per_page: 16
+  max_records_per_scan: 16
+  max_extracted_string_bytes: 256
+operations:
+  - id: events_since
+    when: {required_inputs: [input.since]}
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin: {scheme: https, host: timestamps.example, port: 443}
+      path_segments:
+        - {literal: events}
+        - {input: since, encoding: rfc3986_percent_encoded}
+      query:
+        - name: fixed_at
+          literal: {type: TIMESTAMPTZ, value: "2000-02-29T12:34:56.123456Z"}
+          encoding: form_urlencoded
+        - name: since
+          input: since
+          encoding: form_urlencoded
+          omit_when_unbound: true
+          omit_when_null: true
+      headers: []
+    response: {source: terminal_collection, records: "$.events[*]"}
+    pagination: {strategy: disabled}
+)YAML";
+}
+
+void WriteTimestamptzPackage(TemporaryPackage &package, const std::string &relation) {
+	package.Write("connector.yaml", R"YAML(api_version: cuac/v1
+kind: connector
+id: timestamp_fixture
+version: 1.0.0
+extractor_dialect: cuac/json_path_v1
+network_policy:
+  origins: [{scheme: https, host: timestamps.example, port: 443}]
+  redirects: deny
+  private_addresses: deny
+  link_local_addresses: deny
+  loopback_addresses: deny
+  max_response_bytes: 4096
+relations: [events]
+)YAML");
+	package.Write("relations/events.yaml", relation);
+}
+
+void TestTimestamptzSourceProfile() {
+	{
+		TemporaryPackage package;
+		WriteTimestamptzPackage(package, TimestamptzRelation());
+		NeverCancel cancellation;
+		const auto result = cuac_test::CompileRoot(package.Root(), cancellation);
+		Require(result.Succeeded() && result.Generation(), "strict TIMESTAMPTZ package did not compile");
+		const auto &relation = result.Generation()->Connector().Relations()[0];
+		const auto &request = relation.Operations()[0].Rest().request;
+		Require(relation.Columns().size() == 2 &&
+		            relation.Columns()[0].ScalarType() == cuac::CompiledScalarType::TIMESTAMPTZ &&
+		            relation.Columns()[1].Shape() == cuac::CompiledColumnShape::ARRAY &&
+		            relation.Columns()[1].ElementType() == cuac::CompiledScalarType::TIMESTAMPTZ &&
+		            relation.Inputs()[0].Default().Value().TimestamptzMicroseconds() == INT64_C(1782864000000000) &&
+		            request.path_segments[1].input_type == cuac::CompiledScalarType::TIMESTAMPTZ &&
+		            request.query_parameters[0].DecodedValue().Type() == cuac::CompiledScalarType::TIMESTAMPTZ &&
+		            request.query_parameters[0].DecodedValue().TimestamptzMicroseconds() == INT64_C(951827696123456) &&
+		            request.query_parameters[0].encoded_value == "2000-02-29T12%3A34%3A56.123456Z",
+		        "TIMESTAMPTZ source facts, offset normalization, or typed fixed query drifted");
+	}
+	const std::vector<std::string> invalid = {
+	    "2026-07-01T01:30:00+01:30",
+	    "\"1970-01-01 00:00:00Z\"",
+	    "\"1970-01-01t00:00:00z\"",
+	    "\"1970-01-01T00:00:00\"",
+	    "\"1970-01-01T00:00:00-00:00\"",
+	    "\"1970-01-01T00:00:00+14:01\"",
+	    "\"1970-01-01T00:00:60Z\"",
+	    "\"2001-02-29T00:00:00Z\"",
+	    "\"1970-01-01T00:00:00.1234567Z\"",
+	    "\"0001-01-01T00:00:00+00:01\"",
+	    "\"0\"",
+	    "\"infinity\"",
+	};
+	for (const auto &value : invalid) {
+		TemporaryPackage package;
+		WriteTimestamptzPackage(package,
+		                        cuac_test::ReplaceOnce(TimestamptzRelation(), "\"2026-07-01T01:30:00+01:30\"", value));
+		NeverCancel cancellation;
+		RequireFirstDiagnostic(cuac_test::CompileRoot(package.Root(), cancellation),
+		                       PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
+		                       "invalid TIMESTAMPTZ source spelling escaped strict compilation");
+	}
+	{
+		TemporaryPackage package;
+		WriteTimestamptzPackage(package,
+		                        cuac_test::ReplaceOnce(TimestamptzRelation(), "\"2000-02-29T12:34:56.123456Z\"",
+		                                               "\"2000-02-29T12:34:56.1234567Z\""));
+		NeverCancel cancellation;
+		RequireFirstDiagnostic(cuac_test::CompileRoot(package.Root(), cancellation),
+		                       PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
+		                       "invalid typed fixed TIMESTAMPTZ query escaped strict compilation");
+	}
+}
+
 void TestDoubleMagnitudeOverflowRejected() {
 	TemporaryPackage package;
 	package.Write("connector.yaml", R"YAML(api_version: cuac/v1
@@ -730,6 +847,7 @@ int main() {
 		TestCrossFileAndPolicyReferences();
 		TestTypedDefaults();
 		TestTypedDoubleDefaultsRoundTrip();
+		TestTimestamptzSourceProfile();
 		TestDoubleMagnitudeOverflowRejected();
 		TestDiagnosticBudgetAndCancellation();
 		TestCompiledModelCounterexamplesStayDiagnostics();

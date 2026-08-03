@@ -8,6 +8,7 @@
 #include "query/support/live_scan_request.hpp"
 #include "support/require.hpp"
 
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -168,6 +169,11 @@ void RequireTypedPackageEquality(const cuac::CompiledPackageGeneration &generati
 		            decision.typed_equality.varchar_value.empty() && decision.typed_equality.double_value == 3.5,
 		        "DOUBLE package equality lost its canonical typed payload");
 		break;
+	case RequestedPredicateValueKind::TIMESTAMPTZ:
+		Require(decision.typed_equality.kind == cuac::PlannedRestScalarKind::TIMESTAMPTZ &&
+		            decision.typed_equality.timestamptz_microseconds == INT64_C(1782864000000000),
+		        "TIMESTAMPTZ package equality lost its canonical typed payload");
+		break;
 	}
 	auto unavailable_request = matching_request;
 	unavailable_request.capabilities.selective_predicate = false;
@@ -275,6 +281,10 @@ void TestPackageTypedEqualitySelectionEvidence() {
 	                            RequestedPredicateValue::Varchar(""), RequestedPredicateValue::Varchar("other"), "");
 	RequireTypedPackageEquality(generation, "double_predicates", RequestedPredicateValueKind::DOUBLE,
 	                            RequestedPredicateValue::Double(3.5), RequestedPredicateValue::Double(2.5), "3.5");
+	RequireTypedPackageEquality(generation, "timestamptz_predicates", RequestedPredicateValueKind::TIMESTAMPTZ,
+	                            RequestedPredicateValue::Timestamptz(INT64_C(1782864000000000)),
+	                            RequestedPredicateValue::Timestamptz(INT64_C(1782950400000000)),
+	                            "2026-07-01T00%3A00%3A00.000000Z");
 }
 
 void TestConflictingPackageConditionalsDisqualifyOnlyTheirCandidate() {

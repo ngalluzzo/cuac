@@ -39,6 +39,8 @@ CompiledScalarType ResultElementType(CompiledGraphqlScalarKind kind) {
 		return CompiledScalarType::BIGINT;
 	case CompiledGraphqlScalarKind::BOOLEAN:
 		return CompiledScalarType::BOOLEAN;
+	case CompiledGraphqlScalarKind::TIMESTAMPTZ:
+		return CompiledScalarType::TIMESTAMPTZ;
 	}
 	throw std::invalid_argument("compiled GraphQL result mapping contains an unknown scalar kind");
 }

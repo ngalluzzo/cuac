@@ -1,6 +1,7 @@
 #include "cuac/internal/connector/compiler/package_model_compiler.hpp"
 
 #include <cctype>
+#include <cstdint>
 #include <set>
 
 namespace cuac {
@@ -60,6 +61,10 @@ bool SafeVarchar(const LocatedText &value, bool require_double_quoted) {
 	return true;
 }
 
+bool ParseStrictTimestamptz(const LocatedText &located, std::int64_t &result) {
+	return located.style == FailsafeYamlNode::ScalarStyle::DOUBLE_QUOTED && ParseTimestamptz(located.value, result);
+}
+
 } // namespace
 
 CompiledScalarType ScalarType(const LocatedText &type) {
@@ -72,6 +77,9 @@ CompiledScalarType ScalarType(const LocatedText &type) {
 	if (type.value == "DOUBLE") {
 		return CompiledScalarType::DOUBLE;
 	}
+	if (type.value == "TIMESTAMPTZ") {
+		return CompiledScalarType::TIMESTAMPTZ;
+	}
 	return CompiledScalarType::VARCHAR;
 }
 
@@ -81,6 +89,9 @@ CompiledGraphqlScalarKind GraphqlScalarType(const LocatedText &type) {
 	}
 	if (type.value == "BIGINT") {
 		return CompiledGraphqlScalarKind::INT64;
+	}
+	if (type.value == "TIMESTAMPTZ") {
+		return CompiledGraphqlScalarKind::TIMESTAMPTZ;
 	}
 	return CompiledGraphqlScalarKind::STRING;
 }
@@ -126,6 +137,13 @@ CompiledScalarValue CompileConcreteScalar(const LocatedText &type, const Located
 			diagnostics.Add(code, PackageDiagnosticPhase::SCHEMA, value.mark, "", relation);
 		}
 		return cuac::internal::CompiledModelBuilder::Double(parsed);
+	}
+	if (type.value == "TIMESTAMPTZ") {
+		std::int64_t parsed = 0;
+		if (!ParseStrictTimestamptz(value, parsed)) {
+			diagnostics.Add(code, PackageDiagnosticPhase::SCHEMA, value.mark, "", relation);
+		}
+		return cuac::internal::CompiledModelBuilder::Timestamptz(parsed);
 	}
 	if (!SafeVarchar(value, false)) {
 		diagnostics.Add(code, PackageDiagnosticPhase::SCHEMA, value.mark, "", relation);

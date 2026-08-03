@@ -32,6 +32,9 @@ CompiledScalarType CompileInputType(const InputDeclaration &input) {
 	if (input.type.value == "DOUBLE") {
 		return CompiledScalarType::DOUBLE;
 	}
+	if (input.type.value == "TIMESTAMPTZ") {
+		return CompiledScalarType::TIMESTAMPTZ;
+	}
 	return CompiledScalarType::VARCHAR;
 }
 
@@ -257,7 +260,8 @@ std::vector<CompiledQueryParameter> CompileQuery(const RelationDeclaration &rela
 		switch (field.kind) {
 		case QueryFieldKind::LITERAL:
 			if (paginated && field.name.value == pagination.page_size_parameter.value) {
-				if (field.source.value != pagination.page_size.value ||
+				if ((field.literal_type.value != "VARCHAR" && field.literal_type.value != "BIGINT") ||
+				    field.source.value != pagination.page_size.value ||
 				    page_size > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
 					diagnostics.Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::COMPILE,
 					                field.mark, "", relation.id.value, operation.id.value);
@@ -267,7 +271,8 @@ std::vector<CompiledQueryParameter> CompileQuery(const RelationDeclaration &rela
 				    cuac::internal::CompiledModelBuilder::PageSizeQueryParameter(field.name.value, page_size));
 			} else if (paginated && field.name.value == pagination.page_number_parameter.value) {
 				found_page_number = true;
-				if (field.source.value != pagination.first_page.value ||
+				if ((field.literal_type.value != "VARCHAR" && field.literal_type.value != "BIGINT") ||
+				    field.source.value != pagination.first_page.value ||
 				    first_page > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
 					diagnostics.Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::COMPILE,
 					                field.mark, "", relation.id.value, operation.id.value);
@@ -276,7 +281,8 @@ std::vector<CompiledQueryParameter> CompileQuery(const RelationDeclaration &rela
 				result.push_back(
 				    cuac::internal::CompiledModelBuilder::PageNumberQueryParameter(field.name.value, first_page));
 			} else {
-				auto value = cuac::internal::CompiledModelBuilder::Varchar(field.source.value);
+				auto value = CompileConcreteScalar(field.literal_type, field.source, diagnostics, relation.id.value,
+				                                   PackageDiagnosticCode::INVALID_TYPE);
 				try {
 					(void)EncodeCompiledQueryScalar(value);
 					result.push_back(

@@ -1,6 +1,7 @@
 #include "cuac/internal/runtime/executor/rest_request_materialization.hpp"
 
 #include "cuac/internal/runtime/policy/request_validation.hpp"
+#include "cuac/internal/runtime/decoding/timestamptz_codec.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -113,6 +114,12 @@ bool TryCanonicalPathValue(const PlannedRestPathSegment &binding, std::string &v
 		}
 		value = EncodeCanonicalDouble(binding.DoubleValue());
 		break;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		if (!runtime_timestamptz::InRange(binding.TimestamptzMicroseconds())) {
+			return false;
+		}
+		value = runtime_timestamptz::Canonical(binding.TimestamptzMicroseconds());
+		break;
 	default:
 		return false;
 	}
@@ -178,6 +185,9 @@ bool TryColumnKind(PlannedRestScalarKind planned, ValueKind &kind) {
 	case PlannedRestScalarKind::DOUBLE:
 		kind = ValueKind::DOUBLE;
 		return true;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		kind = ValueKind::TIMESTAMPTZ;
+		return true;
 	}
 	return false;
 }
@@ -196,6 +206,9 @@ bool TryColumnKind(PlannedColumnScalarKind planned, ValueKind &kind) {
 	case PlannedColumnScalarKind::DOUBLE:
 		kind = ValueKind::DOUBLE;
 		return true;
+	case PlannedColumnScalarKind::TIMESTAMPTZ:
+		kind = ValueKind::TIMESTAMPTZ;
+		return true;
 	}
 	return false;
 }
@@ -210,6 +223,8 @@ const char *LogicalTypeName(ValueKind kind) {
 		return "VARCHAR";
 	case ValueKind::DOUBLE:
 		return "DOUBLE";
+	case ValueKind::TIMESTAMPTZ:
+		return "TIMESTAMPTZ";
 	}
 	return nullptr;
 }
@@ -310,6 +325,8 @@ bool MatchesConditionalAuthority(const PlannedRestQueryBinding &binding,
 		return binding.VarcharValue() == authority.varchar_value;
 	case PlannedRestScalarKind::DOUBLE:
 		return binding.DoubleValue() == authority.double_value;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		return binding.TimestamptzMicroseconds() == authority.timestamptz_microseconds;
 	}
 	return false;
 }
@@ -351,6 +368,10 @@ bool HasCanonicalBinding(const PlannedRestQueryBinding &binding, const RestCondi
 		return binding.EncodedValue() == FormUrlEncode(binding.VarcharValue());
 	case PlannedRestScalarKind::DOUBLE:
 		return binding.EncodedValue() == EncodeCanonicalDouble(binding.DoubleValue());
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		return runtime_timestamptz::InRange(binding.TimestamptzMicroseconds()) &&
+		       binding.EncodedValue() ==
+		           FormUrlEncode(runtime_timestamptz::Canonical(binding.TimestamptzMicroseconds()));
 	}
 	return false;
 }

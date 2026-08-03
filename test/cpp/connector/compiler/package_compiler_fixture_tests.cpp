@@ -293,7 +293,7 @@ int main(int argc, char **argv) {
 		Require(identity.SpecIdentifier() == "cuac/v1" && identity.ConnectorId() == "github" &&
 		            identity.PackageVersion() == "1.0.0" &&
 		            identity.PackageDigest() ==
-		                "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c" &&
+		                "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c" &&
 		            registration.GenerationHandle().IsValid(),
 		        "Connector compiler fixture did not expose the exact real package identity and generation");
 		Require(registration.Relations().size() == 4,
@@ -321,6 +321,7 @@ int main(int argc, char **argv) {
 		const auto bigint = CompiledScalarType::BIGINT;
 		const auto varchar = CompiledScalarType::VARCHAR;
 		const auto boolean = CompiledScalarType::BOOLEAN;
+		const auto timestamptz = CompiledScalarType::TIMESTAMPTZ;
 		RequireRelation(registration.Relations()[0], "duckdb_login_search_page", anonymous,
 		                {{"id", bigint, false}, {"login", varchar, false}, {"site_admin", boolean, false}});
 		RequireRelation(registration.Relations()[1], "authenticated_user", required,
@@ -340,7 +341,7 @@ int main(int argc, char **argv) {
 		                 {"primary_language", varchar, true},
 		                 {"private", boolean, false},
 		                 {"archived", boolean, false},
-		                 {"updated_at", varchar, false}});
+		                 {"updated_at", timestamptz, false}});
 		std::cout << "package compiler fixture tests passed" << std::endl;
 		return 0;
 	} catch (const std::exception &error) {

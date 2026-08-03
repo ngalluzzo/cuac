@@ -149,11 +149,11 @@ void TestPackageGenerationFixtureBoundary() {
 	    "predicate conflict fixture lost its package-selected conflict or unaffected empty fallback");
 
 	const auto typed_predicates = cuac_test::BuildTypedPredicatePackageGenerationFixture();
-	const std::vector<std::string> typed_relation_names = {"boolean_predicates", "bigint_predicates",
-	                                                       "varchar_predicates", "double_predicates"};
+	const std::vector<std::string> typed_relation_names = {
+	    "boolean_predicates", "bigint_predicates", "varchar_predicates", "double_predicates", "timestamptz_predicates"};
 	const std::vector<cuac::CompiledScalarType> typed_relation_types = {
 	    cuac::CompiledScalarType::BOOLEAN, cuac::CompiledScalarType::BIGINT, cuac::CompiledScalarType::VARCHAR,
-	    cuac::CompiledScalarType::DOUBLE};
+	    cuac::CompiledScalarType::DOUBLE, cuac::CompiledScalarType::TIMESTAMPTZ};
 	Require(typed_predicates.Connector().Relations().size() == typed_relation_names.size(),
 	        "typed predicate fixture relation inventory drifted");
 	for (std::size_t index = 0; index < typed_relation_names.size(); index++) {

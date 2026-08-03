@@ -23,6 +23,7 @@ public:
 	// RFC 0020: -0.0 is normalized to 0.0 so every consumer sees one
 	// canonical zero.
 	static CompiledScalarValue Double(double value);
+	static CompiledScalarValue Timestamptz(std::int64_t microseconds);
 
 	static CompiledInputDefault NoDefault();
 	static CompiledInputDefault Default(CompiledScalarValue value);

@@ -23,6 +23,8 @@ jobs:
           python3 -I -B test/python/specification_evolution_contract.py
           python3 -I -B scripts/verify-structural-rest-paths.py
           python3 -I -B test/python/structural_rest_path_contract.py
+          python3 -I -B scripts/verify-timestamptz-contract.py
+          python3 -I -B test/python/timestamptz_contract.py
       - name: Build verified development image
         run: docker build --file containers/development/Dockerfile --tag "cuac-development:${GITHUB_SHA}" .
       - name: Run portable product verification

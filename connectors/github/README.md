@@ -13,7 +13,7 @@ GraphQL cursor pagination.
 | `github_duckdb_login_search_page()` | None | `id BIGINT`, `login VARCHAR`, `site_admin BOOLEAN` |
 | `github_authenticated_user(secret := ...)` | GitHub bearer token | `id BIGINT`, `login VARCHAR`, `site_admin BOOLEAN` |
 | `github_authenticated_repositories(secret := ...)` | GitHub bearer token | `id BIGINT`, `full_name VARCHAR`, `private BOOLEAN`, `fork BOOLEAN`, `archived BOOLEAN`, `visibility VARCHAR` |
-| `github_viewer_repository_metrics(secret := ...)` | GitHub bearer token | `id VARCHAR`, `full_name VARCHAR`, `owner_login VARCHAR`, `stars BIGINT`, nullable `primary_language VARCHAR`, `private BOOLEAN`, `archived BOOLEAN`, `updated_at VARCHAR` |
+| `github_viewer_repository_metrics(secret := ...)` | GitHub bearer token | `id VARCHAR`, `full_name VARCHAR`, `owner_login VARCHAR`, `stars BIGINT`, nullable `primary_language VARCHAR`, `private BOOLEAN`, `archived BOOLEAN`, `updated_at TIMESTAMP WITH TIME ZONE` |
 
 The package declares no relation arguments. The `secret` argument is added by
 the extension for authenticated relations. A

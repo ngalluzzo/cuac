@@ -54,6 +54,8 @@ bool SameScalar(const CompiledScalarValue &left, const CompiledScalarValue &righ
 		return left.Varchar() == right.Varchar();
 	case CompiledScalarType::DOUBLE:
 		return left.Double() == right.Double();
+	case CompiledScalarType::TIMESTAMPTZ:
+		return left.TimestamptzMicroseconds() == right.TimestamptzMicroseconds();
 	}
 	return false;
 }

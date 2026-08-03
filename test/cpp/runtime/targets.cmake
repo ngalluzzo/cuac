@@ -329,6 +329,12 @@ endfunction()
 add_cuac_package_fixture_variant_test(
   cuac_package_fixture_column_variant_tests
   test/cpp/runtime/fixtures/package_fixture_column_variant_tests.cpp)
+target_compile_definitions(
+  cuac_package_fixture_column_variant_tests
+  PRIVATE CUAC_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(
+  cuac_package_fixture_column_variant_tests
+  PRIVATE cuac_semantics_package_graphql_fixture_service)
 add_cuac_package_fixture_variant_test(
   cuac_package_fixture_pagination_variant_tests
   test/cpp/runtime/fixtures/package_fixture_pagination_variant_tests.cpp)

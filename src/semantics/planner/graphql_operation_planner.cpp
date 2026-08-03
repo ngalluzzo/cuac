@@ -39,6 +39,8 @@ PlannedGraphqlScalarKind PlanScalar(CompiledGraphqlScalarKind kind) {
 		return PlannedGraphqlScalarKind::INT64;
 	case CompiledGraphqlScalarKind::BOOLEAN:
 		return PlannedGraphqlScalarKind::BOOLEAN;
+	case CompiledGraphqlScalarKind::TIMESTAMPTZ:
+		return PlannedGraphqlScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled GraphQL profile contains an unknown scalar kind");
 }
@@ -216,6 +218,8 @@ CompiledScalarType ResultElementType(CompiledGraphqlScalarKind kind) {
 		return CompiledScalarType::BIGINT;
 	case CompiledGraphqlScalarKind::BOOLEAN:
 		return CompiledScalarType::BOOLEAN;
+	case CompiledGraphqlScalarKind::TIMESTAMPTZ:
+		return CompiledScalarType::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled GraphQL result contains an unknown element kind");
 }

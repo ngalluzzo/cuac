@@ -133,6 +133,7 @@ void ValidateRestPath(const CompiledRestRequest &request) {
 		case CompiledScalarType::BIGINT:
 		case CompiledScalarType::VARCHAR:
 		case CompiledScalarType::DOUBLE:
+		case CompiledScalarType::TIMESTAMPTZ:
 			break;
 		default:
 			throw std::invalid_argument("compiled REST path contains an unknown input type");
@@ -789,6 +790,9 @@ std::string EncodeCompiledQueryScalar(const CompiledScalarValue &value, Compiled
 		break;
 	case CompiledScalarType::DOUBLE:
 		decoded = EncodeCanonicalDouble(value.Double());
+		break;
+	case CompiledScalarType::TIMESTAMPTZ:
+		decoded = CanonicalTimestamptz(value.TimestamptzMicroseconds());
 		break;
 	default:
 		throw std::invalid_argument("compiled query scalar has an unknown type");

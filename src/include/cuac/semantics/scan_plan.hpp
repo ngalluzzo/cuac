@@ -212,6 +212,7 @@ public:
 	std::int64_t BigintValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 	const std::string &ConditionalInputId() const noexcept;
 	const std::string &ProofIdentity() const noexcept;
 	const std::string &BaseDomainIdentity() const noexcept;
@@ -226,7 +227,8 @@ private:
 	                         PlannedRestScalarKind kind, bool boolean_value, std::int64_t bigint_value,
 	                         std::string varchar_value, double double_value, std::string conditional_input_id,
 	                         std::string proof_identity, std::string base_domain_identity,
-	                         PlannedOccurrencePreservation occurrence_preservation);
+	                         PlannedOccurrencePreservation occurrence_preservation,
+	                         std::int64_t timestamptz_microseconds = 0);
 
 	std::string column_name;
 	PlannedPredicateOperator predicate_operator;
@@ -235,6 +237,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 	std::string conditional_input_id;
 	std::string proof_identity;
 	std::string base_domain_identity;
@@ -251,7 +254,7 @@ enum class PlannedCredentialPlacement { NONE, AUTHORIZATION_HEADER, HEADER_NAMED
 // Protocol-neutral output-column scalar vocabulary: PlannedColumn describes a
 // relation's declared output schema uniformly for both REST and GraphQL
 // domains, so it does not borrow either protocol's own scalar-kind enum.
-enum class PlannedColumnScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
+enum class PlannedColumnScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE, TIMESTAMPTZ };
 enum class PlannedColumnShape { SCALAR, ARRAY };
 
 struct PlannedColumn {

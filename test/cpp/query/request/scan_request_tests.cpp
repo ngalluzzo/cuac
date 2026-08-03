@@ -7,6 +7,7 @@
 #include "support/require.hpp"
 
 #include <cstdlib>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -31,6 +32,7 @@ const char GRAPHQL_RELATION[] = "viewer_repository_metrics";
 void TestExplicitInputValues() {
 	const auto boolean = cuac::ExplicitInput::Boolean("enabled", true);
 	const auto bigint = cuac::ExplicitInput::BigInt("count", -42);
+	const auto timestamptz = cuac::ExplicitInput::Timestamptz("updated_after", INT64_C(1782864000000000));
 	std::string identifier = "label;\n";
 	identifier.push_back(static_cast<char>(0xff));
 	std::string exact_varchar = "private;\n";
@@ -39,6 +41,8 @@ void TestExplicitInputValues() {
 	const auto null_boolean = cuac::ExplicitInput::Null("optional_enabled", cuac::ExplicitInputValueKind::BOOLEAN);
 	const auto null_bigint = cuac::ExplicitInput::Null("optional_count", cuac::ExplicitInputValueKind::BIGINT);
 	const auto null_varchar = cuac::ExplicitInput::Null("optional_label", cuac::ExplicitInputValueKind::VARCHAR);
+	const auto null_timestamptz =
+	    cuac::ExplicitInput::Null("optional_updated_at", cuac::ExplicitInputValueKind::TIMESTAMPTZ);
 	const auto bigint_copy = bigint;
 	auto varchar_move_source = varchar_value;
 	const auto varchar_moved = std::move(varchar_move_source);
@@ -56,18 +60,34 @@ void TestExplicitInputValues() {
 	            varchar_value.Snapshot() ==
 	                "input[id=hex:6c6162656c3b0aff,kind=varchar,value=hex:707269766174653b0a01]",
 	        "VARCHAR explicit input was not byte exact or safely escaped");
+	Require(timestamptz.Kind() == cuac::ExplicitInputValueKind::TIMESTAMPTZ && !timestamptz.IsNull() &&
+	            timestamptz.TimestamptzMicroseconds() == INT64_C(1782864000000000) &&
+	            timestamptz.Snapshot() ==
+	                "input[id=hex:757064617465645f6166746572,kind=timestamptz,value=2026-07-01T00:00:00.000000Z]",
+	        "TIMESTAMPTZ explicit input lost exact microseconds or canonical snapshot identity");
 	Require(bigint_copy == bigint && bigint_copy.Snapshot() == bigint.Snapshot() && varchar_moved == varchar_value,
 	        "explicit input copy or move changed its structural value");
 	Require(null_boolean.IsNull() && null_boolean.Kind() == cuac::ExplicitInputValueKind::BOOLEAN &&
 	            null_boolean.Snapshot() == "input[id=hex:6f7074696f6e616c5f656e61626c6564,kind=boolean,value=null]" &&
 	            null_bigint.IsNull() && null_bigint.Kind() == cuac::ExplicitInputValueKind::BIGINT &&
-	            null_varchar.IsNull() && null_varchar.Kind() == cuac::ExplicitInputValueKind::VARCHAR,
+	            null_varchar.IsNull() && null_varchar.Kind() == cuac::ExplicitInputValueKind::VARCHAR &&
+	            null_timestamptz.IsNull() && null_timestamptz.Kind() == cuac::ExplicitInputValueKind::TIMESTAMPTZ &&
+	            null_timestamptz.Snapshot() ==
+	                "input[id=hex:6f7074696f6e616c5f757064617465645f6174,kind=timestamptz,value=null]",
 	        "explicit NULL lost its present typed identity");
 
 	RequireThrows<std::logic_error>([&]() { (void)boolean.BigIntValue(); },
 	                                "BOOLEAN explicit input exposed a BIGINT payload");
 	RequireThrows<std::logic_error>([&]() { (void)null_boolean.BooleanValue(); },
 	                                "explicit NULL exposed a BOOLEAN payload");
+	RequireThrows<std::logic_error>([&]() { (void)null_timestamptz.TimestamptzMicroseconds(); },
+	                                "explicit TIMESTAMPTZ NULL exposed a concrete payload");
+	RequireThrows<std::invalid_argument>(
+	    []() { (void)cuac::ExplicitInput::Timestamptz("too_early", -INT64_C(62135596800000001)); },
+	    "out-of-profile minimum TIMESTAMPTZ explicit input was accepted");
+	RequireThrows<std::invalid_argument>(
+	    []() { (void)cuac::ExplicitInput::Timestamptz("too_late", INT64_C(253402300800000000)); },
+	    "out-of-profile maximum TIMESTAMPTZ explicit input was accepted");
 	RequireThrows<std::invalid_argument>([]() { (void)cuac::ExplicitInput::Varchar("", "value"); },
 	                                     "empty explicit input identifier was accepted");
 	RequireThrows<std::logic_error>(

@@ -10,10 +10,11 @@ ObservedInputResolution::ObservedInputResolution(std::string input_id_p, Observe
                                                  ObservedCallerInputState caller_state_p, ObservedInputState state_p,
                                                  ObservedInputSource source_p, bool completed_p, bool boolean_value_p,
                                                  std::int64_t bigint_value_p, std::string varchar_value_p,
-                                                 double double_value_p)
+                                                 double double_value_p, std::int64_t timestamptz_microseconds_p)
     : input_id(std::move(input_id_p)), kind(kind_p), caller_state(caller_state_p), state(state_p), source(source_p),
       completed(completed_p), boolean_value(boolean_value_p), bigint_value(bigint_value_p),
-      varchar_value(std::move(varchar_value_p)), double_value(double_value_p) {
+      varchar_value(std::move(varchar_value_p)), double_value(double_value_p),
+      timestamptz_microseconds(timestamptz_microseconds_p) {
 }
 
 const std::string &ObservedInputResolution::InputId() const noexcept {
@@ -72,13 +73,20 @@ double ObservedInputResolution::DoubleValue() const {
 	return double_value;
 }
 
+std::int64_t ObservedInputResolution::TimestamptzMicroseconds() const {
+	if (!completed || state != ObservedInputState::BOUND_VALUE || kind != ObservedScalarKind::TIMESTAMPTZ) {
+		throw std::logic_error("observed input is not a completed concrete TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
+}
+
 ObservedRequestBinding::ObservedRequestBinding(std::string name_p, std::string source_id_p, ObservedScalarKind kind_p,
                                                bool boolean_value_p, std::int64_t bigint_value_p,
                                                std::string varchar_value_p, double double_value_p,
-                                               std::string encoded_value_p)
+                                               std::int64_t timestamptz_microseconds_p, std::string encoded_value_p)
     : name(std::move(name_p)), source_id(std::move(source_id_p)), kind(kind_p), boolean_value(boolean_value_p),
       bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)), double_value(double_value_p),
-      encoded_value(std::move(encoded_value_p)) {
+      timestamptz_microseconds(timestamptz_microseconds_p), encoded_value(std::move(encoded_value_p)) {
 }
 
 const std::string &ObservedRequestBinding::Name() const noexcept {
@@ -119,6 +127,13 @@ double ObservedRequestBinding::DoubleValue() const {
 		throw std::logic_error("observed request binding is not a DOUBLE");
 	}
 	return double_value;
+}
+
+std::int64_t ObservedRequestBinding::TimestamptzMicroseconds() const {
+	if (kind != ObservedScalarKind::TIMESTAMPTZ) {
+		throw std::logic_error("observed request binding is not a TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
 }
 
 const std::string &ObservedRequestBinding::EncodedValue() const noexcept {

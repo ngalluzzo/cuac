@@ -90,12 +90,13 @@ PackageFixtureCase ParseCase(const FailsafeYamlNode &node, std::size_t case_inde
 		    Scalar(Required(literal, "type", path + ".predicate.literal"), path + ".predicate.literal.type");
 		const auto value =
 		    Scalar(Required(literal, "value", path + ".predicate.literal"), path + ".predicate.literal.value");
-		const auto scalar_type = type == "BOOLEAN"  ? CompiledScalarType::BOOLEAN
-		                         : type == "BIGINT" ? CompiledScalarType::BIGINT
-		                         : type == "DOUBLE" ? CompiledScalarType::DOUBLE
-		                                            : CompiledScalarType::VARCHAR;
+		const auto scalar_type = type == "BOOLEAN"       ? CompiledScalarType::BOOLEAN
+		                         : type == "BIGINT"      ? CompiledScalarType::BIGINT
+		                         : type == "DOUBLE"      ? CompiledScalarType::DOUBLE
+		                         : type == "TIMESTAMPTZ" ? CompiledScalarType::TIMESTAMPTZ
+		                                                 : CompiledScalarType::VARCHAR;
 		if (column == nullptr || column->Shape() != CompiledColumnShape::SCALAR ||
-		    (type != "BOOLEAN" && type != "BIGINT" && type != "VARCHAR" && type != "DOUBLE") ||
+		    (type != "BOOLEAN" && type != "BIGINT" && type != "VARCHAR" && type != "DOUBLE" && type != "TIMESTAMPTZ") ||
 		    column->ScalarType() != scalar_type || !IsTypedScalar(scalar_type, value)) {
 			Fail(source, path + ".predicate", "fixture predicate is incompatible with the compiled column", id,
 			     relation_id, operation_id);

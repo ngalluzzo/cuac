@@ -1,6 +1,7 @@
 #include "cuac/internal/query/adapter/complex_filter_adapter.hpp"
 
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -47,6 +48,10 @@ bool RequestedType(const LogicalType &type, cuac::RequestedPredicateValueKind &r
 	}
 	if (type == LogicalType::DOUBLE) {
 		result = cuac::RequestedPredicateValueKind::DOUBLE;
+		return true;
+	}
+	if (type == LogicalType::TIMESTAMP_TZ) {
+		result = cuac::RequestedPredicateValueKind::TIMESTAMPTZ;
 		return true;
 	}
 	return false;
@@ -121,6 +126,17 @@ bool RequestedLiteral(const Expression &expression, cuac::RequestedPredicateValu
 		}
 		result = cuac::RequestedPredicateValue::Double(value.GetValue<double>());
 		return true;
+	case cuac::RequestedPredicateValueKind::TIMESTAMPTZ: {
+		if (value.type() != LogicalType::TIMESTAMP_TZ) {
+			return false;
+		}
+		const auto microseconds = value.GetValue<timestamp_tz_t>().value;
+		if (microseconds < -INT64_C(62135596800000000) || microseconds > INT64_C(253402300799999999)) {
+			return false;
+		}
+		result = cuac::RequestedPredicateValue::Timestamptz(microseconds);
+		return true;
+	}
 	}
 	return false;
 }

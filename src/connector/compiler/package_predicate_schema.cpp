@@ -52,7 +52,8 @@ PredicateDeclaration DecodePredicateSchema(const SchemaReader &reader) {
 	RequireValue(predicate.predicate_operator, "eq", PackageDiagnosticCode::UNSUPPORTED_DECLARATION,
 	             PackageDiagnosticPhase::SCHEMA, reader.Diagnostics());
 	if (predicate.literal_type.value != "BOOLEAN" && predicate.literal_type.value != "BIGINT" &&
-	    predicate.literal_type.value != "VARCHAR" && predicate.literal_type.value != "DOUBLE") {
+	    predicate.literal_type.value != "VARCHAR" && predicate.literal_type.value != "DOUBLE" &&
+	    predicate.literal_type.value != "TIMESTAMPTZ") {
 		reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
 		                         predicate.literal_type.mark);
 	}

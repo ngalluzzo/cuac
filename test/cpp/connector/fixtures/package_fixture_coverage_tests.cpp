@@ -59,12 +59,12 @@ bool Contains(const cuac::connector::PackageFixtureCoverage &coverage, const std
 void TestGithubCoverageMatchesAcceptedMapping(const std::string &repository_root) {
 	const auto generation = cuac_test::CompileRepositoryGithubGenerationFixture(repository_root);
 	const auto coverage = cuac::connector::DerivePackageFixtureCoverage(generation);
-	Require(coverage.RequiredKeys().size() == 266,
-	        "repository GitHub package did not derive all 266 accepted coverage keys (observed=" +
+	Require(coverage.RequiredKeys().size() == 271,
+	        "repository GitHub package did not derive all 271 accepted coverage keys (observed=" +
 	            std::to_string(coverage.RequiredKeys().size()) + ")");
 	Require(coverage.Entries().size() == coverage.RequiredKeys().size(),
 	        "typed coverage registry does not align one-for-one with rendered keys");
-	Require(coverage.OrderedDigest() == "sha256.555116e3bd3f0dd28164e0e24218a14f536c054ff1cac1ded2b1cb6d33ccdfa5",
+	Require(coverage.OrderedDigest() == "sha256.dc525ba200cf80c046f64354e14920c514a6fca9dfdf234cef357342e7c5d725",
 	        "repository GitHub coverage ordering drifted from RFC 0013 (observed=" + coverage.OrderedDigest() + ")");
 	Require(coverage.RequiredKeys().front() ==
 	                "operation_duckdb_login_search_page_github_search_duckdb_login_page_success" &&

@@ -81,7 +81,16 @@ QueryFieldDeclaration DecodeQueryField(const SchemaReader &reader) {
 	}
 	if (literal) {
 		field.kind = QueryFieldKind::LITERAL;
-		field.source = reader.Text("literal");
+		const auto *value = reader.Field("literal");
+		if (value != nullptr && value->Type() == FailsafeYamlNode::Kind::MAPPING) {
+			const auto typed = reader.Child("literal");
+			typed.RequireMapping({"type", "value"}, {"type", "value"});
+			field.literal_type = typed.Text("type");
+			field.source = typed.Text("value");
+		} else {
+			field.source = reader.Text("literal");
+			field.literal_type = {"VARCHAR", field.source.mark, field.source.style};
+		}
 		if (reader.Field("omit_when_unbound") != nullptr || reader.Field("omit_when_null") != nullptr) {
 			reader.Diagnostics().Add(PackageDiagnosticCode::UNKNOWN_FIELD, PackageDiagnosticPhase::SCHEMA, field.mark);
 		}

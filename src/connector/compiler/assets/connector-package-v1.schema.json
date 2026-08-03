@@ -219,7 +219,7 @@
       "required": ["id", "type", "nullable", "extract"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
-        "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+        "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"]},
         "nullable": {"$ref": "#/$defs/boolean"},
         "extract": {"$ref": "#/$defs/extractPath"}
       }
@@ -231,7 +231,7 @@
       "properties": {
         "id": {"$ref": "#/$defs/id"},
         "type": {"const": "ARRAY"},
-        "element_type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+        "element_type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"]},
         "element_nullable": {"$ref": "#/$defs/boolean"},
         "nullable": {"$ref": "#/$defs/boolean"},
         "extract": {"$ref": "#/$defs/extractPath"}
@@ -258,7 +258,7 @@
       "required": ["id", "type", "nullable"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
-        "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+        "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"]},
         "nullable": {"$ref": "#/$defs/boolean"},
         "default": {
           "oneOf": [
@@ -328,7 +328,20 @@
       "required": ["name", "literal", "encoding"],
       "properties": {
         "name": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
-        "literal": {"type": "string", "maxLength": 1048576},
+        "literal": {
+          "oneOf": [
+            {"type": "string", "maxLength": 1048576},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "value"],
+              "properties": {
+                "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"]},
+                "value": {"type": "string", "maxLength": 1048576}
+              }
+            }
+          ]
+        },
         "encoding": {"const": "form_urlencoded"}
       }
     },
@@ -770,7 +783,7 @@
           "additionalProperties": false,
           "required": ["type", "value"],
           "properties": {
-            "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"]},
+            "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"]},
             "value": {"type": "string", "maxLength": 1048576}
           }
         },

@@ -108,7 +108,7 @@
           "additionalProperties": false,
           "required": ["type", "value"],
           "properties": {
-            "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR"]},
+            "type": {"enum": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"]},
             "value": {"type": "string", "maxLength": 1048576}
           }
         }

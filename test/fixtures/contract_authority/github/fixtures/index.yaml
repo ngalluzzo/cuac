@@ -1,6 +1,6 @@
 api_version: cuac/v1
 kind: fixture_index
-package_digest: sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c
+package_digest: sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c
 
 cases:
   - id: private_visibility_matching
@@ -219,8 +219,8 @@ cases:
       residual_owner: duckdb
       remote_accuracy: unsupported
       rows:
-        - {id: R1, full_name: duckdb/duckdb, owner_login: duckdb, stars: 42, primary_language: "C++", private: false, archived: false, updated_at: "2026-07-01T00:00:00Z"}
-        - {id: R2, full_name: duckdb/community-extension, owner_login: duckdb, stars: 7, primary_language: {kind: null}, private: false, archived: false, updated_at: "2026-07-02T00:00:00Z"}
+        - {id: R1, full_name: duckdb/duckdb, owner_login: duckdb, stars: 42, primary_language: "C++", private: false, archived: false, updated_at: "2026-07-01T00:00:00.000000Z"}
+        - {id: R2, full_name: duckdb/community-extension, owner_login: duckdb, stars: 7, primary_language: {kind: null}, private: false, archived: false, updated_at: "2026-07-02T00:00:00.000000Z"}
       explain:
         protocol: graphql
         pagination: relay_forward

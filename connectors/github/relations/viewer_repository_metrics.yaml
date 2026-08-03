@@ -33,7 +33,7 @@ columns:
     nullable: false
     extract: $.isArchived
   - id: updated_at
-    type: VARCHAR
+    type: TIMESTAMPTZ
     nullable: false
     extract: $.updatedAt
 

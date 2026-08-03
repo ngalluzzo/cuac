@@ -56,7 +56,8 @@ package before publishing anything.
 - Anonymous, bearer, and static API-key authentication with explicit secrets.
 - Sequential Link, response-body, short-page, and GraphQL cursor pagination.
 - Conservative remote predicate restrictions with DuckDB-owned residuals.
-- Strict scalar and flat list conversion.
+- Strict `BOOLEAN`, `BIGINT`, `VARCHAR`, `DOUBLE`, and native `TIMESTAMPTZ`
+  scalar and flat-list conversion.
 - Bounded retries, reactive rate-limit waits, admission bulkheads, cancellation,
   and complete-scan result caching.
 - Immutable package generations, atomic reload, structured diagnostics, and
@@ -112,7 +113,9 @@ matrix is recorded in
 accepted coverage-driven evolution policy for the single `cuac/v1` path. An
 included classification remains a delivery candidate until a complete
 vertical RFC lands; [RFC 0029](docs/rfcs/0029-add-typed-structural-rest-path-segments.md)
-delivers typed structural REST path segments through that policy.
+delivers typed structural REST path segments and
+[RFC 0030](docs/rfcs/0030-add-timestamptz-scalars.md) delivers strict native
+`TIMESTAMPTZ` instants through that policy.
 
 ## Versioning
 

@@ -24,9 +24,12 @@ class CompiledScalarValue;
 // Consumers switch on this enum; they never parse source logical-type strings
 // to recover authority. DOUBLE is IEEE-754 double precision; construction
 // normalizes -0.0 to 0.0 so every consumer sees one canonical zero value.
-enum class CompiledScalarType { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
+enum class CompiledScalarType { BOOLEAN, BIGINT, VARCHAR, DOUBLE, TIMESTAMPTZ };
 
 const char *CompiledScalarTypeName(CompiledScalarType type);
+bool IsTimestamptzMicroseconds(std::int64_t value) noexcept;
+bool ParseTimestamptz(const std::string &value, std::int64_t &result) noexcept;
+std::string CanonicalTimestamptz(std::int64_t value);
 
 // Source cardinality is a declaration for Relational Semantics to interpret.
 // EXACTLY_ONE_ON_SUCCESS is neither a row estimate nor permission to push a
@@ -91,7 +94,7 @@ enum class CompiledGraphqlDocumentIdentity { PACKAGE_QUERY_GENERATOR_V1 };
 enum class CompiledGraphqlDigestAlgorithm { SHA256 };
 enum class CompiledGraphqlVariableType { INT_NON_NULL, STRING_NULLABLE };
 enum class CompiledGraphqlVariableSource { FIXED_PAGE_SIZE, RUNTIME_CURSOR, CALLER_INPUT, LOGICAL_SECRET };
-enum class CompiledGraphqlScalarKind { STRING, INT64, BOOLEAN };
+enum class CompiledGraphqlScalarKind { STRING, INT64, BOOLEAN, TIMESTAMPTZ };
 enum class CompiledResultShape { SCALAR, ARRAY };
 enum class CompiledGraphqlPartialDataPolicy { FAIL_ON_ANY_ERROR };
 enum class CompiledGraphqlCursorDirection { FORWARD };

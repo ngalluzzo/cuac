@@ -4,6 +4,7 @@
 #include "cuac/internal/connector/model/compiled_model_builder.hpp"
 #include "cuac/internal/connector/model/predicate_declaration.hpp"
 
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -453,6 +454,9 @@ cuac::CompiledPackageGeneration BuildTypedPredicateGeneration(const std::string 
 	                                                 ""));
 	relations.push_back(BuildScalarPredicateRelation(digest, "double_predicates", "score", CompiledScalarType::DOUBLE,
 	                                                 CompiledModelBuilder::Double(3.5), "3.5"));
+	relations.push_back(BuildScalarPredicateRelation(
+	    digest, "timestamptz_predicates", "observed_at", CompiledScalarType::TIMESTAMPTZ,
+	    CompiledModelBuilder::Timestamptz(INT64_C(1782864000000000)), "2026-07-01T00%3A00%3A00.000000Z"));
 	auto identity = CompiledModelBuilder::PackageIdentity("cuac/v1", "typed_predicate_package", version, digest);
 	auto connector =
 	    CompiledModelBuilder::Connector("typed_predicate_package", version, std::move(relations), NetworkPolicy(false));

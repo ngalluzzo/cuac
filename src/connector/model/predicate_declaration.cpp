@@ -56,6 +56,8 @@ bool SameScalarValue(const CompiledScalarValue &left, const CompiledScalarValue 
 		return left.Varchar() == right.Varchar();
 	case CompiledScalarType::DOUBLE:
 		return left.Double() == right.Double();
+	case CompiledScalarType::TIMESTAMPTZ:
+		return left.TimestamptzMicroseconds() == right.TimestamptzMicroseconds();
 	}
 	return false;
 }
@@ -99,6 +101,9 @@ void AppendTypedLiteral(std::ostream &output, const CompiledScalarValue &value) 
 		output << "double:" << std::string(buffer, static_cast<std::size_t>(written));
 		return;
 	}
+	case CompiledScalarType::TIMESTAMPTZ:
+		output << "timestamptz:" << CanonicalTimestamptz(value.TimestamptzMicroseconds());
+		return;
 	}
 	throw std::logic_error("compiled predicate mapping contains an unknown typed literal");
 }

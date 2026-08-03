@@ -372,6 +372,8 @@ bool RenderGraphqlOperation(const RelationDeclaration &relation, const Operation
 			kind = CompiledGraphqlScalarKind::INT64;
 		} else if (element_type.value == "BOOLEAN") {
 			kind = CompiledGraphqlScalarKind::BOOLEAN;
+		} else if (element_type.value == "TIMESTAMPTZ") {
+			kind = CompiledGraphqlScalarKind::TIMESTAMPTZ;
 		}
 		bool nullable = false;
 		(void)IsPlainBoolean(column.nullable, nullable);

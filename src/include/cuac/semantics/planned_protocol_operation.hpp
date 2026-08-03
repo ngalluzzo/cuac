@@ -24,7 +24,7 @@ enum class PlannedReplaySafety { SAFE };
 enum class PlannedUrlScheme { HTTP, HTTPS };
 enum class PlannedResponseSource { JSON_PATH_MANY, ROOT_ARRAY, ROOT_OBJECT };
 
-enum class PlannedRestScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
+enum class PlannedRestScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE, TIMESTAMPTZ };
 enum class PlannedResultShape { SCALAR, ARRAY };
 enum class PlannedRestPathSegmentSource { LITERAL, RELATION_INPUT };
 enum class PlannedRestPathSegmentEncoding { LITERAL, RFC3986_PERCENT_ENCODED };
@@ -93,6 +93,7 @@ public:
 	std::int64_t BigintValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 	PlannedRestPathSegmentEncoding Encoding() const noexcept;
 	const std::string &EncodedValue() const noexcept;
 
@@ -104,7 +105,8 @@ private:
 
 	PlannedRestPathSegment(PlannedRestPathSegmentSource source, std::string source_id, PlannedRestScalarKind kind,
 	                       bool boolean_value, std::int64_t bigint_value, std::string varchar_value,
-	                       double double_value, PlannedRestPathSegmentEncoding encoding, std::string encoded_value);
+	                       double double_value, PlannedRestPathSegmentEncoding encoding, std::string encoded_value,
+	                       std::int64_t timestamptz_microseconds = 0);
 
 	PlannedRestPathSegmentSource source;
 	std::string source_id;
@@ -113,6 +115,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 	PlannedRestPathSegmentEncoding encoding;
 	std::string encoded_value;
 };
@@ -142,6 +145,7 @@ public:
 	std::int64_t BigintValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 	PlannedRestQueryEncoding Encoding() const noexcept;
 	const std::string &EncodedValue() const noexcept;
 
@@ -153,7 +157,7 @@ private:
 	PlannedRestQueryBinding(std::string name, PlannedRestQueryValueSource source, std::string source_id,
 	                        PlannedRestScalarKind kind, bool boolean_value, std::int64_t bigint_value,
 	                        std::string varchar_value, double double_value, PlannedRestQueryEncoding encoding,
-	                        std::string encoded_value);
+	                        std::string encoded_value, std::int64_t timestamptz_microseconds = 0);
 
 	std::string name;
 	PlannedRestQueryValueSource source;
@@ -163,6 +167,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 	PlannedRestQueryEncoding encoding;
 	std::string encoded_value;
 };
@@ -255,7 +260,7 @@ enum class PlannedGraphqlDigestAlgorithm { SHA256 };
 enum class PlannedGraphqlOperationKind { QUERY };
 enum class PlannedGraphqlVariableType { INT_NON_NULL, STRING_NULLABLE };
 enum class PlannedGraphqlVariableSource { FIXED_PAGE_SIZE, RUNTIME_CURSOR };
-enum class PlannedGraphqlScalarKind { STRING, INT64, BOOLEAN };
+enum class PlannedGraphqlScalarKind { STRING, INT64, BOOLEAN, TIMESTAMPTZ };
 enum class PlannedGraphqlPartialDataPolicy { FAIL_ON_ANY_ERROR };
 enum class PlannedGraphqlCursorDirection { FORWARD };
 enum class PlannedGraphqlCursorDependency { SEQUENTIAL };

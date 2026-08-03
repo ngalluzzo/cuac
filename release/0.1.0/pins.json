@@ -441,6 +441,7 @@
         "src/include/cuac/internal/runtime/decoding/graphql_response_decoder.hpp",
         "src/include/cuac/internal/runtime/decoding/json_decoder.hpp",
         "src/include/cuac/internal/runtime/decoding/strict_json_reader.hpp",
+        "src/include/cuac/internal/runtime/decoding/timestamptz_codec.hpp",
         "src/include/cuac/internal/runtime/executor/graphql_paginated_scan.hpp",
         "src/include/cuac/internal/runtime/executor/http_paginated_scan.hpp",
         "src/include/cuac/internal/runtime/executor/http_scan_executor.hpp",
@@ -474,6 +475,7 @@
         "src/include/cuac/internal/semantics/planner/scan_plan_builder.hpp",
         "src/include/cuac/internal/semantics/planner/scan_planner.hpp",
         "src/include/cuac/internal/semantics/predicate/predicate_classifier.hpp",
+        "src/include/cuac/internal/semantics/timestamptz.hpp",
         "src/include/cuac/query/duckdb_secret.hpp",
         "src/include/cuac/query/package_generation_composition.hpp",
         "src/include/cuac/query/product_composition.hpp",
@@ -580,10 +582,10 @@
         "src/semantics/sources.cmake",
         "src/semantics/targets.cmake"
       ],
-      "sha256": "2d8f1376147168e2c44a18d1f9897151b6e5043583d6cd49b0dc4e86c6892288"
+      "sha256": "f1eca14beef1dbe35973e2aa35cfc2d77f8963be64bb6aa52ee770a1bdcacc0d"
     },
     "public_contract": {
-      "canonical_json_sha256": "ba681f4e655df5f6975c62cf9fad7abbf1202448a17783553c62f5c1f9406e08",
+      "canonical_json_sha256": "b4a6d43b9055bab950e47bbbb53b6ffaeec48d54553afeab319028111f0408ae",
       "path": "release/0.1.0/public_contract.json"
     },
     "resilience_certification": {
@@ -613,7 +615,7 @@
         "connectors/github/relations/duckdb_login_search_page.yaml",
         "connectors/github/relations/viewer_repository_metrics.yaml"
       ],
-      "sha256": "5b72d95c9610524ca9975b8e5f365baf755f2d40ea442db8aebf35326c8a2108"
+      "sha256": "1fdb715c9e3c1c853328f7e7d1503c73c57181ddfe81851c821e71ea6161d73c"
     }
   },
   "release_cells": {

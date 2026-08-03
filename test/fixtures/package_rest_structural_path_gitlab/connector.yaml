@@ -19,5 +19,6 @@ network_policy:
 
 relations:
   - project_issue
+  - project_issue_timestamps
   - typed_segments
   - target_budget

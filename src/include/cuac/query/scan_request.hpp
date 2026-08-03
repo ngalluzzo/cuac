@@ -36,7 +36,7 @@ private:
 	std::string exact_duckdb_secret_name;
 };
 
-enum class ExplicitInputValueKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
+enum class ExplicitInputValueKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE, TIMESTAMPTZ };
 
 // One explicitly supplied relation argument at the Query-to-Semantics
 // boundary. Its exact identifier and DuckDB scalar kind are structural facts;
@@ -50,6 +50,7 @@ public:
 	static ExplicitInput BigInt(std::string identifier, std::int64_t value);
 	static ExplicitInput Varchar(std::string identifier, std::string value);
 	static ExplicitInput Double(std::string identifier, double value);
+	static ExplicitInput Timestamptz(std::string identifier, std::int64_t microseconds);
 
 	const std::string &Identifier() const noexcept;
 	ExplicitInputValueKind Kind() const noexcept;
@@ -58,6 +59,7 @@ public:
 	std::int64_t BigIntValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 
 	bool operator==(const ExplicitInput &other) const noexcept;
 	bool operator!=(const ExplicitInput &other) const noexcept;
@@ -70,7 +72,8 @@ public:
 
 private:
 	ExplicitInput(std::string identifier, ExplicitInputValueKind kind, bool is_null, bool boolean_value,
-	              std::int64_t bigint_value, std::string varchar_value, double double_value);
+	              std::int64_t bigint_value, std::string varchar_value, double double_value,
+	              std::int64_t timestamptz_microseconds = 0);
 
 	std::string identifier;
 	ExplicitInputValueKind kind;
@@ -79,6 +82,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 // Query's immutable ordered set of supplied relation arguments. Construction

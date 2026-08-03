@@ -215,7 +215,7 @@ void TestEquivalentInputsCompileToEquivalentOutput(const std::string &repository
 	RequireWellFormedDigest(github_digest, "github-profile");
 	RequireWellFormedDigest(rickandmorty_digest, "rickandmorty-profile");
 	Require(github_digest != rickandmorty_digest, "distinct package envelopes produced an identical package digest");
-	const std::string real_github_digest = "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c";
+	const std::string real_github_digest = "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c";
 	const std::string real_rickandmorty_digest =
 	    "sha256.b04c7488843bc003672445ea10f74461ba915693a51455f899e08bed01cdc301";
 	Require(github_digest != real_github_digest && github_digest != real_rickandmorty_digest &&

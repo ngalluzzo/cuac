@@ -27,7 +27,9 @@ pre-1.0 policy and API coverage corpus are defined by
 classified as included there remains absent until every permanent transition
 and its deterministic evidence are implemented together. Typed structural
 REST paths completed that transition under
-[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md).
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md). Strict native
+`TIMESTAMPTZ` scalars completed the next transition under
+[RFC 0030](rfcs/0030-add-timestamptz-scalars.md).
 
 ## Product surface
 
@@ -192,11 +194,16 @@ named relation arguments into ordered structural inputs:
 
 - absence means omitted;
 - a present SQL NULL remains a typed present NULL; and
-- a present value retains its `BOOLEAN`, `BIGINT`, `VARCHAR`, or `DOUBLE` type.
+- a present value retains its `BOOLEAN`, `BIGINT`, `VARCHAR`, `DOUBLE`, or
+  `TIMESTAMPTZ` type.
 
 Query does not apply defaults or binder-requiredness to relation-origin
 arguments. It synthesizes and validates the separate logical secret selector
 for authenticated relations, but never resolves the secret during bind.
+For `TIMESTAMPTZ`, Query copies DuckDB's native UTC-microsecond payload directly
+and rejects infinities or instants outside years 0001 through 9999 before
+credential or request work; it never parses text or consults a session
+timezone.
 
 An output column is either one scalar or one flat list of one scalar kind.
 Array metadata keeps outer-column nullability separate from child-element
@@ -234,6 +241,9 @@ typed value bindings plus one immutable rendered-path mirror. Runtime correlates
 each contract slot with its binding before reconstructing the path. The package
 still owns origin, segment count, literal bytes, input positions, scalar kinds,
 and encoding identity; Query and callers never provide a path or template.
+Temporal path and query values retain exact UTC microseconds while both
+Semantics and Runtime independently derive the same canonical six-fraction UTC
+text required by RFC 0030.
 
 For a GraphQL operation, Semantics does not accept Connector's
 rendered document or recipe type as execution authority. It deep-copies every

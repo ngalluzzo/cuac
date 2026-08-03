@@ -1,0 +1,107 @@
+{
+  "schema": "cuac/timestamptz-contract-v1",
+  "rfc": "0030",
+  "status": "accepted",
+  "source": {
+    "accepted_specification": "cuac/v1",
+    "type_token": "TIMESTAMPTZ",
+    "concrete_yaml_style": "double_quoted_string",
+    "scalar_locations": [
+      "column",
+      "array_element",
+      "relation_input",
+      "input_default",
+      "predicate_literal",
+      "rest_fixed_query",
+      "rest_input_query",
+      "rest_structural_path"
+    ]
+  },
+  "instant": {
+    "unit": "utc_microseconds_since_unix_epoch",
+    "minimum_microseconds": -62135596800000000,
+    "maximum_microseconds": 253402300799999999,
+    "minimum_canonical": "0001-01-01T00:00:00.000000Z",
+    "maximum_canonical": "9999-12-31T23:59:59.999999Z",
+    "calendar": "proleptic_gregorian",
+    "machine_timezone": false,
+    "locale": false
+  },
+  "text": {
+    "accepted_grammar": "YYYY-MM-DDTHH:MM:SS[.1-6DIGIT](Z|+HH:MM|-HH:MM)",
+    "canonical_grammar": "YYYY-MM-DDTHH:MM:SS.ffffffZ",
+    "offset_maximum": "14:00",
+    "unknown_negative_zero_offset": "reject",
+    "leap_seconds": "reject",
+    "excess_fraction": "reject_without_rounding",
+    "timezone_free": "reject",
+    "numeric_epoch": "reject",
+    "whitespace": "reject",
+    "case": "uppercase_T_and_Z"
+  },
+  "duckdb": {
+    "logical_type": "TIMESTAMP WITH TIME ZONE",
+    "physical_value": "timestamp_tz_t_utc_microseconds",
+    "positive_infinity": "reject",
+    "negative_infinity": "reject",
+    "varchar_fallback": false,
+    "timezone_free_timestamp_fallback": false
+  },
+  "protocols": {
+    "rest_request": "canonical_utc_text_then_declared_encoding",
+    "rest_response": "strict_json_string",
+    "graphql_generated_response": "strict_json_string",
+    "graphql_caller_variables": "not_added_by_this_rfc",
+    "flat_array_elements": "same_strict_profile"
+  },
+  "authority": {
+    "compiled_paths": 1,
+    "planning_paths": 1,
+    "runtime_paths": 1,
+    "parallel_legacy_paths": false,
+    "best_effort_parsing": false,
+    "numeric_epoch_inference": false
+  },
+  "valid_vectors": [
+    {"text": "1970-01-01T00:00:00Z", "microseconds": 0, "canonical": "1970-01-01T00:00:00.000000Z"},
+    {"text": "1970-01-01T00:00:00.1Z", "microseconds": 100000, "canonical": "1970-01-01T00:00:00.100000Z"},
+    {"text": "1970-01-01T00:00:00.12Z", "microseconds": 120000, "canonical": "1970-01-01T00:00:00.120000Z"},
+    {"text": "1970-01-01T00:00:00.123Z", "microseconds": 123000, "canonical": "1970-01-01T00:00:00.123000Z"},
+    {"text": "1970-01-01T00:00:00.1234Z", "microseconds": 123400, "canonical": "1970-01-01T00:00:00.123400Z"},
+    {"text": "1970-01-01T00:00:00.12345Z", "microseconds": 123450, "canonical": "1970-01-01T00:00:00.123450Z"},
+    {"text": "2000-02-29T12:34:56.123456Z", "microseconds": 951827696123456, "canonical": "2000-02-29T12:34:56.123456Z"},
+    {"text": "2026-07-01T01:30:00+01:30", "microseconds": 1782864000000000, "canonical": "2026-07-01T00:00:00.000000Z"},
+    {"text": "2026-06-30T10:00:00-14:00", "microseconds": 1782864000000000, "canonical": "2026-07-01T00:00:00.000000Z"},
+    {"text": "0001-01-01T00:00:00.000000Z", "microseconds": -62135596800000000, "canonical": "0001-01-01T00:00:00.000000Z"},
+    {"text": "9999-12-31T23:59:59.999999Z", "microseconds": 253402300799999999, "canonical": "9999-12-31T23:59:59.999999Z"}
+  ],
+  "invalid_vectors": [
+    "1970-01-01 00:00:00Z",
+    "1970-01-01t00:00:00z",
+    "1970-01-01T00:00:00",
+    "1970-01-01T00:00:00-00:00",
+    "1970-01-01T00:00:00+14:01",
+    "1970-01-01T00:00:00+15:00",
+    "1970-01-01T00:00:60Z",
+    "2001-02-29T00:00:00Z",
+    "1970-01-01T00:00:00.1234567Z",
+    "1970-01-01T00:00:00.Z",
+    " 1970-01-01T00:00:00Z",
+    "0",
+    "infinity"
+  ],
+  "evidence_layers": [
+    "source_schema",
+    "diagnostics",
+    "compiled_facts",
+    "planning",
+    "execution",
+    "fixtures",
+    "compatibility",
+    "independent_author"
+  ],
+  "providers": [
+    {"id": "github_viewer_repository_metrics", "provider": "GitHub", "ownership": "repository"},
+    {"id": "gitlab_project_issue_timestamps", "provider": "GitLab", "ownership": "independent_fixture"}
+  ]
+}

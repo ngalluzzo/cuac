@@ -98,6 +98,7 @@ bool IsPackageRestPath(const CompiledRestRequest &request) {
 		case CompiledScalarType::BIGINT:
 		case CompiledScalarType::VARCHAR:
 		case CompiledScalarType::DOUBLE:
+		case CompiledScalarType::TIMESTAMPTZ:
 			break;
 		default:
 			return false;

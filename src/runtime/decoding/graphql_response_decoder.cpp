@@ -1,5 +1,6 @@
 #include "cuac/internal/runtime/decoding/graphql_response_decoder.hpp"
 #include "cuac/internal/runtime/decoding/strict_json_reader.hpp"
+#include "cuac/internal/runtime/decoding/timestamptz_codec.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -65,7 +66,9 @@ public:
 
 private:
 	struct Slot {
-		Slot() : seen(false), valid(true), bigint_value(0), boolean_value(false), double_value(0.0) {
+		Slot()
+		    : seen(false), valid(true), bigint_value(0), boolean_value(false), double_value(0.0),
+		      timestamptz_microseconds(0) {
 		}
 		bool seen;
 		bool valid;
@@ -73,6 +76,7 @@ private:
 		std::string varchar_value;
 		bool boolean_value;
 		double double_value;
+		std::int64_t timestamptz_microseconds;
 		std::vector<TypedScalarValue> elements;
 	};
 
@@ -94,6 +98,7 @@ private:
 			case ValueKind::VARCHAR:
 			case ValueKind::BOOLEAN:
 			case ValueKind::DOUBLE:
+			case ValueKind::TIMESTAMPTZ:
 				break;
 			default:
 				throw ExecutionError(ErrorStage::INTERNAL, "", "GraphQL decoder received an invalid profile");
@@ -326,6 +331,21 @@ private:
 		                   this);
 	}
 
+	std::int64_t ParseTimestamptz(const std::string &field) {
+		auto text = ParseBoundedString(field);
+		std::int64_t result = 0;
+		if (!runtime_timestamptz::Parse(text, result)) {
+			throw ExecutionError(ErrorStage::SCHEMA, field,
+			                     "GraphQL response field is not a supported TIMESTAMPTZ instant");
+		}
+		const auto capacity = static_cast<std::uint64_t>(text.capacity());
+		if (capacity > pending_string_memory) {
+			throw ExecutionError(ErrorStage::INTERNAL, "", "GraphQL timestamp memory accounting failed");
+		}
+		pending_string_memory -= capacity;
+		return result;
+	}
+
 	int64_t ParseBigInt(const std::string &field) {
 		SkipWhitespace();
 		if (Peek() != '-' && (Peek() < '0' || Peek() > '9')) {
@@ -390,6 +410,8 @@ private:
 			return TypedScalarValue::Boolean(ParseBoolean(column.name));
 		case ValueKind::DOUBLE:
 			return TypedScalarValue::Double(ParseDouble(column.name));
+		case ValueKind::TIMESTAMPTZ:
+			return TypedScalarValue::Timestamptz(ParseTimestamptz(column.name));
 		}
 		throw ExecutionError(ErrorStage::INTERNAL, "", "GraphQL decoder received an invalid array element type");
 	}
@@ -525,6 +547,9 @@ private:
 							case ValueKind::DOUBLE:
 								slot.double_value = ParseDouble(column.name);
 								break;
+							case ValueKind::TIMESTAMPTZ:
+								slot.timestamptz_microseconds = ParseTimestamptz(column.name);
+								break;
 							}
 						}
 					}
@@ -651,6 +676,8 @@ private:
 				row.values.push_back(TypedValue::BigInt(slot.bigint_value));
 			} else if (column.type.element_kind == ValueKind::DOUBLE) {
 				row.values.push_back(TypedValue::Double(slot.double_value));
+			} else if (column.type.element_kind == ValueKind::TIMESTAMPTZ) {
+				row.values.push_back(TypedValue::Timestamptz(slot.timestamptz_microseconds));
 			} else {
 				row.values.push_back(TypedValue::Boolean(slot.boolean_value));
 			}

@@ -41,13 +41,14 @@ public:
 	std::int64_t Bigint() const;
 	const std::string &Varchar() const;
 	double Double() const;
+	std::int64_t TimestamptzMicroseconds() const;
 
 private:
 	friend class internal::CompiledModelBuilder;
 	friend class CompiledPredicateMapping;
 
 	CompiledScalarValue(CompiledScalarType type, bool is_null, bool boolean_value, std::int64_t bigint_value,
-	                    std::string varchar_value, double double_value);
+	                    std::string varchar_value, double double_value, std::int64_t timestamptz_microseconds = 0);
 
 	CompiledScalarType type;
 	bool is_null;
@@ -55,6 +56,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 // Default presence is structural. HasDefault() false never aliases a present

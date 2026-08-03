@@ -41,6 +41,8 @@ const char *SupportedScalarTypeName(CompiledScalarType type) {
 		return "VARCHAR";
 	case CompiledScalarType::DOUBLE:
 		return "DOUBLE";
+	case CompiledScalarType::TIMESTAMPTZ:
+		return "TIMESTAMPTZ";
 	}
 	return nullptr;
 }

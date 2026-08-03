@@ -21,7 +21,7 @@ class ResolvedRelationInput {
 public:
 	ResolvedRelationInput(std::string name, CompiledScalarType type, ResolvedInputState state,
 	                      ResolvedInputSource source, bool boolean_value, std::int64_t bigint_value,
-	                      std::string varchar_value, double double_value);
+	                      std::string varchar_value, double double_value, std::int64_t timestamptz_microseconds = 0);
 	ResolvedRelationInput(const ResolvedRelationInput &) = default;
 	ResolvedRelationInput(ResolvedRelationInput &&) = default;
 	ResolvedRelationInput &operator=(const ResolvedRelationInput &) = delete;
@@ -35,6 +35,7 @@ public:
 	std::int64_t BigintValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 
 private:
 	std::string name;
@@ -45,6 +46,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 // Immutable exact-identifier lookup over all declared relation inputs. The

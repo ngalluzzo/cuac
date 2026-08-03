@@ -1,6 +1,7 @@
 #include "cuac/internal/semantics/planner/scan_plan_builder.hpp"
 
 #include "cuac/internal/semantics/planner/scan_planner.hpp"
+#include "cuac/internal/semantics/timestamptz.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -20,6 +21,8 @@ PlannedRestScalarKind PlanScalarKind(CompiledScalarType type) {
 		return PlannedRestScalarKind::VARCHAR;
 	case CompiledScalarType::DOUBLE:
 		return PlannedRestScalarKind::DOUBLE;
+	case CompiledScalarType::TIMESTAMPTZ:
+		return PlannedRestScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled REST scalar has an unknown type");
 }
@@ -174,7 +177,8 @@ std::string EncodeCanonicalDouble(double value) {
 }
 
 std::string Encode(PlannedRestScalarKind kind, bool boolean_value, std::int64_t bigint_value,
-                   const std::string &varchar_value, double double_value, PlannedRestQueryEncoding encoding) {
+                   const std::string &varchar_value, double double_value, std::int64_t timestamptz_microseconds,
+                   PlannedRestQueryEncoding encoding) {
 	if (encoding != PlannedRestQueryEncoding::FORM_URLENCODED) {
 		throw std::logic_error("planned REST query field has an unknown encoding");
 	}
@@ -187,6 +191,8 @@ std::string Encode(PlannedRestScalarKind kind, bool boolean_value, std::int64_t 
 		return FormUrlEncode(varchar_value);
 	case PlannedRestScalarKind::DOUBLE:
 		return EncodeCanonicalDouble(double_value);
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		return FormUrlEncode(semantics_internal::CanonicalTimestamptz(timestamptz_microseconds));
 	}
 	throw std::logic_error("planned REST query field has an unknown scalar kind");
 }
@@ -197,6 +203,7 @@ struct PlannedScalar {
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 std::string CanonicalPathValue(const PlannedScalar &value) {
@@ -212,6 +219,8 @@ std::string CanonicalPathValue(const PlannedScalar &value) {
 			throw std::invalid_argument("REST structural path DOUBLE must be finite");
 		}
 		return EncodeCanonicalDouble(value.double_value);
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		return semantics_internal::CanonicalTimestamptz(value.timestamptz_microseconds);
 	}
 	throw std::logic_error("planned REST path input has an unknown scalar kind");
 }
@@ -222,13 +231,15 @@ PlannedScalar PlanScalar(const CompiledScalarValue &value) {
 	}
 	switch (value.Type()) {
 	case CompiledScalarType::BOOLEAN:
-		return {PlannedRestScalarKind::BOOLEAN, value.Boolean(), 0, std::string(), 0.0};
+		return {PlannedRestScalarKind::BOOLEAN, value.Boolean(), 0, std::string(), 0.0, 0};
 	case CompiledScalarType::BIGINT:
-		return {PlannedRestScalarKind::BIGINT, false, value.Bigint(), std::string(), 0.0};
+		return {PlannedRestScalarKind::BIGINT, false, value.Bigint(), std::string(), 0.0, 0};
 	case CompiledScalarType::VARCHAR:
-		return {PlannedRestScalarKind::VARCHAR, false, 0, value.Varchar(), 0.0};
+		return {PlannedRestScalarKind::VARCHAR, false, 0, value.Varchar(), 0.0, 0};
 	case CompiledScalarType::DOUBLE:
-		return {PlannedRestScalarKind::DOUBLE, false, 0, std::string(), value.Double()};
+		return {PlannedRestScalarKind::DOUBLE, false, 0, std::string(), value.Double(), 0};
+	case CompiledScalarType::TIMESTAMPTZ:
+		return {PlannedRestScalarKind::TIMESTAMPTZ, false, 0, std::string(), 0.0, value.TimestamptzMicroseconds()};
 	}
 	throw std::logic_error("compiled REST query field contains an unknown scalar type");
 }
@@ -239,13 +250,15 @@ PlannedScalar PlanScalar(const input_resolution::ResolvedRelationInput &value) {
 	}
 	switch (value.Type()) {
 	case CompiledScalarType::BOOLEAN:
-		return {PlannedRestScalarKind::BOOLEAN, value.BooleanValue(), 0, std::string(), 0.0};
+		return {PlannedRestScalarKind::BOOLEAN, value.BooleanValue(), 0, std::string(), 0.0, 0};
 	case CompiledScalarType::BIGINT:
-		return {PlannedRestScalarKind::BIGINT, false, value.BigintValue(), std::string(), 0.0};
+		return {PlannedRestScalarKind::BIGINT, false, value.BigintValue(), std::string(), 0.0, 0};
 	case CompiledScalarType::VARCHAR:
-		return {PlannedRestScalarKind::VARCHAR, false, 0, value.VarcharValue(), 0.0};
+		return {PlannedRestScalarKind::VARCHAR, false, 0, value.VarcharValue(), 0.0, 0};
 	case CompiledScalarType::DOUBLE:
-		return {PlannedRestScalarKind::DOUBLE, false, 0, std::string(), value.DoubleValue()};
+		return {PlannedRestScalarKind::DOUBLE, false, 0, std::string(), value.DoubleValue(), 0};
+	case CompiledScalarType::TIMESTAMPTZ:
+		return {PlannedRestScalarKind::TIMESTAMPTZ, false, 0, std::string(), 0.0, value.TimestamptzMicroseconds()};
 	}
 	throw std::logic_error("resolved REST relation input contains an unknown scalar type");
 }
@@ -254,7 +267,8 @@ PlannedScalar PlanScalar(const predicate_classifier::TypedEqualityDecision &valu
 	if (!value.present) {
 		throw std::logic_error("absent conditional equality reached concrete request materialization");
 	}
-	return {value.kind, value.boolean_value, value.bigint_value, value.varchar_value, value.double_value};
+	return {value.kind,          value.boolean_value, value.bigint_value,
+	        value.varchar_value, value.double_value,  value.timestamptz_microseconds};
 }
 
 } // namespace
@@ -304,7 +318,7 @@ ScanPlanBuilder::BuildRestOperation(const CompiledRelation &relation, const Comp
 		path_bindings.push_back(PlannedRestPathSegment(
 		    PlannedRestPathSegmentSource::RELATION_INPUT, segment.value, scalar.kind, scalar.boolean_value,
 		    scalar.bigint_value, std::move(scalar.varchar_value), scalar.double_value,
-		    PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED, encoded));
+		    PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED, encoded, scalar.timestamptz_microseconds));
 	}
 	if (path.empty()) {
 		path = "/";
@@ -345,7 +359,7 @@ ScanPlanBuilder::BuildRestOperation(const CompiledRelation &relation, const Comp
 	planned.query_bindings.reserve(rest.request.query_parameters.size());
 	for (const auto &query : rest.request.query_parameters) {
 		const auto encoding = PlanQueryEncoding(query.encoding);
-		PlannedScalar scalar {PlannedRestScalarKind::VARCHAR, false, 0, std::string(), 0.0};
+		PlannedScalar scalar {PlannedRestScalarKind::VARCHAR, false, 0, std::string(), 0.0, 0};
 		std::string encoded_value;
 		switch (query.source) {
 		case CompiledQueryValueSource::FIXED:
@@ -376,7 +390,7 @@ ScanPlanBuilder::BuildRestOperation(const CompiledRelation &relation, const Comp
 			}
 			scalar = PlanScalar(*input);
 			encoded_value = Encode(scalar.kind, scalar.boolean_value, scalar.bigint_value, scalar.varchar_value,
-			                       scalar.double_value, encoding);
+			                       scalar.double_value, scalar.timestamptz_microseconds, encoding);
 			break;
 		}
 		case CompiledQueryValueSource::CONDITIONAL_INPUT:
@@ -392,15 +406,15 @@ ScanPlanBuilder::BuildRestOperation(const CompiledRelation &relation, const Comp
 			}
 			scalar = PlanScalar(predicate_decision.typed_equality);
 			encoded_value = Encode(scalar.kind, scalar.boolean_value, scalar.bigint_value, scalar.varchar_value,
-			                       scalar.double_value, encoding);
+			                       scalar.double_value, scalar.timestamptz_microseconds, encoding);
 			break;
 		default:
 			throw std::logic_error("compiled REST query field has an unknown source");
 		}
-		planned.query_bindings.push_back(
-		    PlannedRestQueryBinding(query.name, PlanQuerySource(query.source), query.source_id, scalar.kind,
-		                            scalar.boolean_value, scalar.bigint_value, std::move(scalar.varchar_value),
-		                            scalar.double_value, encoding, std::move(encoded_value)));
+		planned.query_bindings.push_back(PlannedRestQueryBinding(
+		    query.name, PlanQuerySource(query.source), query.source_id, scalar.kind, scalar.boolean_value,
+		    scalar.bigint_value, std::move(scalar.varchar_value), scalar.double_value, encoding,
+		    std::move(encoded_value), scalar.timestamptz_microseconds));
 	}
 	std::size_t target_bytes = planned.path.size();
 	for (const auto &binding : planned.query_bindings) {

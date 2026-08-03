@@ -109,6 +109,7 @@ struct QueryFieldDeclaration {
 	QueryFieldKind kind;
 	LocatedText name;
 	LocatedText source;
+	LocatedText literal_type;
 	LocatedText encoding;
 	SourceMark mark;
 };

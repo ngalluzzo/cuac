@@ -114,8 +114,66 @@ void TestEightColumnsAndNullableLanguage() {
 	Require(decoded.rows[0].values[3].bigint_value == 7 && decoded.rows[0].values[4].valid &&
 	            decoded.rows[0].values[4].varchar_value == "\xF0\x9F\x98\x80" &&
 	            decoded.rows[0].values[4].varchar_value.size() == 4 && !decoded.rows[1].values[4].valid &&
-	            decoded.rows[1].values[4].kind == cuac::ValueKind::VARCHAR,
+	            decoded.rows[1].values[4].kind == cuac::ValueKind::VARCHAR &&
+	            decoded.rows[0].values[7].kind == cuac::ValueKind::TIMESTAMPTZ &&
+	            decoded.rows[0].values[7].timestamptz_microseconds == INT64_C(1767225600000000) &&
+	            decoded.rows[1].values[7].timestamptz_microseconds == INT64_C(1769904000000000),
 	        "decoder must preserve strict scalars and nullable language");
+}
+
+void TestTimestamptzStrictProfile() {
+	auto profile = Profile();
+	NeverCancelled control;
+	const std::vector<std::pair<std::string, std::int64_t>> valid = {
+	    {"1970-01-01T00:00:00Z", 0},
+	    {"1970-01-01T00:00:00.1Z", 100000},
+	    {"1970-01-01T00:00:00.12Z", 120000},
+	    {"1970-01-01T00:00:00.123Z", 123000},
+	    {"1970-01-01T00:00:00.1234Z", 123400},
+	    {"1970-01-01T00:00:00.12345Z", 123450},
+	    {"2000-02-29T12:34:56.123456Z", INT64_C(951827696123456)},
+	    {"2026-07-01T01:30:00+01:30", INT64_C(1782864000000000)},
+	    {"2026-06-30T10:00:00-14:00", INT64_C(1782864000000000)},
+	    {"0001-01-01T00:00:00.000000Z", -INT64_C(62135596800000000)},
+	    {"9999-12-31T23:59:59.999999Z", INT64_C(253402300799999999)},
+	};
+	for (const auto &entry : valid) {
+		auto node = Node("timestamp");
+		const auto begin = node.find("2026-01-01T00:00:00Z");
+		Require(begin != std::string::npos, "GraphQL TIMESTAMPTZ valid fixture drifted");
+		node.replace(begin, 20, entry.first);
+		const auto decoded = cuac::internal::DecodeGraphqlResponse(Envelope(node), *profile, Limits(), control);
+		Require(decoded.rows.size() == 1 && decoded.rows[0].values[7].kind == cuac::ValueKind::TIMESTAMPTZ &&
+		            decoded.rows[0].values[7].timestamptz_microseconds == entry.second,
+		        "GraphQL TIMESTAMPTZ valid vector changed exact UTC microseconds");
+	}
+	const std::vector<std::string> invalid = {
+	    "1970-01-01 00:00:00Z",
+	    "1970-01-01t00:00:00z",
+	    "1970-01-01T00:00:00",
+	    "1970-01-01T00:00:00-00:00",
+	    "1970-01-01T00:00:00+14:01",
+	    "1970-01-01T00:00:00+15:00",
+	    "1970-01-01T00:00:60Z",
+	    "2001-02-29T00:00:00Z",
+	    "1970-01-01T00:00:00.1234567Z",
+	    "1970-01-01T00:00:00.Z",
+	    " 1970-01-01T00:00:00Z",
+	    "0",
+	    "infinity",
+	};
+	for (const auto &spelling : invalid) {
+		auto node = Node("timestamp");
+		const auto begin = node.find("2026-01-01T00:00:00Z");
+		Require(begin != std::string::npos, "GraphQL TIMESTAMPTZ invalid fixture drifted");
+		node.replace(begin, 20, spelling);
+		RequireFailure(Envelope(node), cuac::ErrorStage::SCHEMA, "updated_at");
+	}
+	auto numeric = Node("timestamp");
+	const auto numeric_begin = numeric.find("\"2026-01-01T00:00:00Z\"");
+	Require(numeric_begin != std::string::npos, "GraphQL numeric-epoch fixture drifted");
+	numeric.replace(numeric_begin, 22, "0");
+	RequireFailure(Envelope(numeric), cuac::ErrorStage::SCHEMA, "updated_at");
 }
 
 void TestErrorsPrecedeDataWithoutLeakingRemoteValues() {
@@ -166,7 +224,7 @@ void TestRequiredNestedFieldFailsClosed() {
 	NeverCancelled control;
 	const std::string body = "{\"data\":{\"viewer\":{\"repositories\":{\"nodes\":[{\"id\":\"R\","
 	                         "\"nameWithOwner\":\"o/r\",\"owner\":{},\"stargazerCount\":1,\"primaryLanguage\":null,"
-	                         "\"isPrivate\":false,\"isArchived\":false,\"updatedAt\":\"now\"}],"
+	                         "\"isPrivate\":false,\"isArchived\":false,\"updatedAt\":\"2026-01-01T00:00:00Z\"}],"
 	                         "\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":null}}}}}";
 	try {
 		(void)cuac::internal::DecodeGraphqlResponse(body, *profile, Limits(), control);
@@ -304,15 +362,15 @@ void TestGraphqlScalarArrays() {
 	     "id"},
 	    {"{\"id\":[\"R\",7],\"nameWithOwner\":\"o/r\",\"owner\":{\"login\":\"o\"},"
 	     "\"stargazerCount\":[],\"primaryLanguage\":null,\"isPrivate\":[],\"isArchived\":false,"
-	     "\"updatedAt\":\"now\"}",
+	     "\"updatedAt\":\"2026-01-01T00:00:00Z\"}",
 	     "id"},
 	    {"{\"id\":[[\"R\"]],\"nameWithOwner\":\"o/r\",\"owner\":{\"login\":\"o\"},"
 	     "\"stargazerCount\":[],\"primaryLanguage\":null,\"isPrivate\":[],\"isArchived\":false,"
-	     "\"updatedAt\":\"now\"}",
+	     "\"updatedAt\":\"2026-01-01T00:00:00Z\"}",
 	     "id"},
 	    {"{\"id\":[null],\"nameWithOwner\":\"o/r\",\"owner\":{\"login\":\"o\"},"
 	     "\"stargazerCount\":[],\"primaryLanguage\":null,\"isPrivate\":[],\"isArchived\":false,"
-	     "\"updatedAt\":\"now\"}",
+	     "\"updatedAt\":\"2026-01-01T00:00:00Z\"}",
 	     "id"}};
 	for (const auto &failure : failures) {
 		try {
@@ -363,13 +421,11 @@ void TestGraphqlArrayReplacementUsesIndependentPeakOracle() {
 	const auto previous_array_bytes = static_cast<uint64_t>(previous_element_capacity) * sizeof(cuac::TypedScalarValue);
 	Require(previous_array_bytes > value_storage,
 	        "GraphQL ARRAY oracle must make replacement co-liveness the unique peak");
-	// updatedAt is decoded after isPrivate, so its retained VARCHAR buffer is
-	// not live at the final isPrivate element-buffer replacement.
-	const auto later_string_storage = static_cast<uint64_t>(decoded.rows[0].values[7].varchar_value.capacity());
-	Require(previous_array_bytes > value_storage + later_string_storage,
-	        "GraphQL ARRAY oracle must dominate later retained string storage");
-	const auto expected_peak =
-	    decoded.retained_memory_bytes + staging_overhead + previous_array_bytes - value_storage - later_string_storage;
+	// updatedAt is a fixed-width TIMESTAMPTZ, so no later retained string
+	// allocation is live at the final isPrivate element-buffer replacement.
+	Require(previous_array_bytes > value_storage,
+	        "GraphQL ARRAY oracle must dominate the typed-row replacement storage");
+	const auto expected_peak = decoded.retained_memory_bytes + staging_overhead + previous_array_bytes - value_storage;
 	Require(decoded.peak_memory_bytes == expected_peak,
 	        "GraphQL ARRAY peak must include current and replacement element buffers");
 	auto exact_limits = Limits();
@@ -391,6 +447,7 @@ void TestGraphqlArrayReplacementUsesIndependentPeakOracle() {
 int main() {
 	try {
 		TestEightColumnsAndNullableLanguage();
+		TestTimestamptzStrictProfile();
 		TestErrorsPrecedeDataWithoutLeakingRemoteValues();
 		TestMalformedDocumentPrecedesRemoteProtocol();
 		TestRequiredNestedFieldFailsClosed();

@@ -53,6 +53,8 @@ cuac::PlannedColumnScalarKind PlannedKindForCompiled(cuac::CompiledScalarType ty
 		return cuac::PlannedColumnScalarKind::VARCHAR;
 	case cuac::CompiledScalarType::DOUBLE:
 		return cuac::PlannedColumnScalarKind::DOUBLE;
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return cuac::PlannedColumnScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled column has an unknown scalar type");
 }

@@ -26,6 +26,8 @@ PlannedColumnScalarKind PlanColumnKind(CompiledScalarType type) {
 		return PlannedColumnScalarKind::VARCHAR;
 	case CompiledScalarType::DOUBLE:
 		return PlannedColumnScalarKind::DOUBLE;
+	case CompiledScalarType::TIMESTAMPTZ:
+		return PlannedColumnScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled output column contains an unknown element type");
 }
@@ -286,7 +288,8 @@ ScanPlan ScanPlanBuilder::Build(const CompiledConnector &connector, const ScanRe
 		result.typed_equality = std::shared_ptr<const PlannedEqualityPredicate>(new PlannedEqualityPredicate(
 		    equality.column_name, PlannedPredicateOperator::EQUALS, equality.kind, equality.boolean_value,
 		    equality.bigint_value, equality.varchar_value, equality.double_value, equality.conditional_input_id,
-		    equality.proof_identity, equality.base_domain_identity, equality.occurrence_preservation));
+		    equality.proof_identity, equality.base_domain_identity, equality.occurrence_preservation,
+		    equality.timestamptz_microseconds));
 	}
 	result.predicate_category = predicate_decision.category;
 	result.predicate_reason = predicate_decision.reason_code;

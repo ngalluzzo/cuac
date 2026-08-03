@@ -5,6 +5,7 @@
 #include "semantics/support/repository_graphql_scan_plan_test_fixtures.hpp"
 #include "support/require.hpp"
 
+#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -123,6 +124,30 @@ void TestTypedStructuralPaths(const std::string &repository_root) {
 	Require(defaulted.Operation().Rest().path == "/typed/false/9/default%20value/2.5" &&
 	            defaulted.Operation().Rest().path_bindings[3].VarcharValue() == "default value",
 	        "omitted structural path input did not resolve its non-NULL typed default");
+
+	const auto timestamps =
+	    PlanStructuralPath(gitlab, "project_issue_timestamps",
+	                       {cuac::ExplicitInput::Timestamptz("updated_after", INT64_C(1782864000000000)),
+	                        cuac::ExplicitInput::Timestamptz("updated_before", INT64_C(1782950400000000))});
+	const auto &timestamp_operation = timestamps.Operation().Rest();
+	Require(timestamp_operation.path == "/issues/2026-07-01T00%3A00%3A00.000000Z" &&
+	            timestamp_operation.path_bindings[1].Kind() == cuac::PlannedRestScalarKind::TIMESTAMPTZ &&
+	            timestamp_operation.path_bindings[1].TimestamptzMicroseconds() == INT64_C(1782864000000000) &&
+	            timestamp_operation.query_bindings.size() == 2 &&
+	            timestamp_operation.query_bindings[0].Kind() == cuac::PlannedRestScalarKind::TIMESTAMPTZ &&
+	            timestamp_operation.query_bindings[0].TimestamptzMicroseconds() == INT64_C(1782950400000000) &&
+	            timestamp_operation.query_bindings[0].EncodedValue() == "2026-07-02T00%3A00%3A00.000000Z" &&
+	            timestamp_operation.query_bindings[1].Kind() == cuac::PlannedRestScalarKind::TIMESTAMPTZ &&
+	            timestamp_operation.query_bindings[1].TimestamptzMicroseconds() == INT64_C(951827696123456) &&
+	            timestamp_operation.query_bindings[1].EncodedValue() == "2000-02-29T12%3A34%3A56.123456Z",
+	        "TIMESTAMPTZ path, query, or fixed values lost exact microseconds or canonical UTC encoding");
+	const auto timestamp_default =
+	    PlanStructuralPath(gitlab, "project_issue_timestamps",
+	                       {cuac::ExplicitInput::Timestamptz("updated_before", INT64_C(1782950400000000))});
+	Require(timestamp_default.Operation().Rest().path == "/issues/2026-07-01T00%3A00%3A00.000000Z" &&
+	            timestamp_default.Operation().Rest().path_bindings[1].TimestamptzMicroseconds() ==
+	                INT64_C(1782864000000000),
+	        "omitted TIMESTAMPTZ input did not resolve its compiled default as the canonical instant");
 
 	const std::vector<std::string> rejected = {"",
 	                                           ".",

@@ -414,4 +414,6 @@ additively before 1.0, driven by the checked-in coverage corpus and vertical
 evidence contract. This RFC chooses direction and migration policy. Individual
 classifications become product syntax only through a later accepted vertical
 RFC; typed structural REST path segments were subsequently delivered by
-[RFC 0029](0029-add-typed-structural-rest-path-segments.md).
+[RFC 0029](0029-add-typed-structural-rest-path-segments.md), and strict native
+`TIMESTAMPTZ` scalars were subsequently delivered by
+[RFC 0030](0030-add-timestamptz-scalars.md).

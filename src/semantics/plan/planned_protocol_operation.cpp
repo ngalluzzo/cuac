@@ -1,5 +1,7 @@
 #include "cuac/semantics/planned_protocol_operation.hpp"
 
+#include "cuac/internal/semantics/timestamptz.hpp"
+
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -157,7 +159,8 @@ std::string PercentEncodePathSegment(const std::string &value) {
 }
 
 std::string CanonicalPathValue(PlannedRestScalarKind kind, bool boolean_value, std::int64_t bigint_value,
-                               const std::string &varchar_value, double double_value) {
+                               const std::string &varchar_value, double double_value,
+                               std::int64_t timestamptz_microseconds) {
 	std::string result;
 	switch (kind) {
 	case PlannedRestScalarKind::BOOLEAN:
@@ -174,6 +177,9 @@ std::string CanonicalPathValue(PlannedRestScalarKind kind, bool boolean_value, s
 			throw std::invalid_argument("planned REST path DOUBLE must be finite");
 		}
 		result = EncodeCanonicalDouble(double_value);
+		break;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		result = semantics_internal::CanonicalTimestamptz(timestamptz_microseconds);
 		break;
 	default:
 		throw std::invalid_argument("planned REST path input has an unknown scalar kind");
@@ -206,6 +212,7 @@ PlannedRestPathContractSegment::PlannedRestPathContractSegment(PlannedRestPathSe
 	case PlannedRestScalarKind::BIGINT:
 	case PlannedRestScalarKind::VARCHAR:
 	case PlannedRestScalarKind::DOUBLE:
+	case PlannedRestScalarKind::TIMESTAMPTZ:
 		return;
 	}
 	throw std::invalid_argument("planned REST input path contract has an unknown scalar kind");
@@ -235,29 +242,36 @@ PlannedRestPathSegment::PlannedRestPathSegment(PlannedRestPathSegmentSource sour
                                                PlannedRestScalarKind kind_p, bool boolean_value_p,
                                                std::int64_t bigint_value_p, std::string varchar_value_p,
                                                double double_value_p, PlannedRestPathSegmentEncoding encoding_p,
-                                               std::string encoded_value_p)
+                                               std::string encoded_value_p, std::int64_t timestamptz_microseconds_p)
     : source(source_p), source_id(std::move(source_id_p)), kind(kind_p), boolean_value(boolean_value_p),
       bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)), double_value(double_value_p),
-      encoding(encoding_p), encoded_value(std::move(encoded_value_p)) {
+      timestamptz_microseconds(timestamptz_microseconds_p), encoding(encoding_p),
+      encoded_value(std::move(encoded_value_p)) {
 	switch (kind) {
 	case PlannedRestScalarKind::BOOLEAN:
-		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0) {
+		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("BOOLEAN REST path binding carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::BIGINT:
-		if (boolean_value || !varchar_value.empty() || double_value != 0.0) {
+		if (boolean_value || !varchar_value.empty() || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("BIGINT REST path binding carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::VARCHAR:
-		if (boolean_value || bigint_value != 0 || double_value != 0.0) {
+		if (boolean_value || bigint_value != 0 || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("VARCHAR REST path binding carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::DOUBLE:
-		if (boolean_value || bigint_value != 0 || !varchar_value.empty()) {
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("DOUBLE REST path binding carries a noncanonical inactive payload");
+		}
+		break;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 ||
+		    !semantics_internal::IsTimestamptzMicroseconds(timestamptz_microseconds)) {
+			throw std::invalid_argument("TIMESTAMPTZ REST path binding carries an invalid payload");
 		}
 		break;
 	default:
@@ -276,7 +290,8 @@ PlannedRestPathSegment::PlannedRestPathSegment(PlannedRestPathSegmentSource sour
 	    encoding != PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED) {
 		throw std::invalid_argument("planned REST input path segment has invalid provenance or encoding");
 	}
-	const auto decoded = CanonicalPathValue(kind, boolean_value, bigint_value, varchar_value, double_value);
+	const auto decoded =
+	    CanonicalPathValue(kind, boolean_value, bigint_value, varchar_value, double_value, timestamptz_microseconds);
 	if (encoded_value != PercentEncodePathSegment(decoded)) {
 		throw std::invalid_argument("planned REST path binding bytes do not match its decoded typed payload");
 	}
@@ -322,6 +337,13 @@ double PlannedRestPathSegment::DoubleValue() const {
 	return double_value;
 }
 
+std::int64_t PlannedRestPathSegment::TimestamptzMicroseconds() const {
+	if (kind != PlannedRestScalarKind::TIMESTAMPTZ) {
+		throw std::logic_error("planned REST path binding is not a TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
+}
+
 PlannedRestPathSegmentEncoding PlannedRestPathSegment::Encoding() const noexcept {
 	return encoding;
 }
@@ -334,10 +356,12 @@ PlannedRestQueryBinding::PlannedRestQueryBinding(std::string name_p, PlannedRest
                                                  std::string source_id_p, PlannedRestScalarKind kind_p,
                                                  bool boolean_value_p, std::int64_t bigint_value_p,
                                                  std::string varchar_value_p, double double_value_p,
-                                                 PlannedRestQueryEncoding encoding_p, std::string encoded_value_p)
+                                                 PlannedRestQueryEncoding encoding_p, std::string encoded_value_p,
+                                                 std::int64_t timestamptz_microseconds_p)
     : name(std::move(name_p)), source(source_p), source_id(std::move(source_id_p)), kind(kind_p),
       boolean_value(boolean_value_p), bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)),
-      double_value(double_value_p), encoding(encoding_p), encoded_value(std::move(encoded_value_p)) {
+      double_value(double_value_p), timestamptz_microseconds(timestamptz_microseconds_p), encoding(encoding_p),
+      encoded_value(std::move(encoded_value_p)) {
 	if (name.empty()) {
 		throw std::invalid_argument("planned REST query binding name must not be empty");
 	}
@@ -360,24 +384,30 @@ PlannedRestQueryBinding::PlannedRestQueryBinding(std::string name_p, PlannedRest
 	}
 	switch (kind) {
 	case PlannedRestScalarKind::BOOLEAN:
-		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0) {
+		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("BOOLEAN REST query binding carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::BIGINT:
-		if (boolean_value || !varchar_value.empty() || double_value != 0.0) {
+		if (boolean_value || !varchar_value.empty() || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("BIGINT REST query binding carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::VARCHAR:
-		if (boolean_value || bigint_value != 0 || double_value != 0.0) {
+		if (boolean_value || bigint_value != 0 || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("VARCHAR REST query binding carries a noncanonical inactive payload");
 		}
 		ValidateVarchar(varchar_value);
 		break;
 	case PlannedRestScalarKind::DOUBLE:
-		if (boolean_value || bigint_value != 0 || !varchar_value.empty()) {
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("DOUBLE REST query binding carries a noncanonical inactive payload");
+		}
+		break;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 ||
+		    !semantics_internal::IsTimestamptzMicroseconds(timestamptz_microseconds)) {
+			throw std::invalid_argument("TIMESTAMPTZ REST query binding carries an invalid payload");
 		}
 		break;
 	default:
@@ -399,6 +429,9 @@ PlannedRestQueryBinding::PlannedRestQueryBinding(std::string name_p, PlannedRest
 		break;
 	case PlannedRestScalarKind::DOUBLE:
 		expected_encoded_value = EncodeCanonicalDouble(double_value);
+		break;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		expected_encoded_value = FormUrlEncode(semantics_internal::CanonicalTimestamptz(timestamptz_microseconds));
 		break;
 	default:
 		throw std::logic_error("validated REST query binding lost its scalar kind");
@@ -450,6 +483,13 @@ double PlannedRestQueryBinding::DoubleValue() const {
 		throw std::logic_error("planned REST query binding is not a DOUBLE");
 	}
 	return double_value;
+}
+
+std::int64_t PlannedRestQueryBinding::TimestamptzMicroseconds() const {
+	if (kind != PlannedRestScalarKind::TIMESTAMPTZ) {
+		throw std::logic_error("planned REST query binding is not a TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
 }
 
 PlannedRestQueryEncoding PlannedRestQueryBinding::Encoding() const noexcept {

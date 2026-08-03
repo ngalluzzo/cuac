@@ -17,7 +17,9 @@ implementation, its declarations are unknown and fail before planning,
 credential materialization, or network work. Runtime receives no dormant
 profile and there is no compatibility branch for a future declaration. Typed
 structural REST paths are now a complete admitted profile under
-[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md).
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md), and strict
+native `TIMESTAMPTZ` scalars are a complete admitted profile under
+[RFC 0030](rfcs/0030-add-timestamptz-scalars.md).
 
 ## Contract chain
 
@@ -142,7 +144,8 @@ Runtime admission.
 
 ### Structural values
 
-The only v1 scalar kinds are `BOOLEAN`, `BIGINT`, `VARCHAR`, and `DOUBLE`
+The only v1 scalar kinds are `BOOLEAN`, `BIGINT`, `VARCHAR`, `DOUBLE`, and
+`TIMESTAMPTZ`
 (IEEE-754 double precision; encoded canonically as 17 significant decimal
 digits, the smallest fixed precision proven to round-trip any double
 bit-for-bit; `-0.0` normalizes to `0.0` at construction). A typed scalar
@@ -152,6 +155,14 @@ states are distinct:
 - no default;
 - present typed NULL default; and
 - present typed concrete default.
+
+`TIMESTAMPTZ` stores one finite signed UTC-microsecond payload in the inclusive
+range `-62135596800000000` through `253402300799999999`. Source and planned
+values use Connector/Semantics validation and canonical UTC rendering; Runtime
+independently parses untrusted JSON strings and independently reconstructs
+request text. Both enforce RFC 0030's closed grammar, six-fraction canonical
+form, Gregorian and offset laws, and prohibit numeric epochs, best-effort
+parsing, machine timezone use, infinities, and `VARCHAR` fallback.
 
 Columns store scalar-or-array shape, scalar element kind, child nullability,
 outer nullability, and extractor as structural authority. A scalar always has
@@ -227,7 +238,7 @@ ScanRequest
 ├── captured connector and relation identity
 ├── ordered explicit relation inputs
 │   ├── identifier
-│   ├── BOOLEAN | BIGINT | VARCHAR | DOUBLE
+│   ├── BOOLEAN | BIGINT | VARCHAR | DOUBLE | TIMESTAMPTZ
 │   └── present NULL | present value
 ├── full projected-column closure
 ├── bounded requested predicate structure
@@ -769,6 +780,13 @@ batch, lossy integer, non-finite or noncanonical DOUBLE payload, widened
 schema, or late decode failure is terminal. Complete batch alignment itself
 checkpoints cancellation while traversing rows, columns, and list children;
 an untrusted large batch cannot defer cancellation until vector copying.
+
+A non-NULL `TIMESTAMPTZ` response cell must be a strict JSON string. Runtime
+converts it to exact UTC microseconds before retaining the row; every non-NULL
+flat-list child follows the same rule. Query writes scalar and list values only
+to DuckDB `TIMESTAMP WITH TIME ZONE` vectors. Invalid spelling, excess
+precision, out-of-range normalization, numeric JSON, or a typed payload outside
+the admitted instant range is terminal and cannot be exposed as text.
 
 The Query adapter is the only DuckDB vector writer. It computes total list
 child cardinality with checked arithmetic, reserves the DuckDB `ListVector`

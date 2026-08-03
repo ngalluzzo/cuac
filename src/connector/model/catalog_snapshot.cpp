@@ -147,6 +147,9 @@ void AppendScalar(std::ostringstream &result, const CompiledScalarValue &value) 
 	case CompiledScalarType::DOUBLE:
 		result << value.Double();
 		return;
+	case CompiledScalarType::TIMESTAMPTZ:
+		result << CanonicalTimestamptz(value.TimestamptzMicroseconds());
+		return;
 	}
 }
 
