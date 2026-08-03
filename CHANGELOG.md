@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/ngalluzzo/cuac/compare/v0.1.0...v0.2.0) (2026-08-03)
+
+
+### Features
+
+* **rest:** add typed structural path segments ([e0c6113](https://github.com/ngalluzzo/cuac/commit/e0c61132626421aa4b76816508667efd97e38ada))
+* **runtime:** certify bounded resilience behavior ([41c6be4](https://github.com/ngalluzzo/cuac/commit/41c6be409fd51d84d80b7934dd96609bbd92b7b9))
+* **types:** add TIMESTAMPTZ scalar support ([4281344](https://github.com/ngalluzzo/cuac/commit/42813449bd04b70a566992171d84b31c8d01f3eb))
+
+
+### Bug Fixes
+
+* **ci:** preserve executable verification tools ([9c96905](https://github.com/ngalluzzo/cuac/commit/9c96905921ae82e8d04739aa6383b6825cf804a3))
+* **ci:** verify committed source identities ([c9328e0](https://github.com/ngalluzzo/cuac/commit/c9328e0afb1832b8798c83d66e97e8b662dbefa2))
+
+
+### Performance Improvements
+
+* **build:** keep container state on Linux volumes ([fae8d24](https://github.com/ngalluzzo/cuac/commit/fae8d248b01a215b447dda27ab814f551f8e4369))
+
 ## 0.1.0 (2026-08-01)
 
 
