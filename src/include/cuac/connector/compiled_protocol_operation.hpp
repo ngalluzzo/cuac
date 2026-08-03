@@ -18,6 +18,16 @@ class CompiledModelBuilder;
 
 class CompiledConnector;
 class CompiledScalarValue;
+
+// Closed scalar vocabulary shared by package-declared columns, relation
+// inputs, typed defaults, predicates, and structural request bindings.
+// Consumers switch on this enum; they never parse source logical-type strings
+// to recover authority. DOUBLE is IEEE-754 double precision; construction
+// normalizes -0.0 to 0.0 so every consumer sees one canonical zero value.
+enum class CompiledScalarType { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
+
+const char *CompiledScalarTypeName(CompiledScalarType type);
+
 // Source cardinality is a declaration for Relational Semantics to interpret.
 // EXACTLY_ONE_ON_SUCCESS is neither a row estimate nor permission to push a
 // limit; authentication, transport, decode, and schema failures remain errors.
@@ -257,6 +267,8 @@ enum class CompiledUrlScheme { HTTP, HTTPS };
 
 enum class CompiledQueryValueSource { FIXED, RELATION_INPUT, CONDITIONAL_INPUT, PAGE_SIZE, PAGE_NUMBER };
 enum class CompiledQueryEncoding { FORM_URLENCODED };
+enum class CompiledRestPathSegmentSource { LITERAL, RELATION_INPUT };
+enum class CompiledRestPathSegmentEncoding { LITERAL, RFC3986_PERCENT_ENCODED };
 
 // Canonically encodes one concrete typed value under the closed request
 // encoding carried by a compiled query field. NULL is represented by omission
@@ -322,10 +334,28 @@ struct CompiledHttpOrigin {
 	std::uint16_t port;
 };
 
-// Structural REST request metadata. No field can carry a credential value.
+// One complete package-owned path slot. Literal segments retain exact safe
+// bytes. Relation-input segments retain only the declared source identity,
+// scalar type, and closed encoder; caller values enter only during planning.
+struct CompiledRestPathSegment {
+	CompiledRestPathSegmentSource source;
+	std::string value;
+	CompiledScalarType input_type;
+	CompiledRestPathSegmentEncoding encoding;
+};
+
+// Structural REST request metadata. path is a safe source/explanation mirror;
+// path_segments are the sole request-path authority consumed by Semantics.
+// No field can carry a credential value.
 struct CompiledRestRequest {
+	CompiledRestRequest(CompiledHttpOrigin origin, std::string path,
+	                    std::vector<CompiledQueryParameter> query_parameters, std::vector<CompiledHttpHeader> headers);
+	CompiledRestRequest(CompiledHttpOrigin origin, std::string path, std::vector<CompiledRestPathSegment> path_segments,
+	                    std::vector<CompiledQueryParameter> query_parameters, std::vector<CompiledHttpHeader> headers);
+
 	CompiledHttpOrigin origin;
 	std::string path;
+	std::vector<CompiledRestPathSegment> path_segments;
 	std::vector<CompiledQueryParameter> query_parameters;
 	std::vector<CompiledHttpHeader> headers;
 };

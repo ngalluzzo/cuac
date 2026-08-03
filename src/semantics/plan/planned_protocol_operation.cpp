@@ -1,5 +1,6 @@
 #include "cuac/semantics/planned_protocol_operation.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <stdexcept>
 #include <utility>
@@ -99,7 +100,235 @@ std::string EncodeCanonicalDouble(double value) {
 	return std::string(buffer, static_cast<std::size_t>(written));
 }
 
+bool IsIdentifier(const std::string &value) {
+	if (value.empty() || value.size() > 63 || value.front() < 'a' || value.front() > 'z') {
+		return false;
+	}
+	for (const auto character : value) {
+		if (!((character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') || character == '_')) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsUnreserved(unsigned char byte) {
+	return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') ||
+	       byte == '-' || byte == '.' || byte == '_' || byte == '~';
+}
+
+bool IsLiteralPathSegment(const std::string &value) {
+	if (value.empty() || value.size() > 255 || value == "." || value == "..") {
+		return false;
+	}
+	for (const auto character : value) {
+		if (!IsUnreserved(static_cast<unsigned char>(character))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void ValidatePathSegmentValue(const std::string &value) {
+	if (value.empty() || value.size() > 1024 || value == "." || value == "..") {
+		throw std::invalid_argument("planned REST path input is empty, oversized, or a dot segment");
+	}
+	ValidateVarchar(value);
+	if (value.find_first_of("/\\?#%") != std::string::npos) {
+		throw std::invalid_argument("planned REST path input contains structural or escape syntax");
+	}
+}
+
+std::string PercentEncodePathSegment(const std::string &value) {
+	static const char HEX[] = "0123456789ABCDEF";
+	std::string result;
+	result.reserve(value.size());
+	for (const auto character : value) {
+		const auto byte = static_cast<unsigned char>(character);
+		if (IsUnreserved(byte)) {
+			result.push_back(static_cast<char>(byte));
+		} else {
+			result.push_back('%');
+			result.push_back(HEX[(byte >> 4U) & 0x0FU]);
+			result.push_back(HEX[byte & 0x0FU]);
+		}
+	}
+	return result;
+}
+
+std::string CanonicalPathValue(PlannedRestScalarKind kind, bool boolean_value, std::int64_t bigint_value,
+                               const std::string &varchar_value, double double_value) {
+	std::string result;
+	switch (kind) {
+	case PlannedRestScalarKind::BOOLEAN:
+		result = boolean_value ? "true" : "false";
+		break;
+	case PlannedRestScalarKind::BIGINT:
+		result = std::to_string(bigint_value);
+		break;
+	case PlannedRestScalarKind::VARCHAR:
+		result = varchar_value;
+		break;
+	case PlannedRestScalarKind::DOUBLE:
+		if (!std::isfinite(double_value)) {
+			throw std::invalid_argument("planned REST path DOUBLE must be finite");
+		}
+		result = EncodeCanonicalDouble(double_value);
+		break;
+	default:
+		throw std::invalid_argument("planned REST path input has an unknown scalar kind");
+	}
+	ValidatePathSegmentValue(result);
+	return result;
+}
+
 } // namespace
+
+PlannedRestPathContractSegment::PlannedRestPathContractSegment(PlannedRestPathSegmentSource source_p,
+                                                               std::string source_id_p, PlannedRestScalarKind kind_p,
+                                                               PlannedRestPathSegmentEncoding encoding_p,
+                                                               std::string literal_p)
+    : source(source_p), source_id(std::move(source_id_p)), kind(kind_p), encoding(encoding_p),
+      literal(std::move(literal_p)) {
+	if (source == PlannedRestPathSegmentSource::LITERAL) {
+		if (!source_id.empty() || kind != PlannedRestScalarKind::VARCHAR ||
+		    encoding != PlannedRestPathSegmentEncoding::LITERAL || !IsLiteralPathSegment(literal)) {
+			throw std::invalid_argument("planned REST literal path contract is contradictory");
+		}
+		return;
+	}
+	if (source != PlannedRestPathSegmentSource::RELATION_INPUT || !IsIdentifier(source_id) || !literal.empty() ||
+	    encoding != PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED) {
+		throw std::invalid_argument("planned REST input path contract has invalid provenance or encoding");
+	}
+	switch (kind) {
+	case PlannedRestScalarKind::BOOLEAN:
+	case PlannedRestScalarKind::BIGINT:
+	case PlannedRestScalarKind::VARCHAR:
+	case PlannedRestScalarKind::DOUBLE:
+		return;
+	}
+	throw std::invalid_argument("planned REST input path contract has an unknown scalar kind");
+}
+
+PlannedRestPathSegmentSource PlannedRestPathContractSegment::Source() const noexcept {
+	return source;
+}
+
+const std::string &PlannedRestPathContractSegment::SourceId() const noexcept {
+	return source_id;
+}
+
+PlannedRestScalarKind PlannedRestPathContractSegment::Kind() const noexcept {
+	return kind;
+}
+
+PlannedRestPathSegmentEncoding PlannedRestPathContractSegment::Encoding() const noexcept {
+	return encoding;
+}
+
+const std::string &PlannedRestPathContractSegment::Literal() const noexcept {
+	return literal;
+}
+
+PlannedRestPathSegment::PlannedRestPathSegment(PlannedRestPathSegmentSource source_p, std::string source_id_p,
+                                               PlannedRestScalarKind kind_p, bool boolean_value_p,
+                                               std::int64_t bigint_value_p, std::string varchar_value_p,
+                                               double double_value_p, PlannedRestPathSegmentEncoding encoding_p,
+                                               std::string encoded_value_p)
+    : source(source_p), source_id(std::move(source_id_p)), kind(kind_p), boolean_value(boolean_value_p),
+      bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)), double_value(double_value_p),
+      encoding(encoding_p), encoded_value(std::move(encoded_value_p)) {
+	switch (kind) {
+	case PlannedRestScalarKind::BOOLEAN:
+		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0) {
+			throw std::invalid_argument("BOOLEAN REST path binding carries a noncanonical inactive payload");
+		}
+		break;
+	case PlannedRestScalarKind::BIGINT:
+		if (boolean_value || !varchar_value.empty() || double_value != 0.0) {
+			throw std::invalid_argument("BIGINT REST path binding carries a noncanonical inactive payload");
+		}
+		break;
+	case PlannedRestScalarKind::VARCHAR:
+		if (boolean_value || bigint_value != 0 || double_value != 0.0) {
+			throw std::invalid_argument("VARCHAR REST path binding carries a noncanonical inactive payload");
+		}
+		break;
+	case PlannedRestScalarKind::DOUBLE:
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty()) {
+			throw std::invalid_argument("DOUBLE REST path binding carries a noncanonical inactive payload");
+		}
+		break;
+	default:
+		throw std::invalid_argument("planned REST path binding has an unknown scalar kind");
+	}
+
+	if (source == PlannedRestPathSegmentSource::LITERAL) {
+		if (!source_id.empty() || kind != PlannedRestScalarKind::VARCHAR ||
+		    encoding != PlannedRestPathSegmentEncoding::LITERAL || !IsLiteralPathSegment(varchar_value) ||
+		    encoded_value != varchar_value) {
+			throw std::invalid_argument("planned REST literal path segment is contradictory");
+		}
+		return;
+	}
+	if (source != PlannedRestPathSegmentSource::RELATION_INPUT || !IsIdentifier(source_id) ||
+	    encoding != PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED) {
+		throw std::invalid_argument("planned REST input path segment has invalid provenance or encoding");
+	}
+	const auto decoded = CanonicalPathValue(kind, boolean_value, bigint_value, varchar_value, double_value);
+	if (encoded_value != PercentEncodePathSegment(decoded)) {
+		throw std::invalid_argument("planned REST path binding bytes do not match its decoded typed payload");
+	}
+}
+
+PlannedRestPathSegmentSource PlannedRestPathSegment::Source() const noexcept {
+	return source;
+}
+
+const std::string &PlannedRestPathSegment::SourceId() const noexcept {
+	return source_id;
+}
+
+PlannedRestScalarKind PlannedRestPathSegment::Kind() const noexcept {
+	return kind;
+}
+
+bool PlannedRestPathSegment::BooleanValue() const {
+	if (kind != PlannedRestScalarKind::BOOLEAN) {
+		throw std::logic_error("planned REST path binding is not a BOOLEAN");
+	}
+	return boolean_value;
+}
+
+std::int64_t PlannedRestPathSegment::BigintValue() const {
+	if (kind != PlannedRestScalarKind::BIGINT) {
+		throw std::logic_error("planned REST path binding is not a BIGINT");
+	}
+	return bigint_value;
+}
+
+const std::string &PlannedRestPathSegment::VarcharValue() const {
+	if (kind != PlannedRestScalarKind::VARCHAR) {
+		throw std::logic_error("planned REST path binding is not a VARCHAR");
+	}
+	return varchar_value;
+}
+
+double PlannedRestPathSegment::DoubleValue() const {
+	if (kind != PlannedRestScalarKind::DOUBLE) {
+		throw std::logic_error("planned REST path binding is not a DOUBLE");
+	}
+	return double_value;
+}
+
+PlannedRestPathSegmentEncoding PlannedRestPathSegment::Encoding() const noexcept {
+	return encoding;
+}
+
+const std::string &PlannedRestPathSegment::EncodedValue() const noexcept {
+	return encoded_value;
+}
 
 PlannedRestQueryBinding::PlannedRestQueryBinding(std::string name_p, PlannedRestQueryValueSource source_p,
                                                  std::string source_id_p, PlannedRestScalarKind kind_p,
@@ -242,6 +471,39 @@ PlannedRestOperation::PlannedRestOperation(std::string operation_name_p, Planned
                                            std::vector<PlannedRestResultColumn> result_columns_p)
     : operation_name(std::move(operation_name_p)), method(method_p), cardinality(cardinality_p),
       replay_safety(replay_safety_p), origin(std::move(origin_p)), path(std::move(path_p)),
+      query_parameters(std::move(query_parameters_p)), headers(std::move(headers_p)),
+      response_source(response_source_p), records_extractor(std::move(records_extractor_p)),
+      query_bindings(std::move(query_bindings_p)), records_path(std::move(records_path_p)),
+      result_columns(std::move(result_columns_p)) {
+	if (path.empty() || path.front() != '/') {
+		throw std::invalid_argument("planned fixed REST path must be absolute");
+	}
+	std::size_t begin = 1;
+	while (begin < path.size()) {
+		const auto end = path.find('/', begin);
+		const auto segment_end = end == std::string::npos ? path.size() : end;
+		const auto value = path.substr(begin, segment_end - begin);
+		path_bindings.push_back(PlannedRestPathSegment(PlannedRestPathSegmentSource::LITERAL, "",
+		                                               PlannedRestScalarKind::VARCHAR, false, 0, value, 0.0,
+		                                               PlannedRestPathSegmentEncoding::LITERAL, value));
+		path_contract.push_back(PlannedRestPathContractSegment(PlannedRestPathSegmentSource::LITERAL, "",
+		                                                       PlannedRestScalarKind::VARCHAR,
+		                                                       PlannedRestPathSegmentEncoding::LITERAL, value));
+		begin = segment_end + 1;
+	}
+}
+
+PlannedRestOperation::PlannedRestOperation(
+    std::string operation_name_p, PlannedHttpMethod method_p, PlannedCardinality cardinality_p,
+    PlannedReplaySafety replay_safety_p, PlannedHttpOrigin origin_p, std::string path_p,
+    std::vector<PlannedRestPathContractSegment> path_contract_p, std::vector<PlannedRestPathSegment> path_bindings_p,
+    std::vector<PlannedQueryParameter> query_parameters_p, std::vector<PlannedHttpHeader> headers_p,
+    PlannedResponseSource response_source_p, std::string records_extractor_p,
+    std::vector<PlannedRestQueryBinding> query_bindings_p, PlannedRestResponsePath records_path_p,
+    std::vector<PlannedRestResultColumn> result_columns_p)
+    : operation_name(std::move(operation_name_p)), method(method_p), cardinality(cardinality_p),
+      replay_safety(replay_safety_p), origin(std::move(origin_p)), path(std::move(path_p)),
+      path_contract(std::move(path_contract_p)), path_bindings(std::move(path_bindings_p)),
       query_parameters(std::move(query_parameters_p)), headers(std::move(headers_p)),
       response_source(response_source_p), records_extractor(std::move(records_extractor_p)),
       query_bindings(std::move(query_bindings_p)), records_path(std::move(records_path_p)),

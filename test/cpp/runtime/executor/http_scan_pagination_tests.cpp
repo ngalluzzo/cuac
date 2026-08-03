@@ -96,8 +96,8 @@ std::string PermanentRestPage(uint64_t id, const std::string &label_json) {
 }
 
 std::string PermanentRestNextLink(uint64_t page) {
-	return std::string("<https://api.github.com/fixtures/materialized-records?view=summary&scope_name=") +
-	       "north+america%2F%CE%B2&per_page=25&page=" + std::to_string(page) + ">; rel=next";
+	return std::string("<https://api.github.com/fixtures/materialized-records/north%20america%20%CE%B2?view=summary&") +
+	       "scope_name=north+america+%CE%B2&per_page=25&page=" + std::to_string(page) + ">; rel=next";
 }
 
 std::unique_ptr<cuac::BatchStream> Open(const std::shared_ptr<cuac_test::ControlledHttpRuntime> &runtime,
@@ -370,9 +370,11 @@ void TestPermanentRestPlanExecutesCopiedRelationalFacts() {
 	Require(
 	    observations.size() == 2 &&
 	        observations[0].target ==
-	            "/fixtures/materialized-records?view=summary&scope_name=north+america%2F%CE%B2&per_page=25&page=1" &&
+	            "/fixtures/materialized-records/north%20america%20%CE%B2?view=summary&scope_name=north+america+%CE%B2&"
+	            "per_page=25&page=1" &&
 	        observations[1].target ==
-	            "/fixtures/materialized-records?view=summary&scope_name=north+america%2F%CE%B2&per_page=25&page=3",
+	            "/fixtures/materialized-records/north%20america%20%CE%B2?view=summary&scope_name=north+america+%CE%B2&"
+	            "per_page=25&page=3",
 	    "permanent REST plan lost binding order, relation encoding, or page increment");
 	for (const auto &observation : observations) {
 		Require(observation.headers.size() == 1 && observation.headers[0].first == "X-Connector-Fixture" &&

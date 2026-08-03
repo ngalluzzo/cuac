@@ -17,6 +17,7 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -207,8 +208,15 @@ public:
 	void Close() const noexcept override {
 	}
 
+	std::string LastRestPath() const {
+		std::lock_guard<std::mutex> guard(observation_lock);
+		return last_rest_path;
+	}
+
 	mutable std::atomic<std::uint64_t> anonymous_opens;
 	mutable std::atomic<std::uint64_t> authenticated_opens;
+	mutable std::mutex observation_lock;
+	mutable std::string last_rest_path;
 
 protected:
 	std::unique_ptr<cuac::BatchStream> OpenCredentialProviderEnvelope(const cuac::ScanPlan &plan,
@@ -226,6 +234,10 @@ protected:
 	                                                             cuac::ExecutionControl &control) const override {
 		if (control.IsCancellationRequested()) {
 			throw cuac::ExecutionCancelled();
+		}
+		if (plan.Operation().Protocol() == cuac::PlannedProtocol::REST) {
+			std::lock_guard<std::mutex> guard(observation_lock);
+			last_rest_path = plan.Operation().Rest().path;
 		}
 		const auto alternative = AlternativeOf(authorization);
 		// Query's credential provider supplies the kind-neutral CREDENTIAL
@@ -245,6 +257,51 @@ protected:
 		return std::unique_ptr<cuac::BatchStream>(new PlanEchoStream(plan));
 	}
 };
+
+void TestStructuralPathsReachActualDuckdbSql(const std::string &repository_root) {
+	auto executor = std::shared_ptr<PlanEchoExecutor>(new PlanEchoExecutor());
+	duckdb::DuckDB database(nullptr);
+	duckdb::ExtensionLoader loader(*database.instance, "cuac_structural_path_product_test");
+	duckdb::RegisterCuacPackageSurface(loader, cuac::BuildPackageGenerationComposition(executor));
+	duckdb::Connection connection(database);
+
+	auto github = connection.Query("CALL system.main.cuac_load_connector(package_root := '" + repository_root +
+	                               "/test/fixtures/package_rest_structural_path_github')");
+	auto gitlab = connection.Query("CALL system.main.cuac_load_connector(package_root := '" + repository_root +
+	                               "/test/fixtures/package_rest_structural_path_gitlab')");
+	Require(!github->HasError() && github->GetValue(4, 0).GetValue<std::uint64_t>() == 1 && !gitlab->HasError() &&
+	            gitlab->GetValue(4, 0).GetValue<std::uint64_t>() == 3,
+	        "actual DuckDB did not load both structural-path provider packages");
+
+	auto github_result = connection.Query(
+	    "SELECT number, title FROM system.main.github_paths_repository_issues(owner := 'open ai', repository := "
+	    "'cuac \xCE\xB2')");
+	Require(!github_result->HasError() && github_result->RowCount() == 1 &&
+	            executor->LastRestPath() == "/repos/open%20ai/cuac%20%CE%B2/issues",
+	        "actual DuckDB SQL did not materialize the GitHub structural path");
+
+	auto gitlab_result = connection.Query(
+	    "SELECT iid, title FROM system.main.gitlab_paths_project_issue(project_id := -42, issue_iid := 7)");
+	Require(!gitlab_result->HasError() && gitlab_result->RowCount() == 1 &&
+	            executor->LastRestPath() == "/projects/-42/issues/7",
+	        "actual DuckDB SQL did not materialize the independent GitLab structural path");
+
+	auto typed = connection.Query(
+	    "SELECT value FROM system.main.gitlab_paths_typed_segments(enabled := TRUE, \"count\" := -42, label := 'a "
+	    "b', ratio := 3.5)");
+	Require(!typed->HasError() && typed->RowCount() == 1 && executor->LastRestPath() == "/typed/true/-42/a%20b/3.5",
+	        "actual DuckDB SQL did not preserve BOOLEAN, BIGINT, VARCHAR, and DOUBLE path values");
+	auto defaulted = connection.Query(
+	    "SELECT value FROM system.main.gitlab_paths_typed_segments(enabled := FALSE, \"count\" := 9, ratio := 2.5)");
+	Require(!defaulted->HasError() && defaulted->RowCount() == 1 &&
+	            executor->LastRestPath() == "/typed/false/9/default%20value/2.5",
+	        "actual DuckDB SQL did not materialize an omitted input's typed path default");
+
+	const auto last_valid_path = executor->LastRestPath();
+	auto omitted = connection.Query("SELECT * FROM system.main.github_paths_repository_issues(owner := 'openai')");
+	Require(omitted->HasError() && executor->LastRestPath() == last_valid_path,
+	        "omitted structural path input reached Runtime through actual DuckDB SQL");
+}
 
 void TestRealCatalogCompositionQueriesAnonymousAndAuthenticated(const std::string &repository_root) {
 	auto executor = std::shared_ptr<PlanEchoExecutor>(new PlanEchoExecutor());
@@ -1018,6 +1075,7 @@ int main(int argc, char **argv) {
 			throw std::invalid_argument("usage: package_product_contract_tests ABSOLUTE_REPOSITORY_ROOT");
 		}
 		TestRealCatalogCompositionQueriesAnonymousAndAuthenticated(argv[1]);
+		TestStructuralPathsReachActualDuckdbSql(argv[1]);
 		TestShortPageReachesRealExplainOutput(argv[1]);
 		TestRateLimitPlanReachesRealExplainOutput(argv[1]);
 		TestDoubleColumnReachesRealDescribeAndSelectOutput(argv[1]);

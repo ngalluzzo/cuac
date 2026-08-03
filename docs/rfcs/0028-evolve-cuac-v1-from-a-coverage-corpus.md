@@ -411,5 +411,7 @@ descriptors.
 
 Accepted. CUAC will evolve only the single `cuac/v1` source and product path
 additively before 1.0, driven by the checked-in coverage corpus and vertical
-evidence contract. This acceptance chooses direction and migration policy; it
-does not implement any newly included declaration.
+evidence contract. This RFC chooses direction and migration policy. Individual
+classifications become product syntax only through a later accepted vertical
+RFC; typed structural REST path segments were subsequently delivered by
+[RFC 0029](0029-add-typed-structural-rest-path-segments.md).

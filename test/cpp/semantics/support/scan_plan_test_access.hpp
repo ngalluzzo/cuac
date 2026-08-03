@@ -6,6 +6,7 @@ namespace cuac_test {
 
 enum class RuntimeRestPredicatePlanCounterexample;
 enum class RuntimeRestSchemaCounterexample;
+enum class RuntimeRestPathPlanCounterexample;
 enum class PackageGraphqlRuntimeRecipeCounterexample;
 enum class PackageHttpNumericOriginCounterexample;
 
@@ -19,6 +20,7 @@ public:
 	static cuac::ScanPlan RuntimeRestPredicate(cuac::ScanPlan plan,
 	                                           RuntimeRestPredicatePlanCounterexample counterexample);
 	static cuac::ScanPlan RuntimeRestSchema(cuac::ScanPlan plan, RuntimeRestSchemaCounterexample counterexample);
+	static cuac::ScanPlan RuntimeRestPath(cuac::ScanPlan plan, RuntimeRestPathPlanCounterexample counterexample);
 	static cuac::ScanPlan PackageGraphqlRecipe(cuac::ScanPlan plan,
 	                                           PackageGraphqlRuntimeRecipeCounterexample counterexample);
 	static cuac::ScanPlan PackageGraphqlArray(cuac::ScanPlan plan);

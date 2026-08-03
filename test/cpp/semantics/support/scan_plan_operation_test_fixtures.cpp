@@ -43,6 +43,14 @@ cuac::ScanPlan ScanPlanTestAccess::Operation(cuac::ScanPlan plan, OperationPlanC
 	case OperationPlanCounterexample::OTHER_PATH: {
 		auto operation = plan.Operation().Rest();
 		operation.path = "/other";
+		operation.path_contract.clear();
+		operation.path_contract.push_back(cuac::PlannedRestPathContractSegment(
+		    cuac::PlannedRestPathSegmentSource::LITERAL, "", cuac::PlannedRestScalarKind::VARCHAR,
+		    cuac::PlannedRestPathSegmentEncoding::LITERAL, "other"));
+		operation.path_bindings.clear();
+		operation.path_bindings.push_back(cuac::PlannedRestPathSegment(
+		    cuac::PlannedRestPathSegmentSource::LITERAL, "", cuac::PlannedRestScalarKind::VARCHAR, false, 0, "other",
+		    0.0, cuac::PlannedRestPathSegmentEncoding::LITERAL, "other"));
 		ReplaceRest(plan, std::move(operation));
 		break;
 	}

@@ -399,7 +399,7 @@ void ValidateOperation(const CompiledRelation &relation, const CompiledOperation
 	ValidateRetryContract(operation);
 	ValidateRateLimitContract(operation);
 	if (rest.request.path.empty() || rest.request.path.front() != '/' ||
-	    (!network_policy.allowed_origins.empty() && !IsFixedPackagePath(rest.request.path))) {
+	    (!network_policy.allowed_origins.empty() && !IsPackageRestPath(rest.request))) {
 		throw std::logic_error("selected REST operation contains an unsupported request or retry declaration");
 	}
 	(void)PlanProtocol(operation.Protocol());

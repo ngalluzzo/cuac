@@ -42,6 +42,8 @@ enum class PackageCompatibilityFixture {
 	APPEND_RELATION
 };
 
+enum class RestPathCompatibilityFixture { BASELINE, LITERAL_CHANGED, INPUT_SOURCE_CHANGED, FIXED_FORM };
+
 // Controlled package for future Semantics tests. The named relation carries
 // ordered BOOLEAN/BIGINT/VARCHAR inputs, an absent default, concrete defaults
 // on both non-nullable and nullable inputs, a typed NULL default, one input-
@@ -85,9 +87,10 @@ cuac::CompiledPackageGeneration
 BuildResidualPredicatePackageGenerationFixture(const std::string &package_version = "1.2.3", char digest_fill = '8');
 
 // One anonymous, predicate-free REST relation for the public planning and
-// materialization boundary. Its operation preserves ordered fixed,
-// relation-input, page-size, and page-number bindings plus nested structural
-// records and result paths. Consumers use only immutable Connector APIs.
+// materialization boundary. Its operation preserves an ordered typed
+// structural path plus fixed, relation-input, page-size, and page-number query
+// bindings and nested structural records/result paths. Consumers use only
+// immutable Connector APIs.
 cuac::CompiledPackageGeneration
 BuildRestMaterializationPackageGenerationFixture(const std::string &package_version = "1.2.3", char digest_fill = '7');
 
@@ -110,6 +113,9 @@ cuac::CompiledPackageGeneration BuildPaginationCompatibilityGenerationFixture(co
                                                                               std::uint64_t page_increment);
 cuac::CompiledPackageGeneration BuildRateLimitCompatibilityGenerationFixture(const std::string &package_version,
                                                                              char digest_fill, std::uint16_t status);
+cuac::CompiledPackageGeneration BuildRestPathCompatibilityGenerationFixture(RestPathCompatibilityFixture variant,
+                                                                            const std::string &package_version,
+                                                                            char digest_fill);
 cuac::CompiledPackageGeneration BuildSelectorNamespaceCompatibilityGenerationFixture(const std::string &package_version,
                                                                                      char digest_fill,
                                                                                      bool conditional_reference);

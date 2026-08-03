@@ -70,6 +70,16 @@ void WriteRateLimitPackage(TemporaryPackage &package, const std::string &rest_re
 	              cuac_test::ReadFile("test/fixtures/package_rate_limit/relations/duplicate_graphql_events.yaml"));
 }
 
+void WriteStructuralPathPackage(TemporaryPackage &package, const std::string &relation = std::string()) {
+	package.Write("connector.yaml",
+	              cuac_test::ReadFile("test/fixtures/package_rest_structural_path_github/connector.yaml"));
+	package.Write(
+	    "relations/repository_issues.yaml",
+	    relation.empty()
+	        ? cuac_test::ReadFile("test/fixtures/package_rest_structural_path_github/relations/repository_issues.yaml")
+	        : relation);
+}
+
 void RequireFirstDiagnostic(const cuac::connector::PackageCompileResult &result, PackageDiagnosticCode code,
                             PackageDiagnosticPhase phase, const std::string &message) {
 	Require(!result.Succeeded() && result.Generation() == nullptr && !result.Diagnostics().empty() &&
@@ -119,6 +129,75 @@ void TestRejectsUnknownSpecIdentifier() {
 	RequireFirstDiagnostic(cuac_test::CompileRoot(package.Root(), cancellation),
 	                       PackageDiagnosticCode::UNSUPPORTED_SPEC, PackageDiagnosticPhase::SCHEMA,
 	                       "unknown package specification did not fail closed");
+}
+
+void TestStructuralPathSchemaAndReferences() {
+	const auto source =
+	    cuac_test::ReadFile("test/fixtures/package_rest_structural_path_github/relations/repository_issues.yaml");
+	{
+		TemporaryPackage package;
+		WriteStructuralPathPackage(package);
+		NeverCancel cancellation;
+		const auto result = cuac_test::CompileRoot(package.Root(), cancellation);
+		Require(result.Succeeded() && result.Diagnostics().empty() && result.Generation() != nullptr,
+		        "accepted structural REST path package did not compile");
+		const auto &request = result.Generation()->Connector().Relations()[0].Operation().Rest().request;
+		Require(request.path == "/repos/{input.owner}/{input.repository}/issues" && request.path_segments.size() == 4 &&
+		            request.path_segments[0].source == cuac::CompiledRestPathSegmentSource::LITERAL &&
+		            request.path_segments[1].source == cuac::CompiledRestPathSegmentSource::RELATION_INPUT &&
+		            request.path_segments[1].value == "owner" &&
+		            request.path_segments[1].input_type == cuac::CompiledScalarType::VARCHAR &&
+		            request.path_segments[1].encoding ==
+		                cuac::CompiledRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED &&
+		            request.path_segments[2].value == "repository",
+		        "compiler flattened or mistyped structural REST path facts");
+	}
+
+	const std::string path_block = "      path_segments:\n"
+	                               "        - {literal: repos}\n"
+	                               "        - {input: owner, encoding: rfc3986_percent_encoded}\n"
+	                               "        - {input: repository, encoding: rfc3986_percent_encoded}\n"
+	                               "        - {literal: issues}\n"
+	                               "      query: []";
+	{
+		TemporaryPackage package;
+		WriteStructuralPathPackage(
+		    package, cuac_test::ReplaceOnce(source, path_block, "      path: /repos/fixed/issues\n      query: []"));
+		NeverCancel cancellation;
+		const auto result = cuac_test::CompileRoot(package.Root(), cancellation);
+		Require(result.Succeeded() && result.Generation() != nullptr,
+		        "existing fixed REST path stopped compiling through the normalized model");
+		const auto &request = result.Generation()->Connector().Relations()[0].Operation().Rest().request;
+		Require(request.path == "/repos/fixed/issues" && request.path_segments.size() == 3 &&
+		            request.path_segments[0].source == cuac::CompiledRestPathSegmentSource::LITERAL &&
+		            request.path_segments[1].value == "fixed" && request.path_segments[2].value == "issues",
+		        "fixed REST path did not normalize to the sole compiled segment representation");
+	}
+	const std::vector<std::string> malformed = {
+	    cuac_test::ReplaceOnce(source, "      path_segments:\n",
+	                           "      path: /repos/fixed/issues\n      path_segments:\n"),
+	    cuac_test::ReplaceOnce(source, path_block, "      query: []"),
+	    cuac_test::ReplaceOnce(source, "{literal: repos}", "{template: repos}"),
+	    cuac_test::ReplaceOnce(source, "{literal: repos}", "{literal: \".\"}"),
+	    cuac_test::ReplaceOnce(source, "{input: repository, encoding: rfc3986_percent_encoded}",
+	                           "{input: missing, encoding: rfc3986_percent_encoded}"),
+	    cuac_test::ReplaceOnce(source, "{input: repository, encoding: rfc3986_percent_encoded}",
+	                           "{input: owner, encoding: rfc3986_percent_encoded}"),
+	    cuac_test::ReplaceOnce(
+	        cuac_test::ReplaceOnce(source, "{input: owner, encoding: rfc3986_percent_encoded}", "{literal: owner}"),
+	        "{input: repository, encoding: rfc3986_percent_encoded}", "{literal: repository}"),
+	    cuac_test::ReplaceOnce(source, "required_inputs: [input.owner, input.repository]",
+	                           "required_inputs: [input.owner]"),
+	    cuac_test::ReplaceOnce(source, "  - id: list_repository_issues\n",
+	                           "  - id: list_repository_issues\n    fallback: true\n")};
+	for (std::size_t index = 0; index < malformed.size(); index++) {
+		TemporaryPackage package;
+		WriteStructuralPathPackage(package, malformed[index]);
+		NeverCancel cancellation;
+		const auto result = cuac_test::CompileRoot(package.Root(), cancellation);
+		Require(!result.Succeeded() && result.Generation() == nullptr && !result.Diagnostics().empty(),
+		        "malformed structural REST path compiled at mutation " + std::to_string(index));
+	}
 }
 
 void TestRateLimitSchemaContract() {
@@ -645,6 +724,7 @@ int main() {
 		TestClosedSchemaAndAllOrNothing();
 		TestV1SupportsRetryDeclaration();
 		TestRejectsUnknownSpecIdentifier();
+		TestStructuralPathSchemaAndReferences();
 		TestRateLimitSchemaContract();
 		TestRateLimitExampleCompiles();
 		TestCrossFileAndPolicyReferences();

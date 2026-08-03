@@ -173,10 +173,40 @@ bool IsSafeRequestPath(const std::string &path) noexcept {
 	for (std::size_t index = 1; index <= path.size(); index++) {
 		if (index != path.size() && path[index] != '/') {
 			const auto value = path[index];
-			if (!((value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') ||
-			      value == '.' || value == '_' || value == '~' || value == '-')) {
+			const bool unreserved = (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') ||
+			                        (value >= '0' && value <= '9') || value == '.' || value == '_' || value == '~' ||
+			                        value == '-';
+			if (unreserved) {
+				continue;
+			}
+			if (value != '%' || index + 2 >= path.size()) {
 				return false;
 			}
+			auto hex = [](char character, unsigned char &digit) {
+				if (character >= '0' && character <= '9') {
+					digit = static_cast<unsigned char>(character - '0');
+					return true;
+				}
+				if (character >= 'A' && character <= 'F') {
+					digit = static_cast<unsigned char>(character - 'A' + 10);
+					return true;
+				}
+				return false;
+			};
+			unsigned char high = 0;
+			unsigned char low = 0;
+			if (!hex(path[index + 1], high) || !hex(path[index + 2], low)) {
+				return false;
+			}
+			const auto decoded = static_cast<unsigned char>((high << 4U) | low);
+			const bool decoded_unreserved = (decoded >= 'A' && decoded <= 'Z') || (decoded >= 'a' && decoded <= 'z') ||
+			                                (decoded >= '0' && decoded <= '9') || decoded == '.' || decoded == '_' ||
+			                                decoded == '~' || decoded == '-';
+			if (decoded_unreserved || decoded < 0x20U || decoded == 0x7FU || decoded == '/' || decoded == '\\' ||
+			    decoded == '?' || decoded == '#' || decoded == '%') {
+				return false;
+			}
+			index += 2;
 			continue;
 		}
 		if (index == segment_start) {

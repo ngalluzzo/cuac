@@ -12,6 +12,7 @@ namespace scan_planner_internal {
 // compilation so the planned authority does not depend on a provider having
 // used one particular construction path.
 bool IsFixedPackagePath(const std::string &value);
+bool IsPackageRestPath(const CompiledRestRequest &request);
 bool IsExactPackageOriginAllowed(const CompiledNetworkPolicy &policy, const CompiledHttpOrigin &expected);
 
 } // namespace scan_planner_internal

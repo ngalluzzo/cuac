@@ -188,6 +188,8 @@ run_tests() {
     python3 -I -B "${REPOSITORY_ROOT}/test/python/public_surface_inventory_tests.py"
     python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-specification-evolution.py"
     python3 -I -B "${REPOSITORY_ROOT}/test/python/specification_evolution_contract.py"
+    python3 -I -B "${REPOSITORY_ROOT}/scripts/verify-structural-rest-paths.py"
+    python3 -I -B "${REPOSITORY_ROOT}/test/python/structural_rest_path_contract.py"
     python3 -I -B "${REPOSITORY_ROOT}/scripts/test-native-dependencies.py"
     python3 -I -B "${REPOSITORY_ROOT}/test/python/development_container_tests.py"
     report_phase repository_contracts "${started_at}"

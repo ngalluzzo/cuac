@@ -136,6 +136,42 @@ void ValidateOperation(const CompiledOperation &operation) {
 	internal::ValidateProtocolOperation(operation);
 }
 
+const CompiledRelationInput *FindRelationInput(const std::vector<CompiledRelationInput> &inputs,
+                                               const std::string &name) {
+	for (const auto &input : inputs) {
+		if (input.Name() == name) {
+			return &input;
+		}
+	}
+	return nullptr;
+}
+
+bool SelectorRequiresRelationInput(const CompiledOperation &operation, const std::string &name) {
+	for (const auto &reference : operation.selector.RequiredInputReferences()) {
+		if (reference.Kind() == CompiledRequiredInputKind::RELATION_INPUT && reference.Id() == name) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void ValidateRestPathReferences(const CompiledOperation &operation, const std::vector<CompiledRelationInput> &inputs) {
+	if (operation.Protocol() != CompiledProtocol::REST) {
+		return;
+	}
+	for (const auto &segment : operation.Rest().request.path_segments) {
+		if (segment.source != CompiledRestPathSegmentSource::RELATION_INPUT) {
+			continue;
+		}
+		const auto *input = FindRelationInput(inputs, segment.value);
+		if (input == nullptr || input->Type() != segment.input_type ||
+		    !SelectorRequiresRelationInput(operation, segment.value)) {
+			throw std::invalid_argument(
+			    "compiled REST path references a missing, mistyped, or selector-optional relation input");
+		}
+	}
+}
+
 void ValidateResourceCeilings(const CompiledOperation &operation, const CompiledResourceCeilings &ceilings) {
 	internal::ValidateResourceCeilingsValue(ceilings);
 
@@ -582,6 +618,7 @@ CompiledRelation::CompiledRelation(std::string name_p, std::vector<CompiledColum
 	internal::ValidatePredicateMappings(columns, operations, predicate_mappings);
 	for (const auto &operation : operations) {
 		internal::ValidateOperationSelectorReferences(operation, inputs, predicate_mappings);
+		ValidateRestPathReferences(operation, inputs);
 	}
 	for (const auto &operation : operations) {
 		if (operation.Protocol() == CompiledProtocol::GRAPHQL) {

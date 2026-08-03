@@ -405,7 +405,7 @@ ScanPlan ScanPlanBuilder::Build(const CompiledConnector &connector, const ScanRe
 		}
 		result.pagination.target = {
 		    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
-		    rest.request.path,
+		    result.Operation().Rest().path,
 		    compiled_pagination.PageSizeParameter(),
 		    compiled_pagination.PageSize(),
 		    compiled_pagination.PageNumberParameter(),

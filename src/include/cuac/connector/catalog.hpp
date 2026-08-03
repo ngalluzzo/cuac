@@ -19,15 +19,6 @@ class CompiledModelBuilder;
 
 class CompiledConnector;
 
-// Closed scalar vocabulary shared by package-declared columns, relation
-// inputs, typed defaults, and consumer projections. Consumers switch on this
-// enum; they never parse YAML or logical-type strings to recover authority.
-// DOUBLE (RFC 0020) is IEEE-754 double precision; -0.0 is normalized to 0.0
-// at construction so every consumer sees a single canonical zero value.
-enum class CompiledScalarType { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
-
-const char *CompiledScalarTypeName(CompiledScalarType type);
-
 // Output columns may retain one scalar directly or one flat variable-length
 // collection of that scalar. This shape is deliberately separate from
 // CompiledScalarType so relation inputs, defaults, predicates, and request

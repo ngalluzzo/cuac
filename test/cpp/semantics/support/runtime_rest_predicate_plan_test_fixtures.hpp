@@ -37,6 +37,20 @@ enum class RuntimeRestSchemaCounterexample {
 	COUNT
 };
 
+enum class RuntimeRestPathPlanCounterexample {
+	RENDERED_PATH,
+	SOURCE_ID,
+	SCALAR_KIND,
+	TYPED_VALUE,
+	ENCODED_VALUE,
+	ENCODING,
+	DUPLICATE_INPUT,
+	SEGMENT_ROLE,
+	SEGMENT_ORDER,
+	SEGMENT_COUNT,
+	COUNT
+};
+
 // Deterministic package REST plan built through the production Connector ->
 // Query request -> Semantics planner path. It carries one BIGINT conditional
 // binding, an EXACT occurrence proof, and a DuckDB-owned typed residual.
@@ -62,5 +76,8 @@ cuac::ScanPlan BuildRuntimeRestPredicatePlanCounterexample(RuntimeRestPredicateP
 // tests. Runtime must reject every variant before request construction or
 // transport.
 cuac::ScanPlan BuildRuntimeRestSchemaCounterexample(RuntimeRestSchemaCounterexample counterexample);
+
+cuac::ScanPlan BuildRuntimeStructuralPathPlanFixture();
+cuac::ScanPlan BuildRuntimeRestPathPlanCounterexample(RuntimeRestPathPlanCounterexample counterexample);
 
 } // namespace cuac_test

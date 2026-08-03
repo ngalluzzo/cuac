@@ -13,12 +13,12 @@ const char CONNECTOR_PACKAGE_V1_SCHEMA[] =
 #include "assets/connector-package-v1.schema.inc"
     ;
 
-const char CONNECTOR_PACKAGE_V1_SCHEMA_DIGEST[] = "852d3635b590b0f8bf610b34e9dd3b324c70f4c500ea38886a44383bfa0c2aaf";
+const char CONNECTOR_PACKAGE_V1_SCHEMA_DIGEST[] = "abb8aafa840e10e3a905eb0acef33feb15d977ee09fb58440ea6ab2612402465";
 
 } // namespace
 
 const char *ConnectorPackageV1SchemaDigest() {
-	return "sha256.852d3635b590b0f8bf610b34e9dd3b324c70f4c500ea38886a44383bfa0c2aaf";
+	return "sha256.abb8aafa840e10e3a905eb0acef33feb15d977ee09fb58440ea6ab2612402465";
 }
 
 bool VerifyConnectorPackageV1SchemaAsset() {

@@ -15,7 +15,9 @@ next package-language capabilities, but classification is not execution
 authority. Until an included capability has a complete source-to-fixture
 implementation, its declarations are unknown and fail before planning,
 credential materialization, or network work. Runtime receives no dormant
-profile and there is no compatibility branch for a future declaration.
+profile and there is no compatibility branch for a future declaration. Typed
+structural REST paths are now a complete admitted profile under
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md).
 
 ## Contract chain
 
@@ -184,9 +186,14 @@ ordered unique guidance field names and closed formats, optional remaining and
 remote-bucket field names, and exact maxima. It contains no response values,
 clock state, quota key, credential identity, or scheduler handle.
 
-REST plans contain method, exact origin and path, ordered fixed headers,
-ordered typed query bindings, response source, replay declaration, cardinality,
-and disabled or exact-target Link pagination.
+REST compiled operations contain method, exact origin, and one normalized
+ordered path-segment sequence. Fixed source paths become literal segments;
+structural source paths retain each literal or relation-input role, exact input
+ID and scalar kind, and the closed RFC 3986 percent-encoding identity. The path
+spelling is a validated source/explanation mirror, never a template to parse.
+The operation also owns ordered fixed headers and typed query bindings,
+response source, replay declaration, cardinality, and disabled or exact-target
+pagination.
 
 GraphQL plans contain exact endpoint, ordered headers, generated document and
 digest identity, structured variables, row/error/page-info response paths,
@@ -320,7 +327,7 @@ A successful planner call returns one complete immutable `ScanPlan`:
 ScanPlan
 ├── selected closed protocol operation
 ├── ordered planned columns, shapes, element kinds, and two-level nullability
-├── final typed/encoded request bindings
+├── final typed/encoded request and structural-path bindings
 ├── structured predicate decision and base domain
 ├── complete residual and relational owners
 ├── exact network capability
@@ -335,6 +342,17 @@ ScanPlan
 
 The plan contains everything Runtime needs for validation and execution. Runtime
 does not look up Connector metadata or ask Semantics to complete a decision.
+
+A planned structural REST path contains separate ordered declaration slots and
+literal/input value bindings, plus one rendered-path mirror. A declaration slot
+retains the package-owned role, source ID, scalar kind, encoding identity, and
+literal bytes. Its corresponding input binding adds the non-NULL typed value
+and canonical encoded segment. Semantics constructs those facts only after
+correlating them with the selected operation's resolved selector-required
+relation inputs. Runtime requires a slot-for-binding match before independent
+reconstruction. Unbound, NULL, malformed UTF-8, control-bearing, empty, dot,
+slash/backslash, query/fragment, percent-bearing, non-finite, or over-budget
+values produce no plan.
 
 Semantics copies rate-limit policy fields into distinct planned closed values and
 derives only checked resource algebra. Combined per-step attempts are
@@ -553,10 +571,22 @@ queue state to another key.
 
 ## REST execution
 
-An admitted REST profile constructs a fixed HTTPS GET target from typed plan
-facts. Ordered fixed and selected query fields are encoded once according to
-their compiled form encoding. Caller input cannot supply a raw encoded target,
+An admitted REST profile constructs an HTTPS GET target from typed plan facts.
+Before admission, Runtime independently validates every planned path binding's
+role, source ID, scalar kind, inactive payload, typed value, encoding identity,
+canonical encoded bytes, order, and size. It reconstructs the complete path and
+requires exact byte equality with the Semantics-owned rendered mirror. Ordered
+fixed and selected query fields are encoded once according to their compiled
+form encoding. Caller input cannot supply a raw encoded target, path template,
 header, or URL.
+
+Path values use the sole `rfc3986_percent_encoded` profile: ASCII unreserved
+bytes remain literal and all other canonical UTF-8 bytes become uppercase
+`%HH`; spaces are `%20`. Raw `/`, `\\`, `?`, `#`, `%`, dot segments, controls,
+empty values, and non-finite doubles are invalid rather than escaped or
+reinterpreted. The path ceiling is 2,048 bytes and the target ceiling is 8,192
+bytes. A profile mismatch is a policy failure before authorization or
+transport observation.
 
 An authenticated request is decorated with exactly one approved Authorization
 header after origin validation. Redirect, proxy, cookie, netrc, address, TLS,
@@ -631,9 +661,10 @@ At most one request and one decoded page are active. The page buffer drains in
 batches of at most the product chunk ceiling and is released before the next
 request begins.
 
-For Link pagination, received metadata contributes only a validated next page
-transition within the exact planned origin/path. Once validated, the mutable
-Link state retains only the immutable admitted profile by reference and a
+For Link and body-signaled pagination, received metadata contributes only a
+validated next page transition within the exact admitted origin/materialized
+path. Once validated, the mutable Link state retains only the immutable
+admitted profile by reference and a
 checked scalar page count; exact positive progression makes a dynamic
 seen-target collection unnecessary. For GraphQL, received metadata contributes
 only a validated opaque cursor. Continuations cannot replace fixed fields or

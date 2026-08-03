@@ -7,9 +7,11 @@ responses. The schema below closes every source shape.
 
 The accepted pre-1.0 evolution policy and capability corpus are recorded in
 [RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md). That RFC
-classifies future declaration work; it does not make an included declaration
-valid before its complete schema, compiler, planning, execution, fixture, and
-compatibility slice lands in this document and the product.
+classifies declaration work; it does not make an included declaration valid
+before its complete schema, compiler, planning, execution, fixture, and
+compatibility slice lands in this document and the product. Typed structural
+REST paths are the first delivered slice, specified by
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md).
 
 The specification describes immutable metadata. It does not grant network or
 credential authority by itself, and it does not contain DuckDB catalog state,
@@ -57,10 +59,12 @@ rejected before catalog, credential, or network work. Unknown specification
 identifiers are also rejected; CUAC does not dispatch to a second compiler.
 
 RFC 0028's included classifications are delivery candidates, not accepted
-source syntax. Deferred and rejected classifications likewise grant no package
-or Runtime authority. A future change to existing `cuac/v1` meaning requires a
-separate RFC and one breaking cutover that removes the old compiler path rather
-than operating old and new paths in parallel.
+source syntax until a complete vertical RFC lands. RFC 0029 has delivered its
+one classification; the remaining included classifications are still absent.
+Deferred and rejected classifications likewise grant no package or Runtime
+authority. A future change to existing `cuac/v1` meaning requires a separate
+RFC and one breaking cutover that removes the old compiler path rather than
+operating old and new paths in parallel.
 
 Package version components are unsigned 32-bit canonical decimals. Signs,
 leading zeroes, omitted components, prerelease labels, and build metadata are
@@ -447,7 +451,8 @@ identity.
 
 ## REST operations
 
-REST v1 admits replay-safe HTTPS `GET` with a fixed origin and path:
+REST v1 admits replay-safe HTTPS `GET` with a fixed origin and either a fixed
+path or a typed structural path:
 
 ```yaml
 operations:
@@ -473,6 +478,70 @@ operations:
 
 `cardinality` is `one` or `many`. `one` requires a root object response;
 `many` accepts `root_array` or `terminal_collection` with a records path.
+
+Exactly one of `request.path` and `request.path_segments` is required. A fixed
+path starts with `/`, is at most 2,048 bytes, and remains byte-identical to the
+existing contract. A structural path contains one through 64 complete segments
+and at least one relation-input segment:
+
+```yaml
+inputs:
+  - id: owner
+    type: VARCHAR
+    nullable: false
+  - id: repository
+    type: VARCHAR
+    nullable: false
+
+operations:
+  - id: list_repository_issues
+    when:
+      required_inputs: [input.owner, input.repository]
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: api.github.com
+        port: 443
+      path_segments:
+        - {literal: repos}
+        - {input: owner, encoding: rfc3986_percent_encoded}
+        - {input: repository, encoding: rfc3986_percent_encoded}
+        - {literal: issues}
+      query: []
+      headers: []
+    response:
+      source: root_array
+    pagination:
+      strategy: disabled
+```
+
+A literal segment is one through 255 ASCII RFC 3986 unreserved bytes and is
+neither `.` nor `..`. An input segment is exactly
+`{input: <relation_input_id>, encoding: rfc3986_percent_encoded}`. Each named
+input may occupy only one path slot, must have one of the four v1 scalar types,
+and must be a tagged `input.<id>` required reference in the same operation's
+selector. An input-bearing path therefore cannot belong to a fallback
+operation. All-literal `path_segments` declarations are rejected; use `path`.
+
+Semantics converts non-NULL typed values to canonical text: lower-case Boolean,
+signed base-10 `BIGINT`, the v1 finite 17-significant-digit `DOUBLE` spelling,
+or exact canonical UTF-8 `VARCHAR`. Raw segment text must be nonempty, at most
+1,024 bytes, free of C0/C1 controls and DEL, not `.` or `..`, and contain none
+of `/`, `\\`, `?`, `#`, or `%`. Non-finite doubles and malformed UTF-8 are
+rejected before Runtime authority exists.
+
+Encoding leaves ASCII unreserved bytes unchanged and encodes every other UTF-8
+byte as uppercase `%HH`; space is `%20`, never `+`. The caller supplies only a
+complete typed value. It cannot select the origin, insert separators, provide
+pre-encoded bytes, alter literals, or supply a template. The materialized path
+remains within 2,048 bytes and the complete path-plus-query target remains
+within 8,192 bytes. See
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md) for the
+cross-layer authority and failure contract.
 
 Ordered query fields contain exactly one value source:
 

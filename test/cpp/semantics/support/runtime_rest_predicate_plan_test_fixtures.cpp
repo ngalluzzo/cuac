@@ -4,6 +4,7 @@
 #include "connector/support/package_generation_test_fixtures.hpp"
 #include "cuac/semantics/scan_planner.hpp"
 #include "query/support/live_scan_request.hpp"
+#include "semantics/support/permanent_rest_scan_plan_test_fixtures.hpp"
 #include "semantics/support/scan_plan_test_access.hpp"
 
 #include <memory>
@@ -86,6 +87,14 @@ cuac::ScanPlan BuildRuntimeRestSchemaCounterexample(RuntimeRestSchemaCounterexam
 	                                                  cuac::LogicalSecretReference());
 	return ScanPlanTestAccess::RuntimeRestSchema(cuac::BuildConservativeScanPlan(generation.Connector(), request),
 	                                             counterexample);
+}
+
+cuac::ScanPlan BuildRuntimeStructuralPathPlanFixture() {
+	return BuildValidPermanentRestScanPlanFixture();
+}
+
+cuac::ScanPlan BuildRuntimeRestPathPlanCounterexample(RuntimeRestPathPlanCounterexample counterexample) {
+	return ScanPlanTestAccess::RuntimeRestPath(BuildRuntimeStructuralPathPlanFixture(), counterexample);
 }
 
 cuac::ScanPlan ScanPlanTestAccess::RuntimeRestPredicate(cuac::ScanPlan plan,
@@ -171,6 +180,63 @@ cuac::ScanPlan ScanPlanTestAccess::RuntimeRestSchema(cuac::ScanPlan plan,
 	case RuntimeRestSchemaCounterexample::COUNT:
 	default:
 		throw std::invalid_argument("unknown runtime REST schema counterexample");
+	}
+	plan.operation = std::make_shared<const cuac::PlannedProtocolOperation>(
+	    cuac::PlannedProtocolOperation::FromRest(std::move(operation)));
+	return plan;
+}
+
+cuac::ScanPlan ScanPlanTestAccess::RuntimeRestPath(cuac::ScanPlan plan,
+                                                   RuntimeRestPathPlanCounterexample counterexample) {
+	auto operation = plan.Operation().Rest();
+	if (operation.path_bindings.size() != 3 ||
+	    operation.path_bindings[2].source != cuac::PlannedRestPathSegmentSource::RELATION_INPUT) {
+		throw std::logic_error("runtime structural-path fixture lost its dynamic segment");
+	}
+	auto &binding = operation.path_bindings[2];
+	switch (counterexample) {
+	case RuntimeRestPathPlanCounterexample::RENDERED_PATH:
+		operation.path = "/fixtures/materialized-records/other";
+		break;
+	case RuntimeRestPathPlanCounterexample::SOURCE_ID:
+		binding.source_id = "other_scope";
+		break;
+	case RuntimeRestPathPlanCounterexample::SCALAR_KIND:
+		binding.kind = cuac::PlannedRestScalarKind::BIGINT;
+		binding.bigint_value = 42;
+		binding.varchar_value.clear();
+		binding.encoded_value = "42";
+		break;
+	case RuntimeRestPathPlanCounterexample::TYPED_VALUE:
+		binding.varchar_value = "other";
+		binding.encoded_value = "other";
+		break;
+	case RuntimeRestPathPlanCounterexample::ENCODED_VALUE:
+		binding.encoded_value = "north+america+%CE%B2";
+		break;
+	case RuntimeRestPathPlanCounterexample::ENCODING:
+		binding.encoding = cuac::PlannedRestPathSegmentEncoding::LITERAL;
+		break;
+	case RuntimeRestPathPlanCounterexample::DUPLICATE_INPUT:
+		operation.path_bindings.push_back(binding);
+		break;
+	case RuntimeRestPathPlanCounterexample::SEGMENT_ROLE:
+		operation.path_bindings[0].source = cuac::PlannedRestPathSegmentSource::RELATION_INPUT;
+		break;
+	case RuntimeRestPathPlanCounterexample::SEGMENT_ORDER: {
+		std::vector<cuac::PlannedRestPathSegment> reordered;
+		reordered.reserve(operation.path_bindings.size());
+		reordered.push_back(operation.path_bindings[1]);
+		reordered.push_back(operation.path_bindings[0]);
+		reordered.push_back(operation.path_bindings[2]);
+		operation.path_bindings = std::move(reordered);
+	} break;
+	case RuntimeRestPathPlanCounterexample::SEGMENT_COUNT:
+		operation.path_bindings.pop_back();
+		break;
+	case RuntimeRestPathPlanCounterexample::COUNT:
+	default:
+		throw std::invalid_argument("unknown runtime structural-path plan counterexample");
 	}
 	plan.operation = std::make_shared<const cuac::PlannedProtocolOperation>(
 	    cuac::PlannedProtocolOperation::FromRest(std::move(operation)));

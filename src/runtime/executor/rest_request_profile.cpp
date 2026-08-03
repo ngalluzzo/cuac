@@ -14,11 +14,10 @@ AdmittedRestRequestProfile::AdmittedRestRequestProfile(const ScanPlan &plan, Mat
                                                        AdmittedResiliencePolicy resilience_p)
     : method("GET"), scheme(RestSchemeName(plan.Operation().Rest().origin.scheme)),
       host(plan.Operation().Rest().origin.host), port(plan.Operation().Rest().origin.port),
-      path(plan.Operation().Rest().path), query_parameters(std::move(request.query)),
-      headers(std::move(request.headers)), columns(std::move(request.columns)),
-      response_source(plan.Operation().Rest().response_source), records_path(std::move(request.records_path)),
-      credential(std::move(credential_p)), budgets(plan.Budgets()), retry(retry_p), rate_limit(std::move(rate_limit_p)),
-      resilience(resilience_p) {
+      path(std::move(request.path)), query_parameters(std::move(request.query)), headers(std::move(request.headers)),
+      columns(std::move(request.columns)), response_source(plan.Operation().Rest().response_source),
+      records_path(std::move(request.records_path)), credential(std::move(credential_p)), budgets(plan.Budgets()),
+      retry(retry_p), rate_limit(std::move(rate_limit_p)), resilience(resilience_p) {
 	budgets.request_attempts = resilience.max_attempts_per_step;
 }
 
@@ -82,9 +81,9 @@ AdmittedPaginatedRestRequestProfile::AdmittedPaginatedRestRequestProfile(
     AdmittedRateLimitPolicy rate_limit_p, AdmittedResiliencePolicy resilience_p)
     : method("GET"), scheme(RestSchemeName(plan.Operation().Rest().origin.scheme)),
       host(plan.Operation().Rest().origin.host), port(plan.Operation().Rest().origin.port),
-      path(plan.Operation().Rest().path), query_parameters(std::move(request.query)),
-      headers(std::move(request.headers)), columns(std::move(request.columns)),
-      response_source(plan.Operation().Rest().response_source), records_path(std::move(request.records_path)),
+      path(std::move(request.path)), query_parameters(std::move(request.query)), headers(std::move(request.headers)),
+      columns(std::move(request.columns)), response_source(plan.Operation().Rest().response_source),
+      records_path(std::move(request.records_path)),
       page_size_parameter(plan.Pagination().Target().page_size_parameter),
       page_size(plan.Pagination().Target().page_size),
       page_number_parameter(plan.Pagination().Target().page_number_parameter),

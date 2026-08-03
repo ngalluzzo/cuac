@@ -188,6 +188,42 @@ void TestConditionalBindingCounterexamplesFailBeforeTransport() {
 	}
 }
 
+void TestStructuralPathReconstructionAndCounterexamples() {
+	const auto plan = cuac_test::BuildRuntimeStructuralPathPlanFixture();
+	auto admitted = cuac::internal::TryAdmitPaginatedRestPlan(plan, RepositoryExecutionProfile());
+	Require(admitted && admitted->Path() == "/fixtures/materialized-records/north%20america%20%CE%B2",
+	        "Runtime did not independently reconstruct the planned structural path");
+	const auto request = cuac::internal::BuildAdmittedPaginatedRestPageRequest(*admitted, 1);
+	Require(request.target ==
+	            "/fixtures/materialized-records/north%20america%20%CE%B2?view=summary&scope_name=north+america+%CE%B2&"
+	            "per_page=25&page=1",
+	        "Runtime request construction lost structural path or ordered query bytes");
+
+	using cuac_test::RuntimeRestPathPlanCounterexample;
+	const RuntimeRestPathPlanCounterexample counterexamples[] = {
+	    RuntimeRestPathPlanCounterexample::RENDERED_PATH,   RuntimeRestPathPlanCounterexample::SOURCE_ID,
+	    RuntimeRestPathPlanCounterexample::SCALAR_KIND,     RuntimeRestPathPlanCounterexample::TYPED_VALUE,
+	    RuntimeRestPathPlanCounterexample::ENCODED_VALUE,   RuntimeRestPathPlanCounterexample::ENCODING,
+	    RuntimeRestPathPlanCounterexample::DUPLICATE_INPUT, RuntimeRestPathPlanCounterexample::SEGMENT_ROLE,
+	    RuntimeRestPathPlanCounterexample::SEGMENT_ORDER,   RuntimeRestPathPlanCounterexample::SEGMENT_COUNT};
+	for (std::size_t index = 0; index < sizeof(counterexamples) / sizeof(counterexamples[0]); index++) {
+		const auto invalid = cuac_test::BuildRuntimeRestPathPlanCounterexample(counterexamples[index]);
+		const auto runtime = cuac_test::BuildControlledHttpRuntimeForHost("api.github.com");
+		NeverCancelledControl control;
+		bool rejected = false;
+		try {
+			(void)runtime->Executor()->Open(invalid, control);
+		} catch (const cuac::ExecutionError &error) {
+			rejected = true;
+			Require(error.Stage() == cuac::ErrorStage::POLICY,
+			        "structural path mismatch used the wrong safe error stage");
+		}
+		const auto observation = runtime->Observation();
+		Require(rejected && observation.request_count == 0 && observation.target.empty() && observation.headers.empty(),
+		        "structural path mismatch reached request construction or transport at index " + std::to_string(index));
+	}
+}
+
 void TestPermanentResponseSchemaCounterexamplesFailBeforeTransport() {
 	using cuac_test::RuntimeRestSchemaCounterexample;
 	const RuntimeRestSchemaCounterexample counterexamples[] = {
@@ -338,6 +374,7 @@ int main() {
 		TestPlannerProducedExactAndResidualOnlyPlansRemainDistinct();
 		TestDoubleTypedEqualityReachesRealRequest();
 		TestConditionalBindingCounterexamplesFailBeforeTransport();
+		TestStructuralPathReconstructionAndCounterexamples();
 		TestPermanentResponseSchemaCounterexamplesFailBeforeTransport();
 		TestApiKeyAuthenticatorPlacesDeclaredHeaderAndQueryValues();
 		std::cout << "REST plan admission tests passed" << std::endl;

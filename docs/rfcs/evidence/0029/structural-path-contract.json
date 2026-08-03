@@ -1,0 +1,105 @@
+{
+  "schema": "cuac/structural-rest-path-contract-v1",
+  "rfc": "0029",
+  "status": "accepted",
+  "source": {
+    "accepted_specification": "cuac/v1",
+    "fixed_field": "path",
+    "structural_field": "path_segments",
+    "exactly_one_field": true,
+    "minimum_segments": 1,
+    "maximum_segments": 64,
+    "literal": {
+      "minimum_bytes": 1,
+      "maximum_bytes": 255,
+      "grammar": "[A-Za-z0-9._~-]+",
+      "dot_segments": "reject"
+    },
+    "input": {
+      "source": "declared_relation_input",
+      "minimum_occurrences_per_operation": 1,
+      "maximum_occurrences_per_operation": 1,
+      "selector_reference_required": true,
+      "fallback_allowed": false,
+      "encoding": "rfc3986_percent_encoded",
+      "scalar_types": [
+        "BOOLEAN",
+        "BIGINT",
+        "VARCHAR",
+        "DOUBLE"
+      ]
+    }
+  },
+  "value_contract": {
+    "maximum_decoded_bytes": 1024,
+    "utf8": "canonical",
+    "controls": "reject_c0_c1_and_del",
+    "empty": "reject",
+    "dot_segments": "reject",
+    "raw_forbidden_ascii": [
+      "/",
+      "\\",
+      "?",
+      "#",
+      "%"
+    ],
+    "non_finite_double": "reject",
+    "unbound": "operation_ineligible",
+    "bound_null": "operation_ineligible",
+    "non_null_default": "eligible"
+  },
+  "encoding": {
+    "unescaped_ascii": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~-",
+    "other_bytes": "percent_uppercase_hex",
+    "space": "%20",
+    "plus_for_space": false,
+    "unicode_normalization": false,
+    "maximum_path_bytes": 2048,
+    "maximum_request_target_bytes": 8192
+  },
+  "authority": {
+    "caller_controls": [
+      "typed_complete_segment_values"
+    ],
+    "package_controls": [
+      "scheme",
+      "host",
+      "port",
+      "segment_count",
+      "literal_segments",
+      "input_positions",
+      "input_types",
+      "encoding"
+    ],
+    "compiled_paths": 1,
+    "planning_paths": 1,
+    "runtime_paths": 1,
+    "parallel_legacy_paths": false
+  },
+  "evidence_layers": [
+    "source_schema",
+    "diagnostics",
+    "compiled_facts",
+    "planning",
+    "execution",
+    "fixtures",
+    "compatibility",
+    "independent_author"
+  ],
+  "providers": [
+    {
+      "id": "github_repository_issues",
+      "provider": "GitHub",
+      "path_shape": "/repos/{owner}/{repository}/issues",
+      "input_segments": 2,
+      "ownership": "repository"
+    },
+    {
+      "id": "gitlab_project_issue",
+      "provider": "GitLab",
+      "path_shape": "/projects/{project_id}/issues/{issue_iid}",
+      "input_segments": 2,
+      "ownership": "independent_fixture"
+    }
+  ]
+}

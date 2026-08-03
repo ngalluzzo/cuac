@@ -305,7 +305,7 @@
         "test/cpp/runtime/support/loopback_curl_runtime.cpp",
         "test/cpp/runtime/support/loopback_curl_runtime.hpp"
       ],
-      "sha256": "577067906b0002de11b70f9ecb4fb05f05f0cc5d51c391c57c3cc1e7b64ee855"
+      "sha256": "bad75015aa008087e9eab0d5631419e64593b26dc68a7f2876c77d63c2cc6d69"
     },
     "native_product_sources": {
       "algorithm": "sha256-length-prefixed-path-and-bytes-v1",
@@ -580,10 +580,10 @@
         "src/semantics/sources.cmake",
         "src/semantics/targets.cmake"
       ],
-      "sha256": "4c0b85ce15f73089ac338ad9d37042e5a8258632dced7afde078beab5bcce5c3"
+      "sha256": "2d8f1376147168e2c44a18d1f9897151b6e5043583d6cd49b0dc4e86c6892288"
     },
     "public_contract": {
-      "canonical_json_sha256": "27713609f5a076199e5ab8825f98d97489f42c3de83b2412edc33c3c14ecf799",
+      "canonical_json_sha256": "ba681f4e655df5f6975c62cf9fad7abbf1202448a17783553c62f5c1f9406e08",
       "path": "release/0.1.0/public_contract.json"
     },
     "resilience_certification": {

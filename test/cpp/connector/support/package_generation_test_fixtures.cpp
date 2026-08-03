@@ -36,6 +36,8 @@ using cuac::CompiledProtocol;
 using cuac::CompiledRelation;
 using cuac::CompiledReplaySafety;
 using cuac::CompiledResponseSource;
+using cuac::CompiledRestPathSegmentEncoding;
+using cuac::CompiledRestPathSegmentSource;
 using cuac::CompiledScalarType;
 using cuac::CompiledUrlScheme;
 using cuac::internal::CompiledModelBuilder;
@@ -511,7 +513,13 @@ cuac::CompiledPackageGeneration BuildRestMaterializationGeneration(const std::st
 	    "materialized_records_by_scope", false, CompiledOperationCardinality::ZERO_TO_MANY,
 	    CompiledModelBuilder::LinkPagination("per_page", 25, "page", 1, 2, 4),
 	    {Origin("api.github.com"),
-	     "/fixtures/materialized-records",
+	     "/fixtures/materialized-records/{input.scope}",
+	     {{CompiledRestPathSegmentSource::LITERAL, "fixtures", CompiledScalarType::VARCHAR,
+	       CompiledRestPathSegmentEncoding::LITERAL},
+	      {CompiledRestPathSegmentSource::LITERAL, "materialized-records", CompiledScalarType::VARCHAR,
+	       CompiledRestPathSegmentEncoding::LITERAL},
+	      {CompiledRestPathSegmentSource::RELATION_INPUT, "scope", CompiledScalarType::VARCHAR,
+	       CompiledRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED}},
 	     {CompiledModelBuilder::FixedQueryParameter("view", CompiledModelBuilder::Varchar("summary")),
 	      CompiledModelBuilder::RelationInputQueryParameter("scope_name", "scope"),
 	      CompiledModelBuilder::PageSizeQueryParameter("per_page", 25),
@@ -528,6 +536,53 @@ cuac::CompiledPackageGeneration BuildRestMaterializationGeneration(const std::st
 	auto identity = CompiledModelBuilder::PackageIdentity("cuac/v1", "rest_materialization_package", version, digest);
 	auto connector = CompiledModelBuilder::Connector("rest_materialization_package", version, std::move(relations),
 	                                                 NetworkPolicy(false));
+	return CompiledModelBuilder::PackageGeneration(std::move(identity), std::move(connector));
+}
+
+cuac::CompiledPackageGeneration BuildRestPathCompatibilityGeneration(RestPathCompatibilityFixture variant,
+                                                                     const std::string &version, char digest_fill) {
+	std::vector<cuac::CompiledColumn> columns;
+	columns.push_back(CompiledModelBuilder::Column("record_id", CompiledScalarType::BIGINT, false, "$.record_id"));
+	std::vector<cuac::CompiledRelationInput> inputs;
+	inputs.push_back(
+	    CompiledModelBuilder::Input("scope", CompiledScalarType::VARCHAR, false, CompiledModelBuilder::NoDefault()));
+	inputs.push_back(CompiledModelBuilder::Input("alternate", CompiledScalarType::VARCHAR, false,
+	                                             CompiledModelBuilder::NoDefault()));
+	const auto selector =
+	    CompiledModelBuilder::V1OperationSelector({CompiledModelBuilder::RelationInputReference("scope"),
+	                                               CompiledModelBuilder::RelationInputReference("alternate")});
+	std::vector<CompiledOperation> operations;
+	if (variant == RestPathCompatibilityFixture::FIXED_FORM) {
+		operations.push_back(CompiledModelBuilder::RestOperation(
+		    "records_by_scope", false, CompiledOperationCardinality::ZERO_TO_MANY,
+		    CompiledModelBuilder::DisabledPagination(), {Origin("api.github.com"), "/fixtures/records/fixed", {}, {}},
+		    CompiledResponseSource::ROOT_ARRAY, "$", {}, selector));
+	} else {
+		const auto literal = variant == RestPathCompatibilityFixture::LITERAL_CHANGED ? "recordz" : "records";
+		const auto input = variant == RestPathCompatibilityFixture::INPUT_SOURCE_CHANGED ? "alternate" : "scope";
+		operations.push_back(CompiledModelBuilder::RestOperation(
+		    "records_by_scope", false, CompiledOperationCardinality::ZERO_TO_MANY,
+		    CompiledModelBuilder::DisabledPagination(),
+		    {Origin("api.github.com"),
+		     "/fixtures/" + std::string(literal) + "/{input." + input + "}",
+		     {{CompiledRestPathSegmentSource::LITERAL, "fixtures", CompiledScalarType::VARCHAR,
+		       CompiledRestPathSegmentEncoding::LITERAL},
+		      {CompiledRestPathSegmentSource::LITERAL, literal, CompiledScalarType::VARCHAR,
+		       CompiledRestPathSegmentEncoding::LITERAL},
+		      {CompiledRestPathSegmentSource::RELATION_INPUT, input, CompiledScalarType::VARCHAR,
+		       CompiledRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED}},
+		     {},
+		     {}},
+		    CompiledResponseSource::ROOT_ARRAY, "$", {}, selector));
+	}
+	std::vector<CompiledRelation> relations;
+	relations.push_back(ConnectorCatalogTestAccess::Relation(
+	    "path_records", std::move(columns), std::move(inputs), std::move(operations),
+	    ConnectorCatalogTestAccess::Anonymous(), ConnectorCatalogTestAccess::UnpaginatedResources(8, 128)));
+	auto identity =
+	    CompiledModelBuilder::PackageIdentity("cuac/v1", "path_compatibility", version, Digest(digest_fill));
+	auto connector =
+	    CompiledModelBuilder::Connector("path_compatibility", version, std::move(relations), NetworkPolicy(false));
 	return CompiledModelBuilder::PackageGeneration(std::move(identity), std::move(connector));
 }
 
@@ -616,6 +671,12 @@ cuac::CompiledPackageGeneration BuildPaginationCompatibilityGenerationFixture(co
 cuac::CompiledPackageGeneration BuildRateLimitCompatibilityGenerationFixture(const std::string &package_version,
                                                                              char digest_fill, std::uint16_t status) {
 	return BuildRateLimitCompatibilityGeneration(package_version, digest_fill, status);
+}
+
+cuac::CompiledPackageGeneration BuildRestPathCompatibilityGenerationFixture(RestPathCompatibilityFixture variant,
+                                                                            const std::string &package_version,
+                                                                            char digest_fill) {
+	return BuildRestPathCompatibilityGeneration(variant, package_version, digest_fill);
 }
 
 cuac::CompiledPackageGeneration BuildSelectorNamespaceCompatibilityGenerationFixture(const std::string &package_version,

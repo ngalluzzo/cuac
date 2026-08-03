@@ -51,6 +51,7 @@ package before publishing anything.
 ## Current capabilities
 
 - Declarative, closed connector specifications for REST and GraphQL.
+- Typed structural REST paths with package-owned origins and segment shape.
 - Typed generated DuckDB table functions with offline bind and planning.
 - Anonymous, bearer, and static API-key authentication with explicit secrets.
 - Sequential Link, response-body, short-page, and GraphQL cursor pagination.
@@ -108,9 +109,10 @@ matrix is recorded in
 [RESILIENCE_CERTIFICATION.md](docs/RESILIENCE_CERTIFICATION.md).
 
 [RFC 0028](docs/rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md) records the
-accepted coverage-driven evolution policy for the single `cuac/v1` path. Its
-included classifications are future delivery candidates, not capabilities in
-the current release.
+accepted coverage-driven evolution policy for the single `cuac/v1` path. An
+included classification remains a delivery candidate until a complete
+vertical RFC lands; [RFC 0029](docs/rfcs/0029-add-typed-structural-rest-path-segments.md)
+delivers typed structural REST path segments through that policy.
 
 ## Versioning
 

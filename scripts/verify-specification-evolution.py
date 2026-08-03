@@ -206,7 +206,7 @@ REQUIRED_RFC_SNIPPETS = (
     '## Acceptance and verification',
     '## Contract propagation',
     '## Decision',
-    'does not implement any newly included declaration',
+    '0029-add-typed-structural-rest-path-segments.md',
 )
 
 REQUIRED_REVIEWERS = (
@@ -243,8 +243,8 @@ REQUIRED_CONTRACT_SNIPPETS = {
     ),
     "README.md": (
         "docs/rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md",
-        "included classifications are future delivery candidates",
-        "the current release",
+        "included classification remains a delivery candidate",
+        "delivers typed structural REST path segments",
     ),
 }
 

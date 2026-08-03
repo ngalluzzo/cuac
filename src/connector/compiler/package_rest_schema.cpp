@@ -19,6 +19,52 @@ void RequireIdentifier(const LocatedText &value, PackageDiagnosticSink &diagnost
 	}
 }
 
+bool IsLiteralPathSegment(const std::string &value) {
+	if (value.empty() || value.size() > 255 || value == "." || value == "..") {
+		return false;
+	}
+	for (const auto character : value) {
+		if (!((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') ||
+		      (character >= '0' && character <= '9') || character == '.' || character == '_' || character == '~' ||
+		      character == '-')) {
+			return false;
+		}
+	}
+	return true;
+}
+
+RestPathSegmentDeclaration DecodePathSegment(const SchemaReader &reader) {
+	RestPathSegmentDeclaration segment;
+	reader.RequireMapping({"literal", "input", "encoding"}, {});
+	segment.mark = reader.Mark();
+	const bool literal = reader.Field("literal") != nullptr;
+	const bool input = reader.Field("input") != nullptr;
+	if (static_cast<int>(literal) + static_cast<int>(input) != 1) {
+		reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA, segment.mark);
+	}
+	if (literal) {
+		segment.kind = RestPathSegmentKind::LITERAL;
+		segment.source = reader.Text("literal");
+		segment.encoding = reader.Text("encoding", false);
+		if (reader.Field("encoding") != nullptr) {
+			reader.Diagnostics().Add(PackageDiagnosticCode::UNKNOWN_FIELD, PackageDiagnosticPhase::SCHEMA,
+			                         segment.encoding.mark);
+		}
+		if (!IsLiteralPathSegment(segment.source.value)) {
+			reader.Diagnostics().Add(PackageDiagnosticCode::POLICY_WIDENING, PackageDiagnosticPhase::COMPILE,
+			                         segment.source.mark);
+		}
+	} else {
+		segment.kind = RestPathSegmentKind::INPUT;
+		segment.source = reader.Text("input");
+		segment.encoding = reader.Text("encoding");
+		RequireIdentifier(segment.source, reader.Diagnostics());
+		RequireValue(segment.encoding, "rfc3986_percent_encoded", PackageDiagnosticCode::UNSUPPORTED_DECLARATION,
+		             PackageDiagnosticPhase::SCHEMA, reader.Diagnostics());
+	}
+	return segment;
+}
+
 QueryFieldDeclaration DecodeQueryField(const SchemaReader &reader) {
 	QueryFieldDeclaration field;
 	reader.RequireMapping(
@@ -70,21 +116,35 @@ QueryFieldDeclaration DecodeQueryField(const SchemaReader &reader) {
 
 RestRequestDeclaration DecodeRestRequestSchema(const SchemaReader &reader) {
 	RestRequestDeclaration request;
-	reader.RequireMapping({"protocol", "method", "origin", "path", "query", "headers"},
-	                      {"protocol", "method", "origin", "path", "query", "headers"});
+	reader.RequireMapping({"protocol", "method", "origin", "path", "path_segments", "query", "headers"},
+	                      {"protocol", "method", "origin", "query", "headers"});
 	request.protocol = reader.Text("protocol");
 	request.method = reader.Text("method");
 	request.origin = DecodeHttpOrigin(reader.Child("origin"));
-	request.path = reader.Text("path");
+	request.structural_path = reader.Field("path_segments") != nullptr;
+	request.path = reader.Text("path", false);
 	request.headers = DecodeHttpHeaders(reader);
 	request.mark = reader.Mark();
 	RequireValue(request.protocol, "rest", PackageDiagnosticCode::UNSUPPORTED_DECLARATION,
 	             PackageDiagnosticPhase::SCHEMA, reader.Diagnostics());
 	RequireValue(request.method, "GET", PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::SCHEMA,
 	             reader.Diagnostics());
-	if (!IsFixedPath(request.path.value)) {
+	const bool fixed_path = reader.Field("path") != nullptr;
+	if (fixed_path == request.structural_path) {
+		reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA, request.mark);
+	} else if (fixed_path && !IsFixedPath(request.path.value)) {
 		reader.Diagnostics().Add(PackageDiagnosticCode::POLICY_WIDENING, PackageDiagnosticPhase::COMPILE,
 		                         request.path.mark);
+	}
+	if (request.structural_path) {
+		const auto *segments = reader.Sequence("path_segments", 1, 64);
+		if (segments != nullptr) {
+			request.path_segments.reserve(segments->Size());
+			for (std::size_t index = 0; index < segments->Size(); index++) {
+				request.path_segments.push_back(DecodePathSegment(
+				    reader.Child(segments->SequenceValue(index), ".path_segments[" + std::to_string(index) + "]")));
+			}
+		}
 	}
 	const auto *query = reader.Sequence("query", 0, 64);
 	if (query != nullptr) {

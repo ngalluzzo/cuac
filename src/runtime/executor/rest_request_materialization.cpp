@@ -3,6 +3,7 @@
 #include "cuac/internal/runtime/policy/request_validation.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <set>
@@ -25,6 +26,142 @@ std::string EncodeCanonicalDouble(double value) {
 		throw std::invalid_argument("REST query DOUBLE could not be canonically encoded");
 	}
 	return std::string(buffer, static_cast<std::size_t>(written));
+}
+
+bool IsUnreserved(unsigned char byte) {
+	return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') ||
+	       byte == '-' || byte == '.' || byte == '_' || byte == '~';
+}
+
+bool IsLiteralPathSegment(const std::string &value) {
+	if (value.empty() || value.size() > 255 || value == "." || value == "..") {
+		return false;
+	}
+	for (const auto character : value) {
+		if (!IsUnreserved(static_cast<unsigned char>(character))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsControlFreeUtf8(const std::string &value) {
+	if (!IsValidUtf8(value)) {
+		return false;
+	}
+	std::size_t offset = 0;
+	while (offset < value.size()) {
+		const auto first = static_cast<unsigned char>(value[offset++]);
+		std::uint32_t code_point = first;
+		std::size_t continuation_count = 0;
+		if (first >= 0xC2U && first <= 0xDFU) {
+			code_point = first & 0x1FU;
+			continuation_count = 1;
+		} else if (first >= 0xE0U && first <= 0xEFU) {
+			code_point = first & 0x0FU;
+			continuation_count = 2;
+		} else if (first >= 0xF0U) {
+			code_point = first & 0x07U;
+			continuation_count = 3;
+		}
+		for (std::size_t index = 0; index < continuation_count; index++) {
+			code_point = (code_point << 6U) | (static_cast<unsigned char>(value[offset++]) & 0x3FU);
+		}
+		if (code_point <= 0x1FU || (code_point >= 0x7FU && code_point <= 0x9FU)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsSafeRawPathValue(const std::string &value) {
+	return !value.empty() && value.size() <= 1024 && value != "." && value != ".." &&
+	       value.find_first_of("/\\?#%") == std::string::npos && IsControlFreeUtf8(value);
+}
+
+std::string PercentEncodePathSegment(const std::string &value) {
+	static const char HEX[] = "0123456789ABCDEF";
+	std::string result;
+	result.reserve(value.size());
+	for (const auto character : value) {
+		const auto byte = static_cast<unsigned char>(character);
+		if (IsUnreserved(byte)) {
+			result.push_back(static_cast<char>(byte));
+		} else {
+			result.push_back('%');
+			result.push_back(HEX[(byte >> 4U) & 0x0FU]);
+			result.push_back(HEX[byte & 0x0FU]);
+		}
+	}
+	return result;
+}
+
+bool TryCanonicalPathValue(const PlannedRestPathSegment &binding, std::string &value) {
+	switch (binding.Kind()) {
+	case PlannedRestScalarKind::BOOLEAN:
+		value = binding.BooleanValue() ? "true" : "false";
+		break;
+	case PlannedRestScalarKind::BIGINT:
+		value = std::to_string(binding.BigintValue());
+		break;
+	case PlannedRestScalarKind::VARCHAR:
+		value = binding.VarcharValue();
+		break;
+	case PlannedRestScalarKind::DOUBLE:
+		if (!std::isfinite(binding.DoubleValue())) {
+			return false;
+		}
+		value = EncodeCanonicalDouble(binding.DoubleValue());
+		break;
+	default:
+		return false;
+	}
+	return IsSafeRawPathValue(value);
+}
+
+bool TryCopyPermanentPath(const PlannedRestOperation &operation, std::string &path) {
+	if (operation.path_bindings.size() > 64 || operation.path_contract.size() != operation.path_bindings.size()) {
+		return false;
+	}
+	path.clear();
+	std::set<std::string> input_ids;
+	for (std::size_t index = 0; index < operation.path_bindings.size(); index++) {
+		const auto &contract = operation.path_contract[index];
+		const auto &binding = operation.path_bindings[index];
+		if (contract.Source() != binding.Source() || contract.SourceId() != binding.SourceId() ||
+		    contract.Kind() != binding.Kind() || contract.Encoding() != binding.Encoding()) {
+			return false;
+		}
+		path.push_back('/');
+		if (binding.Source() == PlannedRestPathSegmentSource::LITERAL) {
+			if (!binding.SourceId().empty() || binding.Kind() != PlannedRestScalarKind::VARCHAR ||
+			    binding.Encoding() != PlannedRestPathSegmentEncoding::LITERAL ||
+			    !IsLiteralPathSegment(binding.VarcharValue()) || binding.EncodedValue() != binding.VarcharValue() ||
+			    contract.Literal() != binding.VarcharValue()) {
+				return false;
+			}
+		} else if (binding.Source() == PlannedRestPathSegmentSource::RELATION_INPUT) {
+			std::string decoded;
+			if (!IsSafeLogicalId(binding.SourceId()) || !input_ids.insert(binding.SourceId()).second ||
+			    !contract.Literal().empty() ||
+			    binding.Encoding() != PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED ||
+			    !TryCanonicalPathValue(binding, decoded) ||
+			    binding.EncodedValue() != PercentEncodePathSegment(decoded)) {
+				return false;
+			}
+		} else {
+			return false;
+		}
+		if (path.size() > 2048 || binding.EncodedValue().empty() ||
+		    binding.EncodedValue().size() > 2048 - path.size()) {
+			return false;
+		}
+		path += binding.EncodedValue();
+	}
+	if (path.empty()) {
+		path = "/";
+	}
+	return path.size() <= 2048 && path == operation.path && IsSafeRequestPath(path);
 }
 
 bool TryColumnKind(PlannedRestScalarKind planned, ValueKind &kind) {
@@ -303,13 +440,14 @@ bool TryMaterializeRestRequest(const ScanPlan &plan, const RestConditionalBindin
 	}
 	const auto &operation = plan.Operation().Rest();
 	request = MaterializedRestRequest();
-	if (!TryCopyPermanentQuery(operation.query_bindings, conditional, request.query) ||
+	if (!TryCopyPermanentPath(operation, request.path) ||
+	    !TryCopyPermanentQuery(operation.query_bindings, conditional, request.query) ||
 	    !TryCopyPermanentColumns(operation.result_columns, request.columns) ||
 	    !HasMatchingPermanentColumns(operation.result_columns, plan.OutputColumns()) ||
 	    !TryCopyPermanentRecordsPath(operation, request.records_path)) {
 		return false;
 	}
-	if (!FitsRestRequestTarget(operation.path, request.query) ||
+	if (!FitsRestRequestTarget(request.path, request.query) ||
 	    !TryCopyFixedHeaders(operation.headers, false, plan.Budgets().header_bytes, request.headers)) {
 		return false;
 	}

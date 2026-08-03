@@ -24,7 +24,9 @@ classification for each proposed declaration. Under
 [RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md), an included
 classification is queued product direction, not permission to add dormant
 syntax. The responsible streams extend the one `cuac/v1` construction path in
-one vertical slice or leave the declaration absent.
+one vertical slice or leave the declaration absent. RFC 0029's structural REST
+path slice follows that route across Connector, Semantics, Runtime, Query
+evidence, and Ecosystem Compatibility without adding a second owner or path.
 
 The root of a stream contains only its README and build inventories. A new
 production translation unit belongs in a named responsibility directory. Do

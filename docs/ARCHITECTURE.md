@@ -25,7 +25,9 @@ parallel schema, compiler, model, planner, or Runtime route. The accepted
 pre-1.0 policy and API coverage corpus are defined by
 [RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md). A capability
 classified as included there remains absent until every permanent transition
-and its deterministic evidence are implemented together.
+and its deterministic evidence are implemented together. Typed structural
+REST paths completed that transition under
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md).
 
 ## Product surface
 
@@ -124,7 +126,7 @@ ordered relations
 ├── structural scalar-or-array outputs and two-level nullability
 ├── structural inputs and typed default presence
 ├── authentication shape
-├── operations and selectors
+├── operations, selectors, and typed REST path segments
 ├── predicates and proof facts
 ├── network and resource envelope
 └── safe source coordinates and explanation
@@ -190,7 +192,7 @@ named relation arguments into ordered structural inputs:
 
 - absence means omitted;
 - a present SQL NULL remains a typed present NULL; and
-- a present value retains its `BOOLEAN`, `BIGINT`, or `VARCHAR` type.
+- a present value retains its `BOOLEAN`, `BIGINT`, `VARCHAR`, or `DOUBLE` type.
 
 Query does not apply defaults or binder-requiredness to relation-origin
 arguments. It synthesizes and validates the separate logical secret selector
@@ -222,6 +224,16 @@ Relational Semantics then:
 8. produces one immutable `ScanPlan` with exact residual ownership.
 
 Planning is deterministic and side-effect free.
+
+For a structural REST path, Semantics independently copies the ordered compiled
+declaration into immutable contract slots, then correlates each input slot with
+an exact resolved relation input and selector reference. It converts the typed
+non-NULL value to canonical text, rejects forbidden structure and resource
+excess, percent-encodes every non-unreserved UTF-8 byte, and derives separate
+typed value bindings plus one immutable rendered-path mirror. Runtime correlates
+each contract slot with its binding before reconstructing the path. The package
+still owns origin, segment count, literal bytes, input positions, scalar kinds,
+and encoding identity; Query and callers never provide a path or template.
 
 For a GraphQL operation, Semantics does not accept Connector's
 rendered document or recipe type as execution authority. It deep-copies every
@@ -352,6 +364,13 @@ prefetch, parallel page work, resume, deduplication, stable ordering, or
 snapshot claim is implied. A declared safe-read retry repeats only the current
 unaccepted page. Complete-scan result caching, when enabled, occurs outside the
 page traversal and never changes these continuation semantics.
+
+For REST, Runtime does not trust the planned rendered path by itself. It
+independently validates every literal/input role, source ID, scalar kind,
+typed value, encoding identity, encoded bytes, order, and byte budget;
+reconstructs the path; and requires byte equality with the Semantics mirror
+before request construction. The admitted materialized path is also the exact
+continuation path boundary. Any mismatch fails before transport.
 
 A declared rate-limit policy may additionally react to a complete response whose status and bounded
 field interpretations match the immutable plan. One protocol-neutral

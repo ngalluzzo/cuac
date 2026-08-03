@@ -14,6 +14,7 @@ namespace internal {
 // Admission moves this value into an immutable profile, so execution never
 // retains the plan or reinterprets Connector/Semantics internals.
 struct MaterializedRestRequest {
+	std::string path;
 	std::vector<AdmittedQueryParameter> query;
 	std::vector<HttpHeader> headers;
 	std::vector<AdmittedRestColumn> columns;

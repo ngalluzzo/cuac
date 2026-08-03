@@ -37,7 +37,13 @@ void RunPermanentRestScanPlanFixtureTests() {
 	const auto &operation = plan.Operation().Rest();
 	Require(operation.operation_name == "materialized_records_by_scope" &&
 	            operation.origin.scheme == cuac::PlannedUrlScheme::HTTPS && operation.origin.host == "api.github.com" &&
-	            operation.origin.port == 443 && operation.path == "/fixtures/materialized-records" &&
+	            operation.origin.port == 443 &&
+	            operation.path == "/fixtures/materialized-records/north%20america%20%CE%B2" &&
+	            operation.path_bindings.size() == 3 &&
+	            operation.path_bindings[2].Source() == cuac::PlannedRestPathSegmentSource::RELATION_INPUT &&
+	            operation.path_bindings[2].SourceId() == "scope" &&
+	            operation.path_bindings[2].VarcharValue() == "north america \xCE\xB2" &&
+	            operation.path_bindings[2].EncodedValue() == "north%20america%20%CE%B2" &&
 	            operation.query_parameters.empty() && operation.query_bindings.size() == 4,
 	        "real permanent REST materialization lost its exact selected request envelope");
 	RequireBinding(operation.query_bindings[0], "view", cuac::PlannedRestQueryValueSource::FIXED, "",
@@ -45,8 +51,8 @@ void RunPermanentRestScanPlanFixtureTests() {
 	Require(operation.query_bindings[0].VarcharValue() == "summary",
 	        "permanent REST fixed binding lost its decoded value");
 	RequireBinding(operation.query_bindings[1], "scope_name", cuac::PlannedRestQueryValueSource::RELATION_INPUT,
-	               "scope", cuac::PlannedRestScalarKind::VARCHAR, "north+america%2F%CE%B2");
-	Require(operation.query_bindings[1].VarcharValue() == "north america/\xCE\xB2",
+	               "scope", cuac::PlannedRestScalarKind::VARCHAR, "north+america+%CE%B2");
+	Require(operation.query_bindings[1].VarcharValue() == "north america \xCE\xB2",
 	        "permanent REST relation binding lost exact UTF-8 before canonical encoding");
 	RequireBinding(operation.query_bindings[2], "per_page", cuac::PlannedRestQueryValueSource::PAGINATION_PAGE_SIZE, "",
 	               cuac::PlannedRestScalarKind::BIGINT, "25");
@@ -83,6 +89,6 @@ void RunPermanentRestScanPlanFixtureTests() {
 	            pagination.Target().page_increment == 2 && pagination.ScanBudgets().pages == 4,
 	        "positive permanent REST fixture lost its exact sequential Link transition or scan bound");
 	Require(plan.Snapshot().find("north america") == std::string::npos &&
-	            plan.Snapshot().find("north+america%2F%CE%B2") == std::string::npos,
-	        "permanent REST explanation forwarded a relation-input scalar or encoded request value");
+	            plan.Snapshot().find("north+america+%CE%B2") == std::string::npos,
+	        "permanent REST explanation forwarded raw or query-encoded relation-input scalar bytes");
 }

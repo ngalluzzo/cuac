@@ -2,6 +2,7 @@
 
 #include "cuac/internal/semantics/planner/scan_planner.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <stdexcept>
 #include <utility>
@@ -79,6 +80,85 @@ std::string FormUrlEncode(const std::string &value) {
 	return result;
 }
 
+std::string PercentEncodePathSegment(const std::string &value) {
+	static const char HEX[] = "0123456789ABCDEF";
+	std::string result;
+	result.reserve(value.size());
+	for (const auto character : value) {
+		const auto byte = static_cast<unsigned char>(character);
+		const bool unreserved = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+		                        (byte >= '0' && byte <= '9') || byte == '-' || byte == '.' || byte == '_' ||
+		                        byte == '~';
+		if (unreserved) {
+			result.push_back(static_cast<char>(byte));
+		} else {
+			result.push_back('%');
+			result.push_back(HEX[(byte >> 4U) & 0x0FU]);
+			result.push_back(HEX[byte & 0x0FU]);
+		}
+	}
+	return result;
+}
+
+bool IsContinuation(unsigned char byte) {
+	return (byte & 0xC0U) == 0x80U;
+}
+
+std::uint32_t DecodePathCodePoint(const std::string &value, std::size_t &offset) {
+	const auto first = static_cast<unsigned char>(value[offset]);
+	if (first <= 0x7FU) {
+		offset++;
+		return first;
+	}
+	std::size_t length;
+	std::uint32_t code_point;
+	std::uint32_t minimum;
+	if (first >= 0xC2U && first <= 0xDFU) {
+		length = 2;
+		code_point = first & 0x1FU;
+		minimum = 0x80U;
+	} else if (first >= 0xE0U && first <= 0xEFU) {
+		length = 3;
+		code_point = first & 0x0FU;
+		minimum = 0x800U;
+	} else if (first >= 0xF0U && first <= 0xF4U) {
+		length = 4;
+		code_point = first & 0x07U;
+		minimum = 0x10000U;
+	} else {
+		throw std::invalid_argument("REST structural path input is not canonical UTF-8");
+	}
+	if (value.size() - offset < length) {
+		throw std::invalid_argument("REST structural path input is truncated UTF-8");
+	}
+	for (std::size_t index = 1; index < length; index++) {
+		const auto byte = static_cast<unsigned char>(value[offset + index]);
+		if (!IsContinuation(byte)) {
+			throw std::invalid_argument("REST structural path input is not canonical UTF-8");
+		}
+		code_point = (code_point << 6U) | (byte & 0x3FU);
+	}
+	offset += length;
+	if (code_point < minimum || (code_point >= 0xD800U && code_point <= 0xDFFFU) || code_point > 0x10FFFFU) {
+		throw std::invalid_argument("REST structural path input is not canonical UTF-8");
+	}
+	return code_point;
+}
+
+void ValidatePathValue(const std::string &value) {
+	if (value.empty() || value.size() > 1024 || value == "." || value == ".." ||
+	    value.find_first_of("/\\?#%") != std::string::npos) {
+		throw std::invalid_argument("REST structural path input contains invalid structure or size");
+	}
+	std::size_t offset = 0;
+	while (offset < value.size()) {
+		const auto code_point = DecodePathCodePoint(value, offset);
+		if (code_point <= 0x1FU || (code_point >= 0x7FU && code_point <= 0x9FU)) {
+			throw std::invalid_argument("REST structural path input contains a Unicode control code point");
+		}
+	}
+}
+
 // RFC 0020: 17 significant decimal digits is the smallest fixed precision
 // proven to round-trip any IEEE-754 double bit-for-bit (Steele & White). Must
 // stay byte-identical to Connector's EncodeCanonicalDouble
@@ -118,6 +198,23 @@ struct PlannedScalar {
 	std::string varchar_value;
 	double double_value;
 };
+
+std::string CanonicalPathValue(const PlannedScalar &value) {
+	switch (value.kind) {
+	case PlannedRestScalarKind::BOOLEAN:
+		return value.boolean_value ? "true" : "false";
+	case PlannedRestScalarKind::BIGINT:
+		return std::to_string(value.bigint_value);
+	case PlannedRestScalarKind::VARCHAR:
+		return value.varchar_value;
+	case PlannedRestScalarKind::DOUBLE:
+		if (!std::isfinite(value.double_value)) {
+			throw std::invalid_argument("REST structural path DOUBLE must be finite");
+		}
+		return EncodeCanonicalDouble(value.double_value);
+	}
+	throw std::logic_error("planned REST path input has an unknown scalar kind");
+}
 
 PlannedScalar PlanScalar(const CompiledScalarValue &value) {
 	if (value.IsNull()) {
@@ -171,13 +268,59 @@ ScanPlanBuilder::BuildRestOperation(const CompiledRelation &relation, const Comp
 		throw std::logic_error("REST operation planner received another protocol alternative");
 	}
 	const auto &rest = operation.Rest();
+	std::vector<PlannedRestPathContractSegment> path_contract;
+	path_contract.reserve(rest.request.path_segments.size());
+	std::vector<PlannedRestPathSegment> path_bindings;
+	path_bindings.reserve(rest.request.path_segments.size());
+	std::string path;
+	for (const auto &segment : rest.request.path_segments) {
+		path.push_back('/');
+		if (segment.source == CompiledRestPathSegmentSource::LITERAL) {
+			path += segment.value;
+			path_contract.push_back(PlannedRestPathContractSegment(
+			    PlannedRestPathSegmentSource::LITERAL, "", PlannedRestScalarKind::VARCHAR,
+			    PlannedRestPathSegmentEncoding::LITERAL, segment.value));
+			path_bindings.push_back(PlannedRestPathSegment(PlannedRestPathSegmentSource::LITERAL, "",
+			                                               PlannedRestScalarKind::VARCHAR, false, 0, segment.value, 0.0,
+			                                               PlannedRestPathSegmentEncoding::LITERAL, segment.value));
+			continue;
+		}
+		if (segment.source != CompiledRestPathSegmentSource::RELATION_INPUT) {
+			throw std::logic_error("compiled REST path contains an unknown segment source");
+		}
+		const auto *input = relation_inputs.Find(segment.value);
+		if (input == nullptr || input->State() != input_resolution::ResolvedInputState::BOUND_VALUE ||
+		    input->Type() != segment.input_type) {
+			throw std::logic_error("selected REST path input is absent, NULL, or type-incompatible");
+		}
+		auto scalar = PlanScalar(*input);
+		path_contract.push_back(PlannedRestPathContractSegment(
+		    PlannedRestPathSegmentSource::RELATION_INPUT, segment.value, PlanScalarKind(segment.input_type),
+		    PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED, ""));
+		const auto decoded = CanonicalPathValue(scalar);
+		ValidatePathValue(decoded);
+		const auto encoded = PercentEncodePathSegment(decoded);
+		path += encoded;
+		path_bindings.push_back(PlannedRestPathSegment(
+		    PlannedRestPathSegmentSource::RELATION_INPUT, segment.value, scalar.kind, scalar.boolean_value,
+		    scalar.bigint_value, std::move(scalar.varchar_value), scalar.double_value,
+		    PlannedRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED, encoded));
+	}
+	if (path.empty()) {
+		path = "/";
+	}
+	if (path.size() > 2048) {
+		throw std::invalid_argument("REST structural path exceeds the request-path byte budget");
+	}
 	PlannedRestOperation planned {
 	    operation.name,
 	    PlanMethod(rest.method),
 	    PlanCardinality(operation.cardinality),
 	    PlanReplaySafety(rest.replay_safety),
 	    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
-	    rest.request.path,
+	    std::move(path),
+	    std::move(path_contract),
+	    std::move(path_bindings),
 	    {},
 	    {},
 	    PlanResponseSource(rest.response_source),
@@ -258,6 +401,14 @@ ScanPlanBuilder::BuildRestOperation(const CompiledRelation &relation, const Comp
 		    PlannedRestQueryBinding(query.name, PlanQuerySource(query.source), query.source_id, scalar.kind,
 		                            scalar.boolean_value, scalar.bigint_value, std::move(scalar.varchar_value),
 		                            scalar.double_value, encoding, std::move(encoded_value)));
+	}
+	std::size_t target_bytes = planned.path.size();
+	for (const auto &binding : planned.query_bindings) {
+		const auto field_bytes = 2 + binding.Name().size() + binding.EncodedValue().size();
+		if (target_bytes > 8192 || field_bytes > 8192 - target_bytes) {
+			throw std::invalid_argument("REST request target exceeds the path-plus-query byte budget");
+		}
+		target_bytes += field_bytes;
 	}
 	return planned;
 }

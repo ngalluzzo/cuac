@@ -838,7 +838,15 @@ def main() -> int:
                     "operation_kind": "query",
                     "partial_data": "fail_on_any_error",
                 },
-                "rest": {"enabled": True},
+                "rest": {
+                    "enabled": True,
+                    "path_authority": "package_origin_and_typed_complete_segments",
+                    "path_encoding": "rfc3986_percent_encoded_uppercase_hex",
+                    "path_inputs": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE"],
+                    "path_limit_bytes": 2048,
+                    "structural_paths": True,
+                    "target_limit_bytes": 8192,
+                },
             },
             "relational_ownership": {
                 "filter": "duckdb",

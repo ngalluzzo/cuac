@@ -47,6 +47,39 @@ R"CUACV1({
       "pattern": "^/(?:[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)*)?$",
       "not": {"pattern": "(?:^|/)\\.{1,2}(?:/|$)"}
     },
+    "pathLiteralSegment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9._~-]+$",
+      "not": {"enum": [".", ".."]}
+    },
+    "literalPathSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["literal"],
+      "properties": {"literal": {"$ref": "#/$defs/pathLiteralSegment"}}
+    },
+    "inputPathSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "encoding"],
+      "properties": {
+        "input": {"$ref": "#/$defs/id"},
+        "encoding": {"const": "rfc3986_percent_encoded"}
+      }
+    },
+    "structuralPath": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/literalPathSegment"},
+          {"$ref": "#/$defs/inputPathSegment"}
+        ]
+      }
+    },
     "extractPath": {
       "type": "string",
       "maxLength": 1024,
@@ -325,12 +358,17 @@ R"CUACV1({
     "restRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["protocol", "method", "origin", "path", "query", "headers"],
+      "required": ["protocol", "method", "origin", "query", "headers"],
+      "oneOf": [
+        {"required": ["path"]},
+        {"required": ["path_segments"]}
+      ],
       "properties": {
         "protocol": {"const": "rest"},
         "method": {"const": "GET"},
         "origin": {"$ref": "#/$defs/origin"},
         "path": {"$ref": "#/$defs/fixedPath"},
+        "path_segments": {"$ref": "#/$defs/structuralPath"},
         "query": {
           "type": "array",
           "maxItems": 64,

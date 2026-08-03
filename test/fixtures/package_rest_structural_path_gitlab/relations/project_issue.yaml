@@ -1,0 +1,61 @@
+api_version: cuac/v1
+kind: relation
+id: project_issue
+schema: static
+
+columns:
+  - id: iid
+    type: BIGINT
+    nullable: false
+    extract: $.iid
+  - id: title
+    type: VARCHAR
+    nullable: false
+    extract: $.title
+
+inputs:
+  - id: project_id
+    type: BIGINT
+    nullable: false
+  - id: issue_iid
+    type: BIGINT
+    nullable: false
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 1048576
+  max_response_bytes_per_scan: 1048576
+  max_records_per_page: 1
+  max_records_per_scan: 1
+  max_extracted_string_bytes: 1024
+
+operations:
+  - id: get_project_issue
+    when:
+      required_inputs: [input.project_id, input.issue_iid]
+    cardinality: one
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: gitlab.com
+        port: 443
+      path_segments:
+        - {literal: projects}
+        - {input: project_id, encoding: rfc3986_percent_encoded}
+        - {literal: issues}
+        - {input: issue_iid, encoding: rfc3986_percent_encoded}
+      query: []
+      headers:
+        - name: Accept
+          value: application/json
+        - name: User-Agent
+          value: cuac
+    response:
+      source: root_object
+    pagination:
+      strategy: disabled

@@ -26,6 +26,8 @@ enum class PlannedResponseSource { JSON_PATH_MANY, ROOT_ARRAY, ROOT_OBJECT };
 
 enum class PlannedRestScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
 enum class PlannedResultShape { SCALAR, ARRAY };
+enum class PlannedRestPathSegmentSource { LITERAL, RELATION_INPUT };
+enum class PlannedRestPathSegmentEncoding { LITERAL, RFC3986_PERCENT_ENCODED };
 enum class PlannedRestQueryValueSource {
 	FIXED,
 	RELATION_INPUT,
@@ -37,6 +39,81 @@ enum class PlannedRestQueryEncoding { FORM_URLENCODED };
 
 struct PlannedQueryParameter {
 	std::string name;
+	std::string encoded_value;
+};
+
+// One package-owned structural slot copied independently from the concrete
+// value binding. Runtime correlates this declaration with path_bindings before
+// reconstruction, so a binding cannot replace its source, type, encoding,
+// literal, position, or segment count.
+class PlannedRestPathContractSegment {
+public:
+	PlannedRestPathContractSegment(const PlannedRestPathContractSegment &) = default;
+	PlannedRestPathContractSegment(PlannedRestPathContractSegment &&) = default;
+	PlannedRestPathContractSegment &operator=(const PlannedRestPathContractSegment &) = delete;
+	PlannedRestPathContractSegment &operator=(PlannedRestPathContractSegment &&) = delete;
+
+	PlannedRestPathSegmentSource Source() const noexcept;
+	const std::string &SourceId() const noexcept;
+	PlannedRestScalarKind Kind() const noexcept;
+	PlannedRestPathSegmentEncoding Encoding() const noexcept;
+	const std::string &Literal() const noexcept;
+
+private:
+	friend class ScanPlanBuilder;
+	friend struct PlannedRestOperation;
+	friend class cuac_test::ScanPlanFixtureBuilder;
+	friend class cuac_test::ScanPlanTestAccess;
+
+	PlannedRestPathContractSegment(PlannedRestPathSegmentSource source, std::string source_id,
+	                               PlannedRestScalarKind kind, PlannedRestPathSegmentEncoding encoding,
+	                               std::string literal);
+
+	PlannedRestPathSegmentSource source;
+	std::string source_id;
+	PlannedRestScalarKind kind;
+	PlannedRestPathSegmentEncoding encoding;
+	std::string literal;
+};
+
+// One independently reconstructed complete path segment. Dynamic bindings
+// retain the exact typed value and canonical encoded bytes; Runtime validates
+// both and rebuilds the full path before admission.
+class PlannedRestPathSegment {
+public:
+	PlannedRestPathSegment(const PlannedRestPathSegment &) = default;
+	PlannedRestPathSegment(PlannedRestPathSegment &&) = default;
+	PlannedRestPathSegment &operator=(const PlannedRestPathSegment &) = delete;
+	PlannedRestPathSegment &operator=(PlannedRestPathSegment &&) = delete;
+
+	PlannedRestPathSegmentSource Source() const noexcept;
+	const std::string &SourceId() const noexcept;
+	PlannedRestScalarKind Kind() const noexcept;
+	bool BooleanValue() const;
+	std::int64_t BigintValue() const;
+	const std::string &VarcharValue() const;
+	double DoubleValue() const;
+	PlannedRestPathSegmentEncoding Encoding() const noexcept;
+	const std::string &EncodedValue() const noexcept;
+
+private:
+	friend class ScanPlanBuilder;
+	friend struct PlannedRestOperation;
+	friend class cuac_test::ScanPlanFixtureBuilder;
+	friend class cuac_test::ScanPlanTestAccess;
+
+	PlannedRestPathSegment(PlannedRestPathSegmentSource source, std::string source_id, PlannedRestScalarKind kind,
+	                       bool boolean_value, std::int64_t bigint_value, std::string varchar_value,
+	                       double double_value, PlannedRestPathSegmentEncoding encoding, std::string encoded_value);
+
+	PlannedRestPathSegmentSource source;
+	std::string source_id;
+	PlannedRestScalarKind kind;
+	bool boolean_value;
+	std::int64_t bigint_value;
+	std::string varchar_value;
+	double double_value;
+	PlannedRestPathSegmentEncoding encoding;
 	std::string encoded_value;
 };
 
@@ -136,13 +213,26 @@ struct PlannedRestOperation {
 	                     std::vector<PlannedRestQueryBinding> query_bindings = std::vector<PlannedRestQueryBinding>(),
 	                     PlannedRestResponsePath records_path = PlannedRestResponsePath(),
 	                     std::vector<PlannedRestResultColumn> result_columns = std::vector<PlannedRestResultColumn>());
+	PlannedRestOperation(std::string operation_name, PlannedHttpMethod method, PlannedCardinality cardinality,
+	                     PlannedReplaySafety replay_safety, PlannedHttpOrigin origin, std::string path,
+	                     std::vector<PlannedRestPathContractSegment> path_contract,
+	                     std::vector<PlannedRestPathSegment> path_bindings,
+	                     std::vector<PlannedQueryParameter> query_parameters, std::vector<PlannedHttpHeader> headers,
+	                     PlannedResponseSource response_source, std::string records_extractor,
+	                     std::vector<PlannedRestQueryBinding> query_bindings = std::vector<PlannedRestQueryBinding>(),
+	                     PlannedRestResponsePath records_path = PlannedRestResponsePath(),
+	                     std::vector<PlannedRestResultColumn> result_columns = std::vector<PlannedRestResultColumn>());
 
 	std::string operation_name;
 	PlannedHttpMethod method;
 	PlannedCardinality cardinality;
 	PlannedReplaySafety replay_safety;
 	PlannedHttpOrigin origin;
+	// Safe rendered mirror used by explanation/cache identity. Runtime consumes
+	// path_bindings and requires independent reconstruction to equal this value.
 	std::string path;
+	std::vector<PlannedRestPathContractSegment> path_contract;
+	std::vector<PlannedRestPathSegment> path_bindings;
 	// Explanation mirror only. Runtime consumes query_bindings as the sole
 	// executable query authority.
 	std::vector<PlannedQueryParameter> query_parameters;
