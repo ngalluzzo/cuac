@@ -88,11 +88,31 @@ bool SamePagination(const CompiledPagination &left, const CompiledPagination &ri
 	if (left.Strategy() == CompiledPaginationStrategy::DISABLED) {
 		return true;
 	}
-	return left.Dependency() == right.Dependency() && left.Consistency() == right.Consistency() &&
-	       left.LinkRelation() == right.LinkRelation() && left.TargetScope() == right.TargetScope() &&
-	       left.PageSizeParameter() == right.PageSizeParameter() && left.PageSize() == right.PageSize() &&
-	       left.PageNumberParameter() == right.PageNumberParameter() && left.FirstPage() == right.FirstPage() &&
-	       left.PageIncrement() == right.PageIncrement() && left.MaxPagesPerScan() == right.MaxPagesPerScan();
+	const bool shared = left.Dependency() == right.Dependency() && left.Consistency() == right.Consistency() &&
+	                    left.TargetScope() == right.TargetScope() &&
+	                    left.PageSizeParameter() == right.PageSizeParameter() && left.PageSize() == right.PageSize() &&
+	                    left.MaxPagesPerScan() == right.MaxPagesPerScan();
+	if (!shared) {
+		return false;
+	}
+	// RFC 0029: a cursor traversal carries no page number, so reading the
+	// page-number accessors here would be a logic error rather than a
+	// comparison. Its continuation identity is the declared token path, the
+	// pagination-owned parameter, and the retained byte budget; a change to any
+	// of them changes request behavior and must not normalize as equal.
+	if (left.Strategy() == CompiledPaginationStrategy::RESPONSE_CURSOR) {
+		return left.CursorPath() == right.CursorPath() && left.CursorParameter() == right.CursorParameter() &&
+		       left.MaxCursorBytes() == right.MaxCursorBytes();
+	}
+	// Pre-existing gap found alongside the cursor work: response_next's declared
+	// body continuation path was never compared, so a reload that moved where
+	// the continuation is read from normalized as equal. It is request-behavior
+	// identity for the same reason the cursor path is.
+	if (left.Strategy() == CompiledPaginationStrategy::RESPONSE_NEXT_URL && left.NextUrlPath() != right.NextUrlPath()) {
+		return false;
+	}
+	return left.LinkRelation() == right.LinkRelation() && left.PageNumberParameter() == right.PageNumberParameter() &&
+	       left.FirstPage() == right.FirstPage() && left.PageIncrement() == right.PageIncrement();
 }
 
 bool SameRest(const CompiledRestOperation &left, const CompiledRestOperation &right) {

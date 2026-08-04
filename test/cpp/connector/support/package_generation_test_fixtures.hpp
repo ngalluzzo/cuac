@@ -108,6 +108,17 @@ cuac::CompiledPackageGeneration BuildPackageCompatibilityFixture(PackageCompatib
 cuac::CompiledPackageGeneration BuildPaginationCompatibilityGenerationFixture(const std::string &package_version,
                                                                               char digest_fill,
                                                                               std::uint64_t page_increment);
+// Vary only response_next's declared body continuation path.
+cuac::CompiledPackageGeneration BuildResponseNextCompatibilityGenerationFixture(const std::string &package_version,
+                                                                                char digest_fill,
+                                                                                const std::string &next_url_path);
+
+// RFC 0029: vary one response_cursor continuation field at a time.
+cuac::CompiledPackageGeneration BuildCursorCompatibilityGenerationFixture(const std::string &package_version,
+                                                                          char digest_fill,
+                                                                          const std::string &cursor_path,
+                                                                          const std::string &cursor_parameter,
+                                                                          std::uint64_t max_cursor_bytes);
 cuac::CompiledPackageGeneration BuildRateLimitCompatibilityGenerationFixture(const std::string &package_version,
                                                                              char digest_fill, std::uint16_t status);
 cuac::CompiledPackageGeneration BuildSelectorNamespaceCompatibilityGenerationFixture(const std::string &package_version,
