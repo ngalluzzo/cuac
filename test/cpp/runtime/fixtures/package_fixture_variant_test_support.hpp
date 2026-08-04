@@ -77,6 +77,17 @@ inline RuntimeFixtureTranscript GenericRestTranscript() {
 	return {RuntimeFixtureAuthorizationState::BEARER_PRESENT, {Response(GenericRestPage())}};
 }
 
+// RFC 0029: the author's base cursor page. Every rejection is synthesized by the
+// project-owned mutator from this one page, which is the only thing an author
+// supplies for a cursor relation.
+inline std::string CursorRestPage() {
+	return "{\"records\":[{\"record_id\":1,\"record_label\":\"one\"}],\"paging\":{\"next\":\"base-continuation\"}}";
+}
+
+inline RuntimeFixtureTranscript CursorRestTranscript() {
+	return {RuntimeFixtureAuthorizationState::BEARER_PRESENT, {Response(CursorRestPage())}};
+}
+
 inline RuntimeFixtureTranscript GraphqlTranscript() {
 	return {RuntimeFixtureAuthorizationState::BEARER_PRESENT, {Response(GraphqlPage())}};
 }

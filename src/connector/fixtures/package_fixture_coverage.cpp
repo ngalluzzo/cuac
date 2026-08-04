@@ -311,6 +311,29 @@ void AddProtocolCoverage(CoverageBuilder &coverage, const CompiledConnector &con
 	}
 	for (const auto &relation : connector.Relations()) {
 		for (const auto &operation : relation.Operations()) {
+			if (operation.Protocol() == CompiledProtocol::REST &&
+			    operation.Rest().pagination.Strategy() == CompiledPaginationStrategy::RESPONSE_CURSOR) {
+				// RFC 0029: an opaque token cannot be compared against a locally
+				// reconstructed expectation, so this strategy has no
+				// encoded_target/malformed_target_rejected/replayed_target_rejected
+				// variant. What replaces them is proof of confinement: the first
+				// page omits the parameter, the token is encoded, it is bounded,
+				// a repeat is terminal, and it never reaches explanation or
+				// cache identity.
+				coverage.Variants("pagination_" + relation.Name() + "_" + operation.name + "_",
+				                  {"first_page_omits_cursor", "cursor_transition", "multi_page",
+				                   "termination_empty_cursor", "termination_absent_cursor", "termination_null_cursor",
+				                   "cursor_wrong_type_rejected", "empty_page_with_cursor_continues",
+				                   "repeated_cursor_rejected", "reserved_character_cursor_encoded",
+				                   "cursor_byte_budget_boundary", "cursor_byte_budget_one_over_rejected",
+				                   "max_pages_exhausted", "cursor_at_page_ceiling_resource_failure",
+				                   "cursor_absent_from_explanation", "cursor_absent_from_cache_identity"},
+				                  PackageFixtureCoverageScope::PAGINATION, relation.Name(), operation.name);
+			}
+		}
+	}
+	for (const auto &relation : connector.Relations()) {
+		for (const auto &operation : relation.Operations()) {
 			if (operation.Protocol() == CompiledProtocol::GRAPHQL) {
 				coverage.Variants("pagination_" + relation.Name() + "_" + operation.name + "_",
 				                  {"first_page", "multi_page", "termination", "cursor_transition",
