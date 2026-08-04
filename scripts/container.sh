@@ -87,11 +87,17 @@ run_container() {
     docker volume create "${STATE_VOLUME}" >/dev/null
     echo "developer_state_volume=${STATE_VOLUME}"
     started_at="$(phase_seconds)"
-    docker run --rm --init "${interactive[@]}" "${user[@]}" \
+    # bash 3.2 (the macOS system shell) treats "${empty[@]}" as an unbound
+    # variable under `set -u`; the ${a[@]+...} guard expands to nothing instead.
+    docker run --rm --init ${interactive[@]+"${interactive[@]}"} ${user[@]+"${user[@]}"} \
         --env CUAC_DEV_CONTAINER=1 \
         --env CUAC_DEV_ROOT=/var/lib/cuac-dev/container \
         --env CUAC_CCACHE_DIR=/var/lib/cuac-dev/ccache \
         --env HOME=/tmp/cuac-home \
+        --env GIT_CONFIG_COUNT=1 \
+        --env GIT_CONFIG_KEY_0=safe.directory \
+        --env GIT_CONFIG_VALUE_0=/workspaces/cuac \
+        --env "CUAC_BUILD_JOBS=${CUAC_BUILD_JOBS:-}" \
         --mount "type=volume,source=${STATE_VOLUME},target=/var/lib/cuac-dev" \
         --volume "${REPOSITORY_ROOT}:/workspaces/cuac" \
         --workdir /workspaces/cuac \
