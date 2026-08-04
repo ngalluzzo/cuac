@@ -56,6 +56,7 @@ Run the ownership and repository contract checks before the native build:
 python3 -I -B scripts/verify-source-boundaries.py
 python3 -I -B scripts/verify-public-surface-inventory.py
 python3 -I -B scripts/verify-specification-evolution.py
+python3 -I -B scripts/verify-response-cursor-continuation.py
 python3 -I -B scripts/verify-source-identities.py
 ```
 
