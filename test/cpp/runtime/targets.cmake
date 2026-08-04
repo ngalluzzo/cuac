@@ -222,7 +222,7 @@ target_link_libraries(
 add_executable(
   cuac_graphql_cursor_pagination_tests
   test/cpp/runtime/pagination/graphql_cursor_pagination_tests.cpp
-  src/runtime/pagination/graphql_cursor_pagination.cpp)
+  src/runtime/pagination/opaque_cursor_pagination.cpp)
 configure_cuac_cpp_target(cuac_graphql_cursor_pagination_tests)
 target_include_directories(cuac_graphql_cursor_pagination_tests PRIVATE test/cpp)
 

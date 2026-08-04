@@ -42,7 +42,7 @@ set(REMOTE_RUNTIME_EXECUTOR_SOURCES
     src/runtime/admission/rest_relational_admission.cpp
     src/runtime/executor/rest_request_materialization.cpp
     src/runtime/executor/rest_request_profile.cpp
-    src/runtime/pagination/graphql_cursor_pagination.cpp
+    src/runtime/pagination/opaque_cursor_pagination.cpp
     src/runtime/transport/graphql_request_body.cpp)
 set(REMOTE_RUNTIME_SOURCES
     ${REMOTE_RUNTIME_ADMISSION_SOURCES}
