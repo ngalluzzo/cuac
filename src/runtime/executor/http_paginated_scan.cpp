@@ -6,6 +6,7 @@
 #include "cuac/internal/runtime/decoding/decoded_page_buffer.hpp"
 #include "cuac/internal/runtime/decoding/json_decoder.hpp"
 #include "cuac/internal/runtime/pagination/link_pagination.hpp"
+#include "cuac/internal/runtime/pagination/opaque_cursor_pagination.hpp"
 #include "cuac/internal/runtime/policy/scan_resource_accounting.hpp"
 
 #include <algorithm>
@@ -50,10 +51,19 @@ JsonDecodePlan BuildPaginatedRestDecodePlan(const AdmittedPaginatedRestRequestPr
 	// extracts the body URL during the same pass that produces rows. The path
 	// arrives as a json_path_v1 string ($.field.field); split it into segments
 	// for the decoder.
-	if (profile.PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_NEXT_URL &&
-	    !profile.NextUrlPath().empty()) {
+	// RFC 0029: response_cursor uses the identical page-level scalar slot. The
+	// decoder does not care whether the extracted string is a URL or an opaque
+	// token — it is one scalar at one declared path, read in the same pass that
+	// produces rows, with no second parse and no retained intermediate tree.
+	const bool body_continuation =
+	    (profile.PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_NEXT_URL &&
+	     !profile.NextUrlPath().empty()) ||
+	    (profile.PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_CURSOR && !profile.CursorPath().empty());
+	if (body_continuation) {
 		std::vector<std::string> segments;
-		const auto &path = profile.NextUrlPath();
+		const auto &path = profile.PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+		                       ? profile.CursorPath()
+		                       : profile.NextUrlPath();
 		std::size_t start = 0;
 		if (path.size() >= 2 && path[0] == '$' && path[1] == '.') {
 			start = 2;
@@ -141,6 +151,28 @@ FailureProperties LinkPaginationFailureProperties(LinkPaginationErrorKind kind) 
 	throw std::logic_error("unknown LinkPaginationErrorKind");
 }
 
+// RFC 0029: the same structural mapping for the shared bounded cursor state.
+// A repeated or missing token is PROTOCOL; a byte-budget or page-authority
+// violation is RESOURCE_BUDGET; an invalid profile is CONFIGURATION.
+FailureProperties OpaqueCursorFailureProperties(OpaqueCursorErrorKind kind) {
+	FailureProperties properties {};
+	properties.phase = FailurePhase::PAGINATE;
+	properties.attempt = 1;
+	properties.replay_classification = ReplayClassification::REPLAYABLE_BEFORE_EXPOSURE;
+	switch (kind) {
+	case OpaqueCursorErrorKind::PROFILE:
+		properties.failure_class = FailureClass::CONFIGURATION;
+		return properties;
+	case OpaqueCursorErrorKind::RESOURCE_BUDGET:
+		properties.failure_class = FailureClass::RESOURCE_BUDGET;
+		return properties;
+	case OpaqueCursorErrorKind::PROTOCOL:
+		properties.failure_class = FailureClass::PROTOCOL;
+		return properties;
+	}
+	throw std::logic_error("unknown OpaqueCursorErrorKind");
+}
+
 class CombinedControl final : public ExecutionControl {
 public:
 	CombinedControl(ExecutionControl &outer_p, const std::atomic<bool> &cancelled_p)
@@ -171,9 +203,17 @@ public:
 	      authorization(new ScanAuthorization(std::move(authorization_p))),
 	      column_types(BuildColumnTypes(*admitted_profile)),
 	      accounting(BuildResourceProfile(*admitted_profile, max_wall_milliseconds_p)),
-	      pagination(new LinkPaginationState(*admitted_profile)), cancelled(false), closed(false), exhausted(false),
-	      page_loaded(false), page_has_next(false), decoded_memory_bytes(0), decoded_memory_allowance(0), offset(0),
-	      rows_emitted(0),
+	      // Exactly one of these is live. A cursor scan never reads `pagination`,
+	      // so it is not constructed at all rather than left holding page facts
+	      // it does not have.
+	      pagination(admitted_profile->PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+	                     ? nullptr
+	                     : new LinkPaginationState(*admitted_profile)),
+	      cursor(admitted_profile->PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+	                 ? new OpaqueCursorState(admitted_profile->MaxPages(), admitted_profile->MaxCursorBytes())
+	                 : nullptr),
+	      cancelled(false), closed(false), exhausted(false), page_loaded(false), page_has_next(false),
+	      decoded_memory_bytes(0), decoded_memory_allowance(0), offset(0), rows_emitted(0),
 	      retry_seed(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(this)) ^
 	                 static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())),
 	      rate_limit_runtime(std::move(rate_limit_runtime_p)), admission_runtime(std::move(admission_runtime_p)),
@@ -255,6 +295,15 @@ public:
 			    ErrorStage::POLICY, error.Field(), error.SafeMessage(),
 			    EnrichRateLimitFailureProperties(
 			        EnrichRetryFailureProperties(LinkPaginationFailureProperties(error.Kind()),
+			                                     accounting.Counters().pages, accounting.CurrentAttempt(), rows_emitted,
+			                                     accounting.Counters().cumulative_retry_waiting_milliseconds,
+			                                     CurrentExposure()),
+			        accounting.Counters(), resilience_state));
+		} catch (const OpaqueCursorError &error) {
+			FailWithExecutionError(
+			    ErrorStage::POLICY, error.Field(), error.SafeMessage(),
+			    EnrichRateLimitFailureProperties(
+			        EnrichRetryFailureProperties(OpaqueCursorFailureProperties(error.Kind()),
 			                                     accounting.Counters().pages, accounting.CurrentAttempt(), rows_emitted,
 			                                     accounting.Counters().cumulative_retry_waiting_milliseconds,
 			                                     CurrentExposure()),
@@ -389,15 +438,28 @@ private:
 	}
 
 	void FetchPage(ExecutionControl &control) {
-		const auto current_page = pagination->CurrentPage();
+		const bool cursor_mode = admitted_profile->PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_CURSOR;
+		const auto current_page = cursor_mode ? 0 : pagination->CurrentPage();
+		std::string current_cursor;
+		if (cursor_mode) {
+			const auto *held = cursor->CurrentCursor();
+			if (held != nullptr) {
+				current_cursor = *held;
+			}
+			// Debit page authority once per page. Retry re-invokes the request
+			// builder below, so this must sit outside it.
+			cursor->MarkRequestStarted();
+		}
 		auto attempted = ExecuteHttpStepWithRetry(
 		    admitted_profile->RetryPolicy(), admitted_profile->RateLimitPolicy(), rate_limit_runtime, resilience_state,
 		    admission_runtime, accounting, transport,
 		    std::min(admitted_profile->PageBudgets().header_bytes,
 		             admitted_profile->PageBudgets().decoded_memory_bytes),
 		    retry_seed,
-		    [this, current_page](uint64_t) {
-			    auto request = BuildAdmittedPaginatedRestPageRequest(*admitted_profile, current_page);
+		    [this, current_page, cursor_mode, current_cursor](uint64_t) {
+			    auto request = cursor_mode
+			                       ? BuildAdmittedPaginatedRestCursorPageRequest(*admitted_profile, current_cursor)
+			                       : BuildAdmittedPaginatedRestPageRequest(*admitted_profile, current_page);
 			    if (admitted_profile->RequiresBearer()) {
 				    request = BearerAuthenticator::AuthorizePaginatedRest(*admitted_profile, std::move(request),
 				                                                          *authorization);
@@ -432,9 +494,21 @@ private:
 		// (RFC 0019) has no external signal at all — exhaustion is inferred
 		// purely from the just-decoded row count against the declared page
 		// size, using a value already computed for row production below.
-		std::unique_ptr<LinkPaginationState> staged_pagination(new LinkPaginationState(*pagination));
+		std::unique_ptr<LinkPaginationState> staged_pagination(cursor_mode ? nullptr
+		                                                                   : new LinkPaginationState(*pagination));
 		LinkPageTransition transition;
-		if (admitted_profile->PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_NEXT_URL) {
+		if (cursor_mode) {
+			// RFC 0029: an absent path, JSON null, and an empty string all reach
+			// here as an empty extracted value and all mean "no next page". A
+			// non-empty token must be unseen and within budget; Advance is
+			// terminal on either violation. There is nothing to reconstruct and
+			// verify, so the unseen-token set and the page ceiling are the whole
+			// progress proof.
+			const bool has_next = !page.next_url.empty();
+			cursor->Advance(has_next, page.next_url);
+			transition.has_next = has_next;
+			transition.next_page = 0;
+		} else if (admitted_profile->PaginationStrategy() == PlannedPaginationStrategy::RESPONSE_NEXT_URL) {
 			transition = staged_pagination->AdvanceBody(page.next_url);
 		} else if (admitted_profile->PaginationStrategy() == PlannedPaginationStrategy::SHORT_PAGE) {
 			transition = staged_pagination->AdvanceByCount(page.rows.size());
@@ -523,6 +597,9 @@ private:
 	const std::vector<OutputValueType> column_types;
 	ScanResourceAccounting accounting;
 	std::unique_ptr<LinkPaginationState> pagination;
+	// RFC 0029: RESPONSE_CURSOR only. Null for every page-numbered strategy;
+	// the two are never both live, and a cursor scan never reads `pagination`.
+	std::unique_ptr<OpaqueCursorState> cursor;
 	mutable std::mutex mutex;
 	std::atomic<bool> cancelled;
 	bool closed;

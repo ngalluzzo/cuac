@@ -160,6 +160,31 @@ std::unique_ptr<cuac::BatchStream> OpenShortPage(const std::shared_ptr<cuac_test
 	return runtime->Executor()->OpenWithAuthorization(plan, cuac::ScanAuthorization::Bearer(std::move(token)), control);
 }
 
+// RFC 0029: one cursor page. An empty token renders the continuation as JSON
+// null, which is one of the three shapes that mean "no next page".
+std::string CursorPageOf(const std::vector<std::pair<uint64_t, std::string>> &records, const std::string &next) {
+	std::string body = "{\"records\":[";
+	for (std::size_t index = 0; index < records.size(); index++) {
+		if (index > 0) {
+			body += ",";
+		}
+		body += "{\"record_id\":" + std::to_string(records[index].first) + ",\"record_label\":\"" +
+		        records[index].second + "\"}";
+	}
+	body += "],\"paging\":{\"next\":";
+	body += next.empty() ? "null" : "\"" + next + "\"";
+	body += "}}";
+	return body;
+}
+
+std::unique_ptr<cuac::BatchStream> OpenResponseCursor(const std::shared_ptr<cuac_test::ControlledHttpRuntime> &runtime,
+                                                      ManualHttpExecutionControl &control, uint64_t token_suffix) {
+	const auto plan = cuac_test::BuildValidResponseCursorPlanFixture("fixture_secret");
+	auto token = GeneratedHttpBearerToken(token_suffix);
+	runtime->ExpectBearer("Bearer " + token);
+	return runtime->Executor()->OpenWithAuthorization(plan, cuac::ScanAuthorization::Bearer(std::move(token)), control);
+}
+
 std::unique_ptr<cuac::BatchStream> OpenPermanentRest(const std::shared_ptr<cuac_test::ControlledHttpRuntime> &runtime,
                                                      ManualHttpExecutionControl &control) {
 	const auto plan = BuildValidPermanentRestScanPlanFixture();
@@ -291,6 +316,71 @@ void TestShortPageTerminatesOnShortPage() {
 	            observations[1].target == "/fixtures/short-page-records?batch_size=3&cursor_page=2" &&
 	            runtime->ConsumeBearerExpectation(2),
 	        "short_page pagination requested the wrong page sequence");
+}
+
+// RFC 0029: response_cursor end-to-end. These exercise real admission
+// (TryAdmitPaginatedRestPlan -> HasSupportedRestCursorPagination), the
+// executor's cursor dispatch branch, the shared OpaqueCursorState, and the
+// structural authenticator check, not a mocked state machine.
+void TestResponseCursorTraversesAndTerminates() {
+	const auto runtime = cuac_test::BuildControlledHttpRuntime();
+	// A token containing reserved bytes proves the value is percent-encoded on
+	// the wire rather than spliced in raw.
+	runtime->RespondSequence({ControlledResponse(200, CursorPageOf({{1, "first"}}, "a+b/c=")),
+	                          ControlledResponse(200, CursorPageOf({{2, "second"}}, ""))});
+	ManualHttpExecutionControl control;
+	auto stream = OpenResponseCursor(runtime, control, 941);
+	Require(runtime->Observations().empty(), "response_cursor Open performed transport I/O");
+	cuac::TypedBatch batch;
+	Require(stream->Next(control, batch) && batch.rows.size() == 1 && batch.rows[0].values[0].bigint_value == 1,
+	        "response_cursor did not decode its first page");
+	Require(stream->Next(control, batch) && batch.rows.size() == 1 && batch.rows[0].values[0].bigint_value == 2,
+	        "response_cursor did not request a second page from the received token");
+	Require(!stream->Next(control, batch), "an empty continuation token did not terminate response_cursor pagination");
+	const auto observations = runtime->Observations();
+	Require(observations.size() == 2 && observations[0].target == "/fixtures/cursor-records?batch_size=3",
+	        "the first cursor page must omit the cursor parameter entirely");
+	Require(observations[1].target == "/fixtures/cursor-records?batch_size=3&cursor=a%2Bb%2Fc%3D",
+	        "the continuation token was not appended as one percent-encoded query value");
+	Require(runtime->ConsumeBearerExpectation(2), "response_cursor pages did not carry their credential");
+}
+
+// Without a page number there is no arithmetic progress proof, so a repeated
+// token is the only detectable loop signal and must be terminal.
+void TestResponseCursorRejectsRepeatedToken() {
+	const auto runtime = cuac_test::BuildControlledHttpRuntime();
+	runtime->RespondSequence({ControlledResponse(200, CursorPageOf({{1, "first"}}, "same-token")),
+	                          ControlledResponse(200, CursorPageOf({{2, "second"}}, "same-token"))});
+	ManualHttpExecutionControl control;
+	auto stream = OpenResponseCursor(runtime, control, 942);
+	cuac::TypedBatch batch;
+	Require(stream->Next(control, batch) && batch.rows.size() == 1, "first cursor page did not decode");
+	RequireFailure(
+	    [&]() {
+		    while (stream->Next(control, batch)) {
+		    }
+	    },
+	    cuac::ErrorStage::POLICY, "pagination.cursor", "same-token");
+}
+
+// A token one byte over the declared budget (16) is a terminal resource failure,
+// and the rejected value must never appear in the safe diagnostic.
+void TestResponseCursorRejectsOversizedToken() {
+	const auto runtime = cuac_test::BuildControlledHttpRuntime();
+	runtime->RespondSequence({ControlledResponse(200, CursorPageOf({{1, "first"}}, std::string(17, 'z')))});
+	ManualHttpExecutionControl control;
+	auto stream = OpenResponseCursor(runtime, control, 943);
+	cuac::TypedBatch batch;
+	// The continuation is validated while the page is decoded, before any row is
+	// exposed, so an oversized token fails the very first Next rather than a
+	// later one. That ordering is what keeps the failure replayable-before-
+	// exposure instead of surfacing after a partial result.
+	RequireFailure(
+	    [&]() {
+		    while (stream->Next(control, batch)) {
+		    }
+	    },
+	    cuac::ErrorStage::POLICY, "pagination.cursor", "zzz");
 }
 
 // Empty-page and short-page termination are distinct decoder paths (an empty
@@ -688,6 +778,9 @@ int main() {
 		TestCredentialProviderSnapshotPersistsAcrossPages();
 		TestGenericPaginatedRestUsesCopiedExecutableFacts();
 		TestShortPageTerminatesOnShortPage();
+		TestResponseCursorTraversesAndTerminates();
+		TestResponseCursorRejectsRepeatedToken();
+		TestResponseCursorRejectsOversizedToken();
 		TestShortPageTerminatesOnEmptyPage();
 		TestShortPageExactMultiplePageBoundary();
 		TestShortPageMaxPagesExhaustedWithoutShortPage();

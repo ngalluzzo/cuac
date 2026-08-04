@@ -79,6 +79,7 @@ public:
 	// identical (same relation shape, same fixed destination), for exercising
 	// LinkPaginationState::AdvanceByCount directly.
 	static cuac::ScanPlan ShortPagePagination(const std::string &secret_name);
+	static cuac::ScanPlan ResponseCursorPagination(const std::string &secret_name);
 	static cuac::ScanPlan DistinctRestQueryPath(const std::string &secret_name);
 	static bool RejectsRestQueryBinding(RestQueryBindingConstructionCounterexample counterexample);
 	static bool RejectsPackagePredicateMaterialization(PackagePredicatePlanCounterexample counterexample);
@@ -93,11 +94,32 @@ private:
 	                             std::string page_size_parameter, uint64_t page_size, std::string page_number_parameter,
 	                             uint64_t max_pages, uint64_t response_bytes_per_page, uint64_t response_bytes_per_scan,
 	                             uint64_t records_per_page, uint64_t records_per_scan, uint64_t extracted_string_bytes);
+	// RFC 0029: a cursor plan fills the cursor continuation target instead of
+	// the page-number target, so it needs its own enabler.
+	static void EnableCursorPagination(cuac::ScanPlan &plan, std::string cursor_path, std::string cursor_parameter,
+	                                   uint64_t max_cursor_bytes, uint64_t max_pages, uint64_t response_bytes_per_page,
+	                                   uint64_t response_bytes_per_scan, uint64_t records_per_page,
+	                                   uint64_t records_per_scan, uint64_t extracted_string_bytes);
 	static void SetRestOperation(cuac::ScanPlan &plan, cuac::PlannedRestOperation operation);
 	static void SetRestExecutionAuthority(cuac::ScanPlan &plan,
 	                                      std::vector<cuac::PlannedRestQueryBinding> query_bindings,
 	                                      cuac::PlannedRestResponsePath records_path);
 };
+
+void ScanPlanFixtureBuilder::EnableCursorPagination(cuac::ScanPlan &plan, std::string cursor_path,
+                                                    std::string cursor_parameter, uint64_t max_cursor_bytes,
+                                                    uint64_t max_pages, uint64_t response_bytes_per_page,
+                                                    uint64_t response_bytes_per_scan, uint64_t records_per_page,
+                                                    uint64_t records_per_scan, uint64_t extracted_string_bytes) {
+	EnablePagination(plan, cuac::PlannedPaginationStrategy::RESPONSE_CURSOR, "", 0, "", max_pages,
+	                 response_bytes_per_page, response_bytes_per_scan, records_per_page, records_per_scan,
+	                 extracted_string_bytes);
+	// A cursor traversal owns neither a page number nor a page size: clear the
+	// page-number target and fill only the cursor target.
+	plan.pagination.target = {plan.Operation().Rest().origin, plan.Operation().Rest().path, "", 0, "", 0, 0};
+	plan.pagination.cursor_target = {plan.Operation().Rest().origin, plan.Operation().Rest().path,
+	                                 std::move(cursor_path), std::move(cursor_parameter), max_cursor_bytes};
+}
 
 void ScanPlanFixtureBuilder::SetRestOperation(cuac::ScanPlan &plan, cuac::PlannedRestOperation operation) {
 	plan.operation = std::make_shared<const cuac::PlannedProtocolOperation>(
@@ -496,6 +518,40 @@ cuac::ScanPlan ScanPlanFixtureBuilder::ShortPagePagination(const std::string &se
 	return plan;
 }
 
+cuac::ScanPlan ScanPlanFixtureBuilder::ResponseCursorPagination(const std::string &secret_name) {
+	auto plan = Common("fixture_pagination_catalog", "test-1", "fixture_cursor_records", "fixture:cursor-records");
+	plan.domain = cuac::BaseDomain::PAGINATED_JSON_PATH_RECORDS;
+	std::vector<cuac::PlannedRestQueryBinding> bindings;
+	bindings.push_back(cuac::PlannedRestQueryBinding("batch_size", cuac::PlannedRestQueryValueSource::FIXED, "",
+	                                                 cuac::PlannedRestScalarKind::BIGINT, false, 3, "", 0.0,
+	                                                 cuac::PlannedRestQueryEncoding::FORM_URLENCODED, "3"));
+	SetRestOperation(plan, {"fixture_cursor_records",
+	                        cuac::PlannedHttpMethod::GET,
+	                        cuac::PlannedCardinality::ZERO_TO_MANY,
+	                        cuac::PlannedReplaySafety::SAFE,
+	                        {cuac::PlannedUrlScheme::HTTPS, "api.github.com", 443},
+	                        "/fixtures/cursor-records",
+	                        {},
+	                        {{"X-Connector-Fixture", "cursor-shape"}},
+	                        cuac::PlannedResponseSource::JSON_PATH_MANY,
+	                        "$.records[*]",
+	                        std::move(bindings),
+	                        {{"records"}},
+	                        {{"record_id", cuac::PlannedRestScalarKind::BIGINT, false, {{"record_id"}}},
+	                         {"record_label", cuac::PlannedRestScalarKind::VARCHAR, false, {{"record_label"}}}}});
+	plan.output_columns = {{"record_id", "BIGINT", false, "$.record_id", cuac::PlannedColumnShape::SCALAR,
+	                        cuac::PlannedColumnScalarKind::BIGINT, false},
+	                       {"record_label", "VARCHAR", false, "$.record_label", cuac::PlannedColumnShape::SCALAR,
+	                        cuac::PlannedColumnScalarKind::VARCHAR, false}};
+	// max_cursor_bytes is deliberately below the decoder's extracted-string
+	// budget (96) so the cursor budget is the binding constraint. At the shared
+	// 512 ceiling the two coincide and the decoder's string budget would fire
+	// first, which would not prove this bound at all.
+	EnableCursorPagination(plan, "$.paging.next", "cursor", 16, 4, 1024, 4096, 3, 12, 96);
+	RequireBearer(plan, secret_name);
+	return plan;
+}
+
 cuac::ScanPlan ScanPlanFixtureBuilder::DistinctRestQueryPath(const std::string &secret_name) {
 	auto plan = Common("package_rest_fixture", "1.2.3", "activity_records",
 	                   "package=package_rest_fixture@1.2.3;relation=activity_records;"
@@ -740,6 +796,10 @@ cuac::ScanPlan BuildValidPaginatedPlanFixture(const std::string &exact_logical_s
 
 cuac::ScanPlan BuildValidShortPagePlanFixture(const std::string &exact_logical_secret_name) {
 	return ScanPlanFixtureBuilder::ShortPagePagination(exact_logical_secret_name);
+}
+
+cuac::ScanPlan BuildValidResponseCursorPlanFixture(const std::string &exact_logical_secret_name) {
+	return ScanPlanFixtureBuilder::ResponseCursorPagination(exact_logical_secret_name);
 }
 
 cuac::ScanPlan BuildDistinctRestQueryPathScanPlanFixture(const std::string &exact_logical_secret_name) {

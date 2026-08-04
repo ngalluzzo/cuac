@@ -202,6 +202,9 @@ cuac::ScanPlan BuildValidPaginatedPlanFixture(const std::string &exact_logical_s
 // otherwise identical (same relation shape, same fixed destination), for
 // exercising LinkPaginationState::AdvanceByCount directly.
 cuac::ScanPlan BuildValidShortPagePlanFixture(const std::string &exact_logical_secret_name);
+// RFC 0029: a RESPONSE_CURSOR plan whose continuation token arrives at
+// $.paging.next and is echoed into the "cursor" query parameter.
+cuac::ScanPlan BuildValidResponseCursorPlanFixture(const std::string &exact_logical_secret_name);
 cuac::ScanPlan BuildValidAuthenticatedRepositoriesPlanFixture(const std::string &exact_logical_secret_name);
 cuac::ScanPlan BuildRetryEnabledPaginatedRestPlanFixture(const std::string &exact_logical_secret_name);
 // Bounded package-like REST query/path provider for Runtime consumer tests. It
