@@ -1,0 +1,253 @@
+{
+  "schema": "cuac/continuation-contract-v1",
+  "rfc": "0029",
+  "status": "accepted",
+  "delivery_state": "unimplemented",
+  "capability": "response_query_continuation",
+  "strategy": "response_cursor",
+  "rest_strategy_set": [
+    "disabled",
+    "link_next",
+    "response_next",
+    "short_page",
+    "response_cursor"
+  ],
+  "shared_cursor_bounds": {
+    "max_pages": 32,
+    "max_cursor_bytes": 512,
+    "shared_with_protocol": "graphql",
+    "duplicate_state_machines": 0
+  },
+  "corpus_relations": [
+    "kubernetes_namespace_pods",
+    "slack_conversation_history"
+  ],
+  "independent_author_relation": "slack_conversation_history",
+  "vertical_evidence": [
+    "source_schema",
+    "diagnostics",
+    "compiled_facts",
+    "planning",
+    "execution",
+    "fixtures",
+    "compatibility",
+    "independent_author"
+  ],
+  "fields": [
+    {
+      "name": "strategy",
+      "requirement": "required",
+      "value_law": "exactly response_cursor"
+    },
+    {
+      "name": "dependency",
+      "requirement": "required",
+      "value_law": "exactly sequential"
+    },
+    {
+      "name": "consistency",
+      "requirement": "required",
+      "value_law": "exactly mutable"
+    },
+    {
+      "name": "target_scope",
+      "requirement": "required",
+      "value_law": "exactly exact_operation_origin_and_path"
+    },
+    {
+      "name": "cursor_path",
+      "requirement": "required",
+      "value_law": "extractPath grammar; the terminal collection marker is invalid"
+    },
+    {
+      "name": "cursor_parameter",
+      "requirement": "required",
+      "value_law": "query-parameter name grammar; unique across every declared field role"
+    },
+    {
+      "name": "max_cursor_bytes",
+      "requirement": "required",
+      "value_law": "positive integer in 1..512"
+    },
+    {
+      "name": "max_pages_per_scan",
+      "requirement": "required",
+      "value_law": "positive integer in 1..32"
+    }
+  ],
+  "rejected_fields": [
+    {
+      "name": "page_number_parameter",
+      "reason": "a token-paginated request carries no page number"
+    },
+    {
+      "name": "first_page",
+      "reason": "a token-paginated request carries no page number"
+    },
+    {
+      "name": "page_increment",
+      "reason": "a token-paginated request carries no page number"
+    },
+    {
+      "name": "next_url_path",
+      "reason": "belongs to response_next, whose reconstruct-and-verify rule is untouched"
+    },
+    {
+      "name": "page_size_parameter",
+      "reason": "a cursor traversal owns no page size; an author declares one as a fixed query field"
+    },
+    {
+      "name": "page_size",
+      "reason": "a cursor traversal owns no page size; an author declares one as a fixed query field"
+    }
+  ],
+  "signals": [
+    {
+      "observed": "absent_path",
+      "result": "exhausted"
+    },
+    {
+      "observed": "json_null",
+      "result": "exhausted"
+    },
+    {
+      "observed": "empty_string",
+      "result": "exhausted"
+    },
+    {
+      "observed": "unseen_string_within_budget",
+      "result": "continue"
+    },
+    {
+      "observed": "repeated_string",
+      "result": "terminal_protocol_failure"
+    },
+    {
+      "observed": "string_over_budget",
+      "result": "terminal_resource_budget_failure"
+    },
+    {
+      "observed": "non_string_value",
+      "result": "terminal_schema_rejection"
+    }
+  ],
+  "placement": {
+    "first_page": "cursor_parameter_omitted_entirely",
+    "later_pages": "cursor_parameter_appended_once_percent_encoded",
+    "encoding": "form_urlencoded",
+    "owner": "pagination_block_not_query_list",
+    "received_value_may_alter": "one_declared_query_value",
+    "received_value_may_never_alter": [
+      "origin",
+      "path",
+      "method",
+      "parameter_name",
+      "headers",
+      "credential",
+      "content_type",
+      "request_body"
+    ]
+  },
+  "diagnostics": [
+    {
+      "failure": "rejected_page_addressing_or_next_url_field_present",
+      "code": "CUAC_UNKNOWN_FIELD"
+    },
+    {
+      "failure": "required_cursor_field_absent",
+      "code": "CUAC_MISSING_FIELD"
+    },
+    {
+      "failure": "cursor_path_outside_json_path_v1",
+      "code": "CUAC_INVALID_EXTRACTOR"
+    },
+    {
+      "failure": "cursor_parameter_collides_with_declared_field",
+      "code": "CUAC_DUPLICATE_ID"
+    },
+    {
+      "failure": "block_on_non_replayable_read_operation",
+      "code": "CUAC_UNSUPPORTED_DECLARATION"
+    },
+    {
+      "failure": "bound_out_of_accepted_range",
+      "code": "CUAC_UNSUPPORTED_DECLARATION"
+    },
+    {
+      "failure": "strategy_unknown_to_older_cuac_release",
+      "code": "CUAC_UNSUPPORTED_DECLARATION"
+    }
+  ],
+  "new_diagnostic_codes": [],
+  "coverage_keys": [
+    "first_page_omits_cursor",
+    "cursor_transition",
+    "multi_page",
+    "termination_empty_cursor",
+    "termination_absent_cursor",
+    "termination_null_cursor",
+    "cursor_wrong_type_rejected",
+    "empty_page_with_cursor_continues",
+    "repeated_cursor_rejected",
+    "reserved_character_cursor_encoded",
+    "cursor_byte_budget_boundary",
+    "cursor_byte_budget_one_over_rejected",
+    "max_pages_exhausted",
+    "cursor_at_page_ceiling_resource_failure",
+    "cursor_absent_from_explanation",
+    "cursor_absent_from_cache_identity"
+  ],
+  "preserved_graphql_coverage_keys": [
+    "pagination_viewer_repository_metrics_github_viewer_repository_metrics_cursor_transition",
+    "pagination_viewer_repository_metrics_github_viewer_repository_metrics_missing_cursor_rejected",
+    "pagination_viewer_repository_metrics_github_viewer_repository_metrics_repeated_cursor_rejected"
+  ],
+  "compatibility": [
+    {
+      "relationship": "existing_package_on_first_supporting_release",
+      "behavior": "identical normalized meaning; no existing strategy changes"
+    },
+    {
+      "relationship": "response_cursor_relation_appended",
+      "behavior": "package MINOR permitted when every existing relation stays structurally identical and ordered"
+    },
+    {
+      "relationship": "existing_relation_changed_to_or_from_response_cursor",
+      "behavior": "incompatible reload; package MAJOR required"
+    },
+    {
+      "relationship": "response_cursor_field_value_changed",
+      "behavior": "incompatible reload; package MAJOR required"
+    },
+    {
+      "relationship": "response_cursor_package_on_older_release",
+      "behavior": "reject in the schema phase before catalog, credential, or network work"
+    },
+    {
+      "relationship": "extension_downgrade_under_response_cursor_package",
+      "behavior": "older release rejects the package; rollback restores artifact and package bytes as one matched set"
+    },
+    {
+      "relationship": "graphql_cursor_packages_across_the_refactor",
+      "behavior": "byte-identical normalized descriptor, plan, requests, and coverage keys"
+    }
+  ],
+  "exclusions": [
+    "received_url_used_as_a_fetch_target",
+    "reverse_or_bidirectional_traversal",
+    "continuation_placed_in_a_body_path_segment_or_header",
+    "more_than_one_token_or_one_token_feeding_more_than_one_field",
+    "caller_supplied_initial_cursor_or_resume",
+    "has_more_booleans_secondary_termination_or_total_counts",
+    "received_value_altering_a_parameter_name_or_request_authority",
+    "parallel_concurrent_or_speculative_page_fetching",
+    "author_declared_cursor_persistence_snapshot_or_deduplication",
+    "relaxing_the_response_next_reconstruct_and_verify_rule"
+  ],
+  "open_decisions": [],
+  "resolved_decisions": [
+    "this slice ships ahead of RFC 0028 delivery orders 1 through 6",
+    "the Slack HTTP 200 ok:false envelope gap is explicitly deferred to its own classification",
+    "the independent-author Slack package stays outside connectors/"
+  ]
+}
