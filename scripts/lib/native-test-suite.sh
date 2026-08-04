@@ -65,6 +65,7 @@ CURL_FREE_LINKAGE_TARGETS=(
     cuac_package_query_surface_tests
     cuac_package_product_contract_tests
     cuac_rickandmorty_package_compiler_tests
+    cuac_slack_independent_package_tests
     cuac_cross_package_equivalence_tests
 )
 
@@ -210,6 +211,7 @@ run_native_test_binaries() {
         "${native_test_root}/cuac_package_fixture_candidate_tests" "${source_root}"
         "${native_test_root}/cuac_package_fixture_coverage_tests" "${source_root}"
         "${native_test_root}/cuac_rickandmorty_package_compiler_tests" "${source_root}"
+        "${native_test_root}/cuac_slack_independent_package_tests" "${source_root}"
         "${native_test_root}/cuac_cross_package_equivalence_tests" "${source_root}"
     )
     "${native_test_root}/cuac_scan_request_tests"

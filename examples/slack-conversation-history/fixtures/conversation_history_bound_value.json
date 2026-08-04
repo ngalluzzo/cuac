@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "messages": [
+    {"type": "message", "ts": "1717171719.000300", "user": "U04GAMMA03", "text": "third message"}
+  ],
+  "has_more": false,
+  "response_metadata": {"next_cursor": ""}
+}

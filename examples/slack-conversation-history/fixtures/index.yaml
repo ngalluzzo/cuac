@@ -1,0 +1,215 @@
+api_version: cuac/v1
+kind: fixture_index
+package_digest: sha256.06e9796939d9440a065302926a7959216b8aedd355de6ea54b936362a894264e
+
+cases:
+  - id: slack_conversation_history_cursor_traversal
+    relation: conversation_history
+    operation: read_history
+    covers:
+      - operation_conversation_history_read_history_success
+      - auth_conversation_history_read_history_bearer_present
+      - input_conversation_history_channel_bound_null_rejected
+      - column_conversation_history_message_timestamp_success
+      - column_conversation_history_message_timestamp_type_mismatch_rejected
+      - column_conversation_history_user_id_success
+      - column_conversation_history_user_id_type_mismatch_rejected
+      - column_conversation_history_text_success
+      - column_conversation_history_text_type_mismatch_rejected
+      - column_conversation_history_user_id_null
+      - column_conversation_history_text_null
+      - column_conversation_history_message_timestamp_missing_rejected
+      - column_conversation_history_message_timestamp_null_rejected
+      - column_conversation_history_message_timestamp_string_budget_boundary
+      - column_conversation_history_message_timestamp_string_budget_one_over_rejected
+      - column_conversation_history_user_id_string_budget_boundary
+      - column_conversation_history_user_id_string_budget_one_over_rejected
+      - column_conversation_history_text_string_budget_boundary
+      - column_conversation_history_text_string_budget_one_over_rejected
+      - pagination_conversation_history_read_history_first_page_omits_cursor
+      - pagination_conversation_history_read_history_cursor_transition
+      - pagination_conversation_history_read_history_multi_page
+      - pagination_conversation_history_read_history_termination_empty_cursor
+      - pagination_conversation_history_read_history_termination_absent_cursor
+      - pagination_conversation_history_read_history_termination_null_cursor
+      - pagination_conversation_history_read_history_cursor_wrong_type_rejected
+      - pagination_conversation_history_read_history_empty_page_with_cursor_continues
+      - pagination_conversation_history_read_history_repeated_cursor_rejected
+      - pagination_conversation_history_read_history_reserved_character_cursor_encoded
+      - pagination_conversation_history_read_history_cursor_byte_budget_boundary
+      - pagination_conversation_history_read_history_cursor_byte_budget_one_over_rejected
+      - pagination_conversation_history_read_history_max_pages_exhausted
+      - pagination_conversation_history_read_history_cursor_at_page_ceiling_resource_failure
+      - pagination_conversation_history_read_history_cursor_absent_from_explanation
+      - pagination_conversation_history_read_history_cursor_absent_from_cache_identity
+      - resource_conversation_history_max_response_bytes_per_page_boundary
+      - resource_conversation_history_max_response_bytes_per_page_one_over_rejected
+      - resource_conversation_history_max_response_bytes_per_scan_boundary
+      - resource_conversation_history_max_response_bytes_per_scan_one_over_rejected
+      - resource_conversation_history_max_records_per_page_boundary
+      - resource_conversation_history_max_records_per_page_one_over_rejected
+      - resource_conversation_history_max_records_per_scan_boundary
+      - resource_conversation_history_max_records_per_scan_one_over_rejected
+      - resource_conversation_history_max_extracted_string_bytes_boundary
+      - resource_conversation_history_max_extracted_string_bytes_one_over_rejected
+      - rate_limit_conversation_history_read_history_mode_disabled
+      - rate_limit_conversation_history_read_history_safe_explanation
+      - compiler_cancellation_source_enumeration
+      - compiler_cancellation_source_read
+      - compiler_cancellation_yaml_parse
+      - compiler_cancellation_reference_validation
+      - compiler_cancellation_generation_validation
+      - compiler_cancellation_publication_wait
+      - runtime_cancellation_conversation_history_read_history_before_request
+      - runtime_cancellation_conversation_history_read_history_transport
+      - runtime_cancellation_conversation_history_read_history_decode
+      - runtime_cancellation_conversation_history_read_history_page_boundary
+      - runtime_cancellation_conversation_history_read_history_stream_close
+      - source_identity_copied_root
+      - source_identity_byte_change
+      - source_identity_symlink_rejected
+      - source_identity_hardlink_rejected
+      - source_identity_entry_change_rejected
+      - source_identity_unlisted_relation_rejected
+      - source_identity_case_collision_rejected
+      - reload_exact_no_op
+      - reload_compatible_patch
+      - reload_compatible_minor
+      - reload_version_reuse_rejected
+      - reload_downgrade_rejected
+      - reload_incompatible_rejected
+      - diagnostic_cuac_unsupported_spec
+      - diagnostic_cuac_unsupported_dialect
+      - diagnostic_cuac_malformed_yaml
+      - diagnostic_cuac_unknown_field
+      - diagnostic_cuac_missing_field
+      - diagnostic_cuac_duplicate_id
+      - diagnostic_cuac_invalid_reference
+      - diagnostic_cuac_invalid_identifier
+      - diagnostic_cuac_invalid_type
+      - diagnostic_cuac_invalid_extractor
+      - diagnostic_cuac_reserved_input
+      - diagnostic_cuac_unsupported_declaration
+      - diagnostic_cuac_invalid_selector
+      - diagnostic_cuac_invalid_predicate
+      - diagnostic_cuac_invalid_graphql_profile
+      - diagnostic_cuac_policy_widening
+      - diagnostic_cuac_resource_exhausted
+      - diagnostic_cuac_package_identity
+      - diagnostic_cuac_fixture_mismatch
+      - diagnostic_cuac_incompatible_reload
+      - diagnostic_cuac_publication_conflict
+    inputs:
+      - {id: channel, value: {kind: value, value: "C04CHANNEL"}}
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: slack.com, port: 443}
+            path: /api/conversations.history
+            query:
+              - {name: limit, encoded_value: "200"}
+              - {name: channel, encoded_value: C04CHANNEL}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: conversation_history_page_1.json
+            body_digest: sha256.5aca47851581c156410e63c91e023a534f060918bc016725f00a7f20a39a1160
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: slack.com, port: 443}
+            path: /api/conversations.history
+            query:
+              - {name: limit, encoded_value: "200"}
+              - {name: channel, encoded_value: C04CHANNEL}
+              - {name: cursor, encoded_value: "bmV4dDpwYWdlMg%3D%3D"}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: conversation_history_page_2.json
+            body_digest: sha256.c570767426ae3ec3c8497b8bbf8094f828d4d97ba400a6d09a22cc05cb2e85d1
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {message_timestamp: "1717171717.000100", user_id: U04ALPHA01, text: first message}
+        - {message_timestamp: "1717171718.000200", user_id: U04BETA002, text: second message}
+        - {message_timestamp: "1717171719.000300", user_id: U04GAMMA03, text: third message}
+      explain: {protocol: rest, pagination: response_cursor, auth: credential}
+
+  - id: slack_conversation_history_channel_bound_value
+    relation: conversation_history
+    operation: read_history
+    covers:
+      - input_conversation_history_channel_bound_value
+    inputs:
+      - {id: channel, value: {kind: value, value: "C04CHANNEL"}}
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: slack.com, port: 443}
+            path: /api/conversations.history
+            query:
+              - {name: limit, encoded_value: "200"}
+              - {name: channel, encoded_value: C04CHANNEL}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: conversation_history_bound_value.json
+            body_digest: sha256.c570767426ae3ec3c8497b8bbf8094f828d4d97ba400a6d09a22cc05cb2e85d1
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {message_timestamp: "1717171719.000300", user_id: U04GAMMA03, text: third message}
+      explain: {protocol: rest, pagination: response_cursor, auth: credential}
+
+  - id: slack_conversation_history_channel_unbound
+    relation: conversation_history
+    operation: read_history
+    covers:
+      - input_conversation_history_channel_unbound
+    inputs: []
+    auth: bearer_present
+    execution:
+      pages:
+        - request:
+            protocol: rest
+            method: GET
+            origin: {scheme: https, host: slack.com, port: 443}
+            path: /api/conversations.history
+            query:
+              - {name: limit, encoded_value: "200"}
+            authorization: bearer_capability
+          response:
+            status: 200
+            headers: []
+            body_file: conversation_history_unbound.json
+            body_digest: sha256.c570767426ae3ec3c8497b8bbf8094f828d4d97ba400a6d09a22cc05cb2e85d1
+    expected:
+      residual_owner: duckdb
+      remote_accuracy: unsupported
+      rows:
+        - {message_timestamp: "1717171719.000300", user_id: U04GAMMA03, text: third message}
+      explain: {protocol: rest, pagination: response_cursor, auth: credential}
+
+  - id: slack_conversation_history_bearer_missing
+    relation: conversation_history
+    operation: read_history
+    covers:
+      - auth_conversation_history_read_history_bearer_missing
+    inputs:
+      - {id: channel, value: {kind: value, value: "C04CHANNEL"}}
+    auth: bearer_missing
+    pre_request_failure: {checkpoint: authorization_resolution}
+    expected:
+      runtime_error: {stage: authentication, field: authorization}
