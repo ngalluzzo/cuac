@@ -6,6 +6,13 @@ namespace internal {
 
 namespace {
 
+// RFC 0029: the response_cursor bounds are the same ceilings the shared bounded
+// cursor state machine enforces, so one budget governs both protocols. The
+// embedded JSON schema states them as closed patterns; these are the second,
+// independent statement the reader applies.
+constexpr std::uint64_t MAX_CURSOR_BYTES_CEILING = 512;
+constexpr std::uint64_t MAX_CURSOR_PAGES_CEILING = 32;
+
 void RequireValue(const LocatedText &value, const char *expected, PackageDiagnosticCode code,
                   PackageDiagnosticPhase phase, PackageDiagnosticSink &diagnostics) {
 	if (value.value != expected) {
@@ -125,15 +132,18 @@ RestResponseDeclaration DecodeRestResponseSchema(const SchemaReader &reader) {
 
 RestPaginationDeclaration DecodeRestPaginationSchema(const SchemaReader &reader) {
 	RestPaginationDeclaration pagination;
-	reader.RequireMapping({"strategy", "dependency", "consistency", "target_scope", "next_url_path",
-	                       "page_size_parameter", "page_size", "page_number_parameter", "first_page", "page_increment",
-	                       "max_pages_per_scan"},
+	reader.RequireMapping({"strategy", "dependency", "consistency", "target_scope", "next_url_path", "cursor_path",
+	                       "cursor_parameter", "max_cursor_bytes", "page_size_parameter", "page_size",
+	                       "page_number_parameter", "first_page", "page_increment", "max_pages_per_scan"},
 	                      {"strategy"});
 	pagination.strategy = reader.Text("strategy");
 	pagination.dependency = reader.Text("dependency", false);
 	pagination.consistency = reader.Text("consistency", false);
 	pagination.target_scope = reader.Text("target_scope", false);
 	pagination.next_url_path = reader.Text("next_url_path", false);
+	pagination.cursor_path = reader.Text("cursor_path", false);
+	pagination.cursor_parameter = reader.Text("cursor_parameter", false);
+	pagination.max_cursor_bytes = reader.Text("max_cursor_bytes", false);
 	pagination.page_size_parameter = reader.Text("page_size_parameter", false);
 	pagination.page_size = reader.Text("page_size", false);
 	pagination.page_number_parameter = reader.Text("page_number_parameter", false);
@@ -142,15 +152,84 @@ RestPaginationDeclaration DecodeRestPaginationSchema(const SchemaReader &reader)
 	pagination.max_pages_per_scan = reader.Text("max_pages_per_scan", false);
 	pagination.mark = reader.Mark();
 	if (pagination.strategy.value == "disabled") {
-		for (const auto *name :
-		     {"dependency", "consistency", "target_scope", "next_url_path", "page_size_parameter", "page_size",
-		      "page_number_parameter", "first_page", "page_increment", "max_pages_per_scan"}) {
+		for (const auto *name : {"dependency", "consistency", "target_scope", "next_url_path", "cursor_path",
+		                         "cursor_parameter", "max_cursor_bytes", "page_size_parameter", "page_size",
+		                         "page_number_parameter", "first_page", "page_increment", "max_pages_per_scan"}) {
 			if (reader.Field(name) != nullptr) {
 				reader.Diagnostics().Add(PackageDiagnosticCode::UNKNOWN_FIELD, PackageDiagnosticPhase::SCHEMA,
 				                         reader.FieldMark(name));
 			}
 		}
 		return pagination;
+	}
+	// RFC 0029: response_cursor is the one strategy with no page number. It
+	// returns before the shared page-number obligations below rather than
+	// threading a conditional through them, so link_next, response_next, and
+	// short_page keep their exact certified validation path.
+	if (pagination.strategy.value == "response_cursor") {
+		// RFC 0029: a cursor traversal owns no page addressing at all. The
+		// page-size pair is rejected with the page-number fields rather than
+		// accepted and ignored: it never reached the request, so admitting it
+		// would be inert grammar. An author declares a page size as an ordinary
+		// fixed query field, which the closed grammar already supports.
+		for (const auto *name : {"next_url_path", "page_number_parameter", "first_page", "page_increment",
+		                         "page_size_parameter", "page_size"}) {
+			if (reader.Field(name) != nullptr) {
+				reader.Diagnostics().Add(PackageDiagnosticCode::UNKNOWN_FIELD, PackageDiagnosticPhase::SCHEMA,
+				                         reader.FieldMark(name));
+			}
+		}
+		for (const auto *name : {"dependency", "consistency", "target_scope", "cursor_path", "cursor_parameter",
+		                         "max_cursor_bytes", "max_pages_per_scan"}) {
+			if (reader.Field(name) == nullptr) {
+				reader.Diagnostics().Add(PackageDiagnosticCode::MISSING_FIELD, PackageDiagnosticPhase::SCHEMA,
+				                         reader.FieldMark(name));
+			}
+		}
+		RequireValue(pagination.dependency, "sequential", PackageDiagnosticCode::UNSUPPORTED_DECLARATION,
+		             PackageDiagnosticPhase::SCHEMA, reader.Diagnostics());
+		RequireValue(pagination.consistency, "mutable", PackageDiagnosticCode::UNSUPPORTED_DECLARATION,
+		             PackageDiagnosticPhase::SCHEMA, reader.Diagnostics());
+		RequireValue(pagination.target_scope, "exact_operation_origin_and_path", PackageDiagnosticCode::POLICY_WIDENING,
+		             PackageDiagnosticPhase::COMPILE, reader.Diagnostics());
+		// The token is one scalar page-level value, so the terminal collection
+		// marker is not a valid cursor path.
+		if (reader.Field("cursor_path") != nullptr && !IsExtractor(pagination.cursor_path.value, false, nullptr)) {
+			reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_EXTRACTOR, PackageDiagnosticPhase::SCHEMA,
+			                         pagination.cursor_path.mark);
+		}
+		if (reader.Field("cursor_parameter") != nullptr && !IsQueryName(pagination.cursor_parameter.value)) {
+			reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
+			                         pagination.cursor_parameter.mark);
+		}
+		std::uint64_t cursor_bound = 0;
+		if (reader.Field("max_cursor_bytes") != nullptr) {
+			if (!IsCanonicalUnsigned(pagination.max_cursor_bytes, cursor_bound)) {
+				reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
+				                         pagination.max_cursor_bytes.mark);
+			} else if (cursor_bound < 1 || cursor_bound > MAX_CURSOR_BYTES_CEILING) {
+				reader.Diagnostics().Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::SCHEMA,
+				                         pagination.max_cursor_bytes.mark);
+			}
+		}
+		std::uint64_t page_bound = 0;
+		if (reader.Field("max_pages_per_scan") != nullptr) {
+			if (!IsCanonicalUnsigned(pagination.max_pages_per_scan, page_bound)) {
+				reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
+				                         pagination.max_pages_per_scan.mark);
+			} else if (page_bound < 1 || page_bound > MAX_CURSOR_PAGES_CEILING) {
+				reader.Diagnostics().Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::SCHEMA,
+				                         pagination.max_pages_per_scan.mark);
+			}
+		}
+		return pagination;
+	}
+	// Every remaining strategy is page-number driven and owns no cursor fields.
+	for (const auto *name : {"cursor_path", "cursor_parameter", "max_cursor_bytes"}) {
+		if (reader.Field(name) != nullptr) {
+			reader.Diagnostics().Add(PackageDiagnosticCode::UNKNOWN_FIELD, PackageDiagnosticPhase::SCHEMA,
+			                         reader.FieldMark(name));
+		}
 	}
 	const bool response_next = pagination.strategy.value == "response_next";
 	const bool short_page = pagination.strategy.value == "short_page";

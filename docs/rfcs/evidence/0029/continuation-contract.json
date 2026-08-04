@@ -2,7 +2,7 @@
   "schema": "cuac/continuation-contract-v1",
   "rfc": "0029",
   "status": "accepted",
-  "delivery_state": "unimplemented",
+  "delivery_state": "in_progress",
   "capability": "response_query_continuation",
   "strategy": "response_cursor",
   "rest_strategy_set": [

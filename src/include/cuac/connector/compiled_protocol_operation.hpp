@@ -425,7 +425,14 @@ struct CompiledGraphqlOperation {
 // declared `page_size` (or zero rows). `page_size_parameter`/`page_size` are
 // therefore required for SHORT_PAGE, unlike their RFC-0017-optional status
 // for LINK_HEADER/RESPONSE_NEXT_URL.
-enum class CompiledPaginationStrategy { DISABLED, LINK_HEADER, RESPONSE_NEXT_URL, SHORT_PAGE };
+// RESPONSE_CURSOR (RFC 0029) is the one strategy with no page number at all.
+// An opaque body token becomes the value of one pagination-owned query
+// parameter on a request that is otherwise reconstructed entirely from admitted
+// facts. Nothing received is compared against a local expectation, because an
+// opaque token cannot be reconstructed; safety comes from confinement to one
+// encoded value slot plus the bounded byte budget, unseen-token set, and page
+// ceiling. Its page-number accessors are a logic error, not a zero.
+enum class CompiledPaginationStrategy { DISABLED, LINK_HEADER, RESPONSE_NEXT_URL, SHORT_PAGE, RESPONSE_CURSOR };
 enum class CompiledPageDependency { SEQUENTIAL };
 enum class CompiledPageConsistency { MUTABLE };
 enum class CompiledLinkRelation { NEXT };
@@ -455,6 +462,13 @@ public:
 	// from which Runtime reads the body-embedded continuation URL.
 	// Accessing this on a non-RESPONSE_NEXT_URL pagination is a logic error.
 	const std::string &NextUrlPath() const;
+	// RESPONSE_CURSOR only (RFC 0029): the declared JSON path the decoder reads
+	// the opaque token from, the pagination-owned query parameter that carries
+	// it on every page after the first, and the token's retained byte budget.
+	// Accessing any of these on another strategy is a logic error.
+	const std::string &CursorPath() const;
+	const std::string &CursorParameter() const;
+	std::uint64_t MaxCursorBytes() const;
 
 private:
 	friend class internal::CompiledModelBuilder;
@@ -484,8 +498,20 @@ private:
 	CompiledPagination(CompiledPaginationStrategy strategy_tag, std::string page_size_parameter,
 	                   std::uint64_t page_size, std::string page_number_parameter, std::uint64_t first_page,
 	                   std::uint64_t page_increment, std::uint64_t max_pages_per_scan);
+	// RESPONSE_CURSOR (RFC 0029): a named factory because this strategy's field
+	// set is not a superset of any page-number strategy's — it has no page
+	// number to bind at all, so it cannot reuse those constructors.
+	static CompiledPagination ResponseCursor(std::string cursor_path, std::string cursor_parameter,
+	                                         std::uint64_t max_cursor_bytes, std::uint64_t max_pages_per_scan);
+	CompiledPagination(std::string cursor_path, std::string cursor_parameter, std::uint64_t max_cursor_bytes,
+	                   std::uint64_t max_pages_per_scan);
 	void RequirePaginated() const;
 	void RequireResponseNextUrl() const;
+	// RESPONSE_CURSOR carries no page-number facts, so the page-number
+	// accessors are narrower than RequirePaginated: a caller that reads a page
+	// number from a cursor traversal is asking for a value that does not exist.
+	void RequirePageNumbered() const;
+	void RequireResponseCursor() const;
 
 	CompiledPaginationStrategy strategy;
 	std::string page_size_parameter;
@@ -495,6 +521,9 @@ private:
 	std::uint64_t page_increment;
 	std::uint64_t max_pages_per_scan;
 	std::string next_url_path;
+	std::string cursor_path;
+	std::string cursor_parameter;
+	std::uint64_t max_cursor_bytes;
 };
 
 // REST is one alternative in the permanent protocol sum.

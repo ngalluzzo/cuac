@@ -110,6 +110,14 @@ CompiledPagination CompilePagination(const RestPaginationDeclaration &source) {
 		    ParseUnsigned(source.first_page), ParseUnsigned(source.page_increment),
 		    ParseUnsigned(source.max_pages_per_scan));
 	}
+	if (source.strategy.value == "response_cursor") {
+		return cuac::internal::CompiledModelBuilder::ResponseCursorPagination(
+		    source.cursor_path.value, source.cursor_parameter.value, ParseUnsigned(source.max_cursor_bytes),
+		    ParseUnsigned(source.max_pages_per_scan));
+	}
+	// Reachable only for "disabled". Every other strategy value is refused in
+	// the schema phase, so no declared traversal can arrive here and be
+	// silently downgraded to a single page.
 	return cuac::internal::CompiledModelBuilder::DisabledPagination();
 }
 
