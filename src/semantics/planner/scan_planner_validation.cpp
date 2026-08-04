@@ -261,6 +261,28 @@ void ValidatePagination(const CompiledOperation &operation, const CompiledResour
 		}
 		return;
 	}
+	// RFC 0029: a cursor traversal shares the sequential/mutable/scope laws but
+	// owns no page number, so it is validated on its own facts and returns
+	// before every page-addressing obligation below.
+	if (pagination.Strategy() == CompiledPaginationStrategy::RESPONSE_CURSOR) {
+		if (PlanPageDependency(pagination.Dependency()) != PlannedPageDependency::SEQUENTIAL ||
+		    PlanPageConsistency(pagination.Consistency()) != PlannedPageConsistency::MUTABLE ||
+		    PlanTargetScope(pagination.TargetScope()) !=
+		        PlannedContinuationTargetScope::EXACT_OPERATION_ORIGIN_AND_PATH ||
+		    pagination.SupportsTotal() || pagination.SupportsResume() ||
+		    operation.cardinality != CompiledOperationCardinality::ZERO_TO_MANY ||
+		    (rest.response_source != CompiledResponseSource::JSON_PATH_MANY &&
+		     rest.response_source != CompiledResponseSource::ROOT_ARRAY)) {
+			throw std::logic_error("selected relation contains an unsupported pagination capability profile");
+		}
+		if (pagination.CursorPath().empty() || pagination.CursorPath()[0] != '$' ||
+		    pagination.CursorPath().find("[*]") != std::string::npos || pagination.CursorParameter().empty() ||
+		    pagination.MaxCursorBytes() == 0 || pagination.MaxCursorBytes() > PAGINATION_MAX_CURSOR_BYTES ||
+		    pagination.MaxPagesPerScan() == 0 || pagination.MaxPagesPerScan() > PAGINATION_MAX_PAGES_PER_SCAN) {
+			throw std::logic_error("selected pagination contains an unsupported typed cursor transition");
+		}
+		return;
+	}
 	if ((pagination.Strategy() != CompiledPaginationStrategy::LINK_HEADER &&
 	     pagination.Strategy() != CompiledPaginationStrategy::RESPONSE_NEXT_URL &&
 	     pagination.Strategy() != CompiledPaginationStrategy::SHORT_PAGE) ||

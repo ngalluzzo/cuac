@@ -142,9 +142,13 @@ inline BaseDomain PlanBaseDomain(CompiledResponseSource source, CompiledPaginati
 	// the domain classification depends only on the response source's
 	// duplicate-preserving-bag shape, never on which mechanism (header, body
 	// URL, or decoded row count) signals continuation.
+	// RFC 0029: a cursor traversal produces the identical base domain — the
+	// duplicate-preserving bag from every accepted page, with no ordering or
+	// snapshot guarantee. Only how the next page is addressed differs.
 	if (pagination == CompiledPaginationStrategy::LINK_HEADER ||
 	    pagination == CompiledPaginationStrategy::RESPONSE_NEXT_URL ||
-	    pagination == CompiledPaginationStrategy::SHORT_PAGE) {
+	    pagination == CompiledPaginationStrategy::SHORT_PAGE ||
+	    pagination == CompiledPaginationStrategy::RESPONSE_CURSOR) {
 		switch (source) {
 		case CompiledResponseSource::JSON_PATH_MANY:
 			return BaseDomain::PAGINATED_JSON_PATH_RECORDS;
@@ -215,6 +219,8 @@ inline PlannedPaginationStrategy PlanPaginationStrategy(CompiledPaginationStrate
 		return PlannedPaginationStrategy::RESPONSE_NEXT_URL;
 	case CompiledPaginationStrategy::SHORT_PAGE:
 		return PlannedPaginationStrategy::SHORT_PAGE;
+	case CompiledPaginationStrategy::RESPONSE_CURSOR:
+		return PlannedPaginationStrategy::RESPONSE_CURSOR;
 	}
 	throw std::logic_error("compiled relation contains an unsupported pagination strategy");
 }

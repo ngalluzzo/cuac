@@ -118,6 +118,12 @@ public:
 	// RESPONSE_NEXT_URL only: empty for other strategies. Carries the
 	// declared JSON body path the decoder uses to extract the continuation.
 	const std::string &NextUrlPath() const;
+	// RESPONSE_CURSOR only (RFC 0029): empty/zero for other strategies. The
+	// declared token path, the pagination-owned parameter that carries it, and
+	// the token's retained byte budget. Never a token value.
+	const std::string &CursorPath() const;
+	const std::string &CursorParameter() const;
+	uint64_t MaxCursorBytes() const;
 	bool RequiresBearer() const;
 	bool RequiresApiKey() const;
 	// Valid only when RequiresApiKey() is true: true = header, false = query.
@@ -156,6 +162,9 @@ private:
 	uint64_t max_pages;
 	PlannedPaginationStrategy pagination_strategy;
 	std::string next_url_path;
+	std::string cursor_path;
+	std::string cursor_parameter;
+	uint64_t max_cursor_bytes;
 	RequiredCredential credential;
 	ResourceBudgets page_budgets;
 	ScanResourceBudgets scan_budgets;
@@ -174,6 +183,10 @@ TryAdmitPaginatedRestPlan(const ScanPlan &plan, const HttpExecutionProfile &prof
 // additionally rejects page state outside its exact checked progression.
 HttpRequest BuildAdmittedRestRequest(const AdmittedRestRequestProfile &profile);
 HttpRequest BuildAdmittedPaginatedRestPageRequest(const AdmittedPaginatedRestRequestProfile &profile, uint64_t page);
+// RFC 0029: RESPONSE_CURSOR page request. An empty cursor builds the first page,
+// which omits the cursor parameter entirely.
+HttpRequest BuildAdmittedPaginatedRestCursorPageRequest(const AdmittedPaginatedRestRequestProfile &profile,
+                                                        const std::string &cursor);
 
 } // namespace internal
 } // namespace cuac

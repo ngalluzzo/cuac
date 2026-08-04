@@ -336,12 +336,14 @@ PaginationPlan::PaginationPlan()
                       {},
                       {},
                       0},
+      cursor_target {{PlannedUrlScheme::HTTPS, "", 0}, "", "", "", 0},
       page_budgets {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scan_budgets {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
 }
 
 void PaginationPlan::RequirePaginated() const {
 	if (strategy != PlannedPaginationStrategy::LINK_HEADER &&
-	    strategy != PlannedPaginationStrategy::RESPONSE_NEXT_URL && strategy != PlannedPaginationStrategy::SHORT_PAGE) {
+	    strategy != PlannedPaginationStrategy::RESPONSE_NEXT_URL && strategy != PlannedPaginationStrategy::SHORT_PAGE &&
+	    strategy != PlannedPaginationStrategy::RESPONSE_CURSOR) {
 		throw std::logic_error("pagination accessor invoked on a non-paginated strategy");
 	}
 }
@@ -381,7 +383,7 @@ bool PaginationPlan::SupportsResume() const {
 }
 
 const PlannedPaginationTarget &PaginationPlan::Target() const {
-	RequirePaginated();
+	RequirePageNumbered();
 	return target;
 }
 
@@ -397,6 +399,24 @@ const std::string &PaginationPlan::NextUrlPath() const {
 		throw std::logic_error("pagination plan does not contain a response_next payload");
 	}
 	return next_url_path;
+}
+
+const PlannedCursorContinuationTarget &PaginationPlan::ResponseCursor() const {
+	RequireResponseCursor();
+	return cursor_target;
+}
+
+void PaginationPlan::RequirePageNumbered() const {
+	if (strategy != PlannedPaginationStrategy::LINK_HEADER &&
+	    strategy != PlannedPaginationStrategy::RESPONSE_NEXT_URL && strategy != PlannedPaginationStrategy::SHORT_PAGE) {
+		throw std::logic_error("page-number accessor invoked on a strategy without a page number");
+	}
+}
+
+void PaginationPlan::RequireResponseCursor() const {
+	if (strategy != PlannedPaginationStrategy::RESPONSE_CURSOR) {
+		throw std::logic_error("pagination plan does not contain a response_cursor payload");
+	}
 }
 
 const ResourceBudgets &PaginationPlan::PageBudgets() const {

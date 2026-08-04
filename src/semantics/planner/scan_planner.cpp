@@ -222,6 +222,11 @@ std::string BuildCanonicalRepresentation(const ScanPlan &plan, const ScanRequest
 	case PlannedPaginationStrategy::SHORT_PAGE:
 		buffer.append("short");
 		break;
+	case PlannedPaginationStrategy::RESPONSE_CURSOR:
+		// Distinct canonical tag: this string is part of plan identity, so a
+		// cursor traversal must never hash equal to any page-numbered plan.
+		buffer.append("resp_cursor");
+		break;
 	}
 	return buffer;
 }
@@ -403,14 +408,27 @@ ScanPlan ScanPlanBuilder::Build(const CompiledConnector &connector, const ScanRe
 		if (compiled_pagination.Strategy() == CompiledPaginationStrategy::RESPONSE_NEXT_URL) {
 			result.pagination.next_url_path = compiled_pagination.NextUrlPath();
 		}
-		result.pagination.target = {
-		    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
-		    rest.request.path,
-		    compiled_pagination.PageSizeParameter(),
-		    compiled_pagination.PageSize(),
-		    compiled_pagination.PageNumberParameter(),
-		    compiled_pagination.FirstPage(),
-		    compiled_pagination.PageIncrement()};
+		if (compiled_pagination.Strategy() == CompiledPaginationStrategy::RESPONSE_CURSOR) {
+			// RFC 0029: a cursor traversal has no page number, so it fills its
+			// own continuation target instead of the page-number target. Both
+			// carry the operation's own origin and path, which is what keeps a
+			// received token from ever influencing where the request goes.
+			result.pagination.cursor_target = {
+			    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
+			    rest.request.path,
+			    compiled_pagination.CursorPath(),
+			    compiled_pagination.CursorParameter(),
+			    compiled_pagination.MaxCursorBytes()};
+		} else {
+			result.pagination.target = {
+			    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
+			    rest.request.path,
+			    compiled_pagination.PageSizeParameter(),
+			    compiled_pagination.PageSize(),
+			    compiled_pagination.PageNumberParameter(),
+			    compiled_pagination.FirstPage(),
+			    compiled_pagination.PageIncrement()};
+		}
 
 		const auto page_response_bytes =
 		    std::min(std::min(ceilings.MaxResponseBytesPerPage(), connector.NetworkPolicy().max_response_bytes),

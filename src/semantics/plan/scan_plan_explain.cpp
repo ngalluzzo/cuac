@@ -222,6 +222,8 @@ const char *PaginationStrategyName(PlannedPaginationStrategy strategy) {
 		return "graphql_cursor";
 	case PlannedPaginationStrategy::SHORT_PAGE:
 		return "short_page";
+	case PlannedPaginationStrategy::RESPONSE_CURSOR:
+		return "response_cursor";
 	}
 	throw std::logic_error("scan plan contains an unknown pagination strategy");
 }
@@ -475,6 +477,23 @@ void AppendPagination(std::ostringstream &result, const PaginationPlan &paginati
 		AppendScanBudgets(result, pagination.ScanBudgets());
 		result << ",body_bytes_per_page:" << pagination.PageBudgets().serialized_request_body_bytes
 		       << ",body_bytes_per_scan:" << pagination.ScanBudgets().serialized_request_body_bytes << ']';
+		return;
+	}
+	if (pagination.Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR) {
+		// RFC 0029: structure only. The declared path and parameter name are
+		// package facts; a received token never reaches explanation.
+		const auto &cursor = pagination.ResponseCursor();
+		result << "[dependency:" << PageDependencyName(pagination.Dependency())
+		       << ",consistency:" << PageConsistencyName(pagination.Consistency())
+		       << ",total:" << (pagination.SupportsTotal() ? "supported" : "none")
+		       << ",resume:" << (pagination.SupportsResume() ? "supported" : "none")
+		       << ",target_scope:" << ContinuationTargetScopeName(pagination.TargetScope()) << ",origin:";
+		AppendOrigin(result, cursor.origin);
+		result << ",path:" << cursor.path << ",cursor_path:" << cursor.cursor_path
+		       << ",cursor_parameter:" << cursor.cursor_parameter << ",max_cursor_bytes:" << cursor.max_cursor_bytes
+		       << ",scan_budgets:";
+		AppendScanBudgets(result, pagination.ScanBudgets());
+		result << ']';
 		return;
 	}
 	const auto &target = pagination.Target();
