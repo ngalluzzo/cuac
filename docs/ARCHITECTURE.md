@@ -27,6 +27,8 @@ pre-1.0 policy and API coverage corpus are defined by
 classified as included there remains absent until every permanent transition
 and its deterministic evidence are implemented together.
 
+One bounded opaque-cursor traversal serves both protocols. RFC 0029 generalized the GraphQL Relay cursor state into a protocol-neutral `OpaqueCursorState` rather than adding a second REST-specific one, so the page ceiling, retained token budget, unseen-token loop detection, and release path have exactly one implementation.
+
 ## Product surface
 
 An author explicitly loads an absolute local package root:

@@ -12,6 +12,9 @@ next narrower responsibility without reading build history.
 | Ecosystem Compatibility | `src/ecosystem/reload/` | Decide whether one compiled package generation may replace another |
 | Relational Semantics | `src/semantics/{predicate,plan,planner}/` | Prove conservative relational behavior and produce immutable execution plans |
 | Remote Runtime | `src/runtime/{admission,api,authentication,cache,decoding,executor,generation,pagination,policy,resilience,transport}/` | Admit and execute a plan with bounded authority and lifecycle |
+
+Remote Runtime owns the single protocol-neutral bounded cursor state under
+`src/runtime/pagination/`; no stream may hold a second implementation of it.
 | Query Experience | `src/query/{request,composition,duckdb/{adapter,catalog,credentials,extension}}/` | Translate DuckDB state, publish catalog objects, resolve credentials, and compose the product |
 
 Public headers mirror the same ownership under `src/include/cuac/`. Private

@@ -413,49 +413,6 @@ second interpretation to unblock another.
    `connectors/`, reaching real DuckDB SQL against a deterministic controlled
    service, with no package-specific native code.
 
-## Compatibility, downgrade, and rollback
-
-| Relationship | Required behavior |
-| --- | --- |
-| Existing package on the first supporting release | Identical normalized meaning; no existing strategy's behavior changes |
-| New `response_cursor` relation appended to an existing package | Greater package MINOR permitted when every existing relation stays structurally identical and ordered |
-| Existing relation changed to or from `response_cursor` | Execution change to an existing relation — incompatible reload, package MAJOR required |
-| Any `response_cursor` field value changed | Same: incompatible reload, package MAJOR |
-| `response_cursor` package on an older CUAC release | `CUAC_UNSUPPORTED_DECLARATION` in the schema phase, before catalog, credential, or network work |
-| Extension downgrade under such a package | Older release rejects the package; rollback restores extension artifact and package bytes as one matched set |
-| GraphQL cursor packages across the refactor | Byte-identical normalized descriptor, plan, requests, and coverage keys |
-
-Reload failure publishes nothing and leaves the active generation and every
-bound or in-flight owner usable, unchanged.
-
-## Vertical evidence contract
-
-All eight RFC 0028 layers land in one sequence. No layer may add a temporary
-second interpretation to unblock another.
-
-1. **Source schema** — a `cursorPagination` `$defs` entry in
-   [`connector-package-v1.schema.json`](../../src/connector/compiler/assets/connector-package-v1.schema.json)
-   with `additionalProperties: false`; exact accepted and rejected byte cases
-   for every field, bound, and cross-field law.
-2. **Diagnostics** — the code table above, each with a stable safe source
-   coordinate and structural field, and no received value in any record.
-3. **Compiled facts** — `PlannedCursorContinuationTarget` as immutable typed
-   values holding no Query, Runtime, credential, catalog, or received state.
-4. **Planning** — independent reconstruction of the parameter-collision law, the
-   `replayable_read` requirement, budget intersection with host ceilings, and
-   the absence of page-number obligations.
-5. **Execution** — first-page omission, encoded placement, transition, byte
-   accounting, unseen-set enforcement, page debit, terminal classes,
-   cancellation, and release, through the production Runtime path only.
-6. **Fixtures** — the coverage keys below, with derived, claimed, and actually
-   executed key sets equal.
-7. **Compatibility** — same-version drift, upgrade, downgrade, reload, prepared
-   generation, explanation, and public-inventory effects, plus proof that
-   GraphQL descriptors are unchanged.
-8. **Independent author** — a Slack `conversations.history` package outside
-   `connectors/`, reaching real DuckDB SQL against a deterministic controlled
-   service, with no package-specific native code.
-
 ### What each layer's evidence turned out to be
 
 Recorded after delivery so a reader can judge the claim rather than infer it.
@@ -650,6 +607,10 @@ The three decisions that blocked acceptance are resolved:
   mutation must fail closed.
 - **Quality gates:** both run under `make test` and `make verify` in the
   verified development container.
+- **Delivered:** `delivery_state` reads `shipped`. Every contract in the
+  propagation table below has been updated, including the narrowed exclusion
+  wording, and the oracle now enforces the presence invariants rather than the
+  absence ones.
 - **Status gate:** `delivery_state` in the evidence file is the authority on
   whether the slice exists. While it reads `unimplemented` the oracle proves the
   capability is absent from the schema, planner, and contracts, so this record

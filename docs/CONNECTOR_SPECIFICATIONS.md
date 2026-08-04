@@ -487,8 +487,9 @@ encoding. Fixed headers are non-sensitive structural values. `Authorization`,
 not fixed author metadata.
 
 Pagination is `disabled`, sequential mutable `Link: rel=next` (`link_next`),
-a body-embedded next-page URL (`response_next`), or count-terminated with no
-continuation signal at all (`short_page`). An accepted continuation must
+a body-embedded next-page URL (`response_next`), count-terminated with no
+continuation signal at all (`short_page`), or an opaque body token echoed into
+one declared query parameter (`response_cursor`). An accepted continuation must
 remain on the exact operation origin and path. Pagination is pull-driven, one
 page at a time, bounded by positive page and scan ceilings, and does not
 grant ordering, snapshot, parallelism, resume, deduplication, or cache
@@ -496,14 +497,13 @@ guarantees. Automatic retry occurs only for an explicitly opted-in safe
 read and remains page-atomic and bounded by the Runtime contract.
 
 The REST pagination strategy set is closed at `{disabled, link_next,
-response_next, short_page}`. Common real-world shapes outside this set are
-rejected by the closed schema rather than silently reinterpreted: an opaque
-body-embedded cursor that drives the next request directly rather than being
-verified against a locally reconstructed expectation, and reverse or
-bidirectional traversal. GraphQL REST-like body pagination is likewise
-outside the structured GraphQL profile below. A later accepted contract and
-executable evidence would be required to admit any such strategy; the
-compiler rejects the declaration today (verified as
+response_next, short_page, response_cursor}`. Common real-world shapes outside
+this set are rejected by the closed schema rather than silently reinterpreted: a
+received value used *as* the next request — dereferenced, or trusted for its
+origin, path, or field names — and reverse or bidirectional traversal. GraphQL
+REST-like body pagination is likewise outside the structured GraphQL profile
+below. A later accepted contract and executable evidence would be required to
+admit any such strategy; the compiler rejects the declaration today (verified as
 `CUAC_UNSUPPORTED_DECLARATION` in the schema phase).
 
 `response_next` is architecturally identical to `link_next` except the
@@ -524,11 +524,56 @@ if a server never returns a short page. This covers plain `?page=N&page_size=M`
 or `?offset=N&limit=M` REST APIs that signal exhaustion only by page size,
 without a `Link` header or a body-embedded next-page URL.
 
-The broader exclusion covering an opaque body-embedded cursor used directly
-to build the next request (a materially different, less conservative trust
-flow than every accepted strategy's reconstruct-and-verify model) and reverse
-or bidirectional traversal remains permanent; admitting either still requires
-a later accepted contract and executable evidence.
+`response_cursor` ([RFC 0029](rfcs/0029-admit-response-cursor-continuation.md))
+is the one strategy with no page number at all, for APIs that return an opaque
+continuation token rather than a page number or a next-page URL:
+
+```yaml
+pagination:
+  strategy: response_cursor
+  dependency: sequential
+  consistency: mutable
+  target_scope: exact_operation_origin_and_path
+  cursor_path: $.response_metadata.next_cursor
+  cursor_parameter: cursor
+  max_cursor_bytes: 512
+  max_pages_per_scan: 16
+```
+
+`cursor_path` is a required scalar `json_path_v1` path (the terminal collection
+marker is invalid); `cursor_parameter` is the required pagination-owned query
+parameter that carries the token; `max_cursor_bytes` is a required `1..512`
+retained-token budget; and `max_pages_per_scan` is a required `1..32` ceiling.
+All eight fields are required; this strategy has no optional field.
+`page_number_parameter`, `first_page`, `page_increment`, `next_url_path`,
+`page_size_parameter`, and `page_size` are rejected as unknown fields: a
+token-paginated request has no page addressing at all, and nothing is stored as
+an ignored or sentinel value. A page size is declared as an ordinary fixed query
+field instead.
+
+The first request omits `cursor_parameter` entirely — v1 has no emit-null query
+encoding, so omission and not an empty value is the first-page shape. Every later
+request appends it exactly once, with the received token percent-encoded by the
+same `form_urlencoded` encoder every other query value uses. An absent path, a
+JSON `null`, and an empty string all mean "no next page". A present non-string
+value is a SCHEMA-phase rejection. A repeated token and a token over
+`max_cursor_bytes` are each terminal.
+
+This strategy is the one place where safety does not come from comparing a
+received value against a locally reconstructed expectation, because an opaque
+token cannot be reconstructed. It comes from confinement instead: the token
+becomes one declared query field's value on a request whose origin, path, method,
+headers, other query values, and credential placement are all still built from
+admitted facts alone. `cursor_parameter` may not collide with any fixed,
+input-bound, or conditional query field, with `page_size_parameter`, or with an
+`api_key` credential's `query_param`.
+
+The permanent exclusion is narrower than a body-embedded token: a received value
+used **as** the request — dereferenced as a fetch target, or trusted for its
+origin, path, or parameter names — and reverse or bidirectional traversal both
+remain permanently excluded, and admitting either still requires a later accepted
+contract and executable evidence. A received value used as **one declared
+field's value**, as `response_cursor` does, is admitted.
 
 ## Structured GraphQL operations
 
@@ -731,15 +776,16 @@ documents, dynamic schemas, write operations, connection profiles,
 partitions, providers, enrichment, retry of writes or unclassified failures,
 author-declared or persistent caching, proactive successful-response pacing,
 distributed quota coordination,
-remote projection/order/limit declarations, an opaque body-embedded cursor
-used directly to build the next request, reverse or bidirectional traversal,
+remote projection/order/limit declarations, a received value used as the next
+request target, reverse or bidirectional traversal,
 custom native code, WASM, or a public C++ ABI.
 
 Adding any such capability requires a later accepted contract. An
 implementation must reject the declaration rather than accept and ignore it.
 
 The REST pagination strategy set is `{disabled, link_next, response_next,
-short_page}`. See the REST pagination section above for both continuation
+short_page, response_cursor}`. See the REST pagination section above for both continuation
 strategies' full grammar. An opaque body-embedded
 cursor used directly to build the next request, and reverse or bidirectional
-traversal, remain permanent exclusions of this boundary.
+traversal, remain permanent exclusions of this boundary. A received token used
+as one declared query field's value is admitted through `response_cursor`.

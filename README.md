@@ -53,7 +53,8 @@ package before publishing anything.
 - Declarative, closed connector specifications for REST and GraphQL.
 - Typed generated DuckDB table functions with offline bind and planning.
 - Anonymous, bearer, and static API-key authentication with explicit secrets.
-- Sequential Link, response-body, short-page, and GraphQL cursor pagination.
+- Sequential Link, response-body, short-page, opaque response-cursor, and
+  GraphQL cursor pagination.
 - Conservative remote predicate restrictions with DuckDB-owned residuals.
 - Strict scalar and flat list conversion.
 - Bounded retries, reactive rate-limit waits, admission bulkheads, cancellation,
@@ -98,7 +99,9 @@ that Linux-backed volume. It does not reuse developer build outputs.
   registries, package signing, and automatic updates are not available.
 - OAuth, implicit credential selection, writes, dynamic schemas, continuous
   streams, parallel pagination, and arbitrary extension code are not supported.
-- GitHub and Rick and Morty are the two maintained example providers.
+- GitHub and Rick and Morty are the two maintained example providers. The
+  Slack package under `examples/` is independent-author evidence, not a
+  maintained provider.
 
 The durable behavioral contracts are documented in
 [ARCHITECTURE.md](docs/ARCHITECTURE.md),
