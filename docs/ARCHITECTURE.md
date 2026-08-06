@@ -31,6 +31,8 @@ REST paths completed that transition under
 `TIMESTAMPTZ` scalars completed the next transition under
 [RFC 0030](rfcs/0030-add-timestamptz-scalars.md).
 
+One bounded opaque-cursor traversal serves both protocols. RFC 0029 generalized the GraphQL Relay cursor state into a protocol-neutral `OpaqueCursorState` rather than adding a second REST-specific one, so the page ceiling, retained token budget, unseen-token loop detection, and release path have exactly one implementation.
+
 ## Product surface
 
 An author explicitly loads an absolute local package root:

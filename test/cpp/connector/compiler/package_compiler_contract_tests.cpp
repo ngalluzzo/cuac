@@ -60,7 +60,7 @@ void TestLocalRootSourceFailuresStayDiagnosticOnly() {
 
 void TestSchemaAssetIdentity() {
 	Require(std::string(cuac::connector::ConnectorPackageV1SchemaDigest()) ==
-	                "sha256.16b9fc2e0440f077bfda811e89125d0259cc59b55a9ac338430f2ce15d672ef2" &&
+	                "sha256.ee4a724ea1d98654f569f20c12c619ab4cd439559166474eadd477bcdccd60a0" &&
 	            cuac::connector::VerifyConnectorPackageV1SchemaAsset(),
 	        "permanent connector schema asset drifted");
 }

@@ -135,7 +135,15 @@ run_build() {
     fi
     CCACHE_DIR="${CCACHE_ROOT}" ccache --zero-stats >/dev/null
     started_at="$(phase_seconds)"
-    env -i HOME="${DEV_ROOT}/home" TMPDIR="${DEV_ROOT}/tmp" \
+    # DuckDB's debug unity translation units are memory-hungry; on a host with a
+    # small container memory ceiling the generator's default job count can OOM
+    # the compiler. CUAC_BUILD_JOBS bounds it. Unset keeps the generator default,
+    # so no existing build changes behavior.
+    local parallel_env=()
+    if [[ -n "${CUAC_BUILD_JOBS:-}" ]]; then
+        parallel_env=(CMAKE_BUILD_PARALLEL_LEVEL="${CUAC_BUILD_JOBS}")
+    fi
+    env -i ${parallel_env[@]+"${parallel_env[@]}"} HOME="${DEV_ROOT}/home" TMPDIR="${DEV_ROOT}/tmp" \
         XDG_CACHE_HOME="${DEV_ROOT}/cache" CCACHE_DIR="${CCACHE_ROOT}" \
         CCACHE_BASEDIR="${TEMPLATE_ROOT}" CCACHE_COMPRESS=true \
         CCACHE_MAXSIZE="${CUAC_CCACHE_MAXSIZE:-5G}" \

@@ -21,6 +21,8 @@ jobs:
           python3 -I -B test/python/development_container_tests.py
           python3 -I -B scripts/verify-specification-evolution.py
           python3 -I -B test/python/specification_evolution_contract.py
+          python3 -I -B scripts/verify-response-cursor-continuation.py
+          python3 -I -B test/python/response_cursor_continuation_contract.py
           python3 -I -B scripts/verify-structural-rest-paths.py
           python3 -I -B test/python/structural_rest_path_contract.py
           python3 -I -B scripts/verify-timestamptz-contract.py

@@ -1,0 +1,70 @@
+api_version: cuac/v1
+kind: relation
+id: conversation_history
+schema: static
+
+columns:
+  - id: message_timestamp
+    type: VARCHAR
+    nullable: false
+    extract: $.ts
+  - id: user_id
+    type: VARCHAR
+    nullable: true
+    extract: $.user
+  - id: text
+    type: VARCHAR
+    nullable: true
+    extract: $.text
+
+inputs:
+  - id: channel
+    type: VARCHAR
+    nullable: false
+
+auth:
+  mode: credential
+  credential: slack_token
+
+resources:
+  max_response_bytes_per_page: 1048576
+  max_response_bytes_per_scan: 16777216
+  max_records_per_page: 200
+  max_records_per_scan: 3200
+  max_extracted_string_bytes: 4096
+
+operations:
+  - id: read_history
+    fallback: true
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: slack.com
+        port: 443
+      path: /api/conversations.history
+      query:
+        - name: limit
+          literal: "200"
+          encoding: form_urlencoded
+        - name: channel
+          input: channel
+          encoding: form_urlencoded
+          omit_when_unbound: true
+          omit_when_null: true
+      headers: []
+    response:
+      source: terminal_collection
+      records: $.messages[*]
+    pagination:
+      strategy: response_cursor
+      dependency: sequential
+      consistency: mutable
+      target_scope: exact_operation_origin_and_path
+      cursor_path: $.response_metadata.next_cursor
+      cursor_parameter: cursor
+      max_cursor_bytes: 512
+      max_pages_per_scan: 16

@@ -402,6 +402,58 @@ cuac::CompiledPackageGeneration BuildRateLimitCompatibilityGeneration(const std:
 	return CompiledModelBuilder::PackageGeneration(std::move(identity), std::move(connector));
 }
 
+// A response_next generation varying only its declared body continuation path.
+// That path was absent from reload comparison until RFC 0029's review, so a
+// package that moved where the continuation is read from normalized as equal.
+cuac::CompiledPackageGeneration BuildResponseNextCompatibilityGeneration(const std::string &version, char digest_fill,
+                                                                         const std::string &next_url_path) {
+	std::vector<CompiledOperation> operations;
+	operations.push_back(CompiledModelBuilder::RestOperation(
+	    "records", true, CompiledOperationCardinality::ZERO_TO_MANY,
+	    CompiledModelBuilder::ResponseNextPagination(next_url_path, "", 0, "page", 1, 1, 4),
+	    {Origin("api.example.com"), "/records", {CompiledModelBuilder::PageNumberQueryParameter("page", 1)}, {}},
+	    CompiledResponseSource::JSON_PATH_MANY, "$.records[*]", {"records"},
+	    CompiledModelBuilder::V1OperationSelector({})));
+	std::vector<cuac::CompiledColumn> columns;
+	columns.push_back(CompiledModelBuilder::Column("id", CompiledScalarType::BIGINT, false, "$.id", {"id"}));
+	std::vector<CompiledRelation> relations;
+	relations.push_back(CompiledModelBuilder::Relation(
+	    "records", std::move(columns), {}, {}, std::move(operations), CompiledModelBuilder::AnonymousAuthentication(),
+	    ConnectorCatalogTestAccess::PaginatedResources(1024, 4096, 5, 20, 64)));
+	auto identity =
+	    CompiledModelBuilder::PackageIdentity("cuac/v1", "response_next_package", version, Digest(digest_fill));
+	auto connector =
+	    CompiledModelBuilder::Connector("response_next_package", version, std::move(relations),
+	                                    {{"https"}, {"api.example.com"}, false, false, false, false, 4096});
+	return CompiledModelBuilder::PackageGeneration(std::move(identity), std::move(connector));
+}
+
+// RFC 0029: a response_cursor generation whose continuation identity can be
+// varied one field at a time, so reload classification can be proved to notice
+// each of them rather than normalizing them away.
+cuac::CompiledPackageGeneration BuildCursorCompatibilityGeneration(const std::string &version, char digest_fill,
+                                                                   const std::string &cursor_path,
+                                                                   const std::string &cursor_parameter,
+                                                                   std::uint64_t max_cursor_bytes) {
+	std::vector<CompiledOperation> operations;
+	operations.push_back(CompiledModelBuilder::RestOperation(
+	    "records", true, CompiledOperationCardinality::ZERO_TO_MANY,
+	    CompiledModelBuilder::ResponseCursorPagination(cursor_path, cursor_parameter, max_cursor_bytes, 4),
+	    {Origin("api.example.com"), "/records", {}, {}}, CompiledResponseSource::JSON_PATH_MANY, "$.records[*]",
+	    {"records"}, CompiledModelBuilder::V1OperationSelector({})));
+	std::vector<cuac::CompiledColumn> columns;
+	columns.push_back(CompiledModelBuilder::Column("id", CompiledScalarType::BIGINT, false, "$.id", {"id"}));
+	std::vector<CompiledRelation> relations;
+	relations.push_back(CompiledModelBuilder::Relation(
+	    "records", std::move(columns), {}, {}, std::move(operations), CompiledModelBuilder::AnonymousAuthentication(),
+	    ConnectorCatalogTestAccess::PaginatedResources(1024, 4096, 5, 20, 64)));
+	auto identity = CompiledModelBuilder::PackageIdentity("cuac/v1", "cursor_package", version, Digest(digest_fill));
+	auto connector =
+	    CompiledModelBuilder::Connector("cursor_package", version, std::move(relations),
+	                                    {{"https"}, {"api.example.com"}, false, false, false, false, 4096});
+	return CompiledModelBuilder::PackageGeneration(std::move(identity), std::move(connector));
+}
+
 cuac::CompiledPackageGeneration BuildSelectorNamespaceCompatibilityGeneration(const std::string &version,
                                                                               char digest_fill,
                                                                               bool conditional_reference) {
@@ -675,6 +727,21 @@ cuac::CompiledPackageGeneration BuildPaginationCompatibilityGenerationFixture(co
 cuac::CompiledPackageGeneration BuildRateLimitCompatibilityGenerationFixture(const std::string &package_version,
                                                                              char digest_fill, std::uint16_t status) {
 	return BuildRateLimitCompatibilityGeneration(package_version, digest_fill, status);
+}
+
+cuac::CompiledPackageGeneration BuildResponseNextCompatibilityGenerationFixture(const std::string &package_version,
+                                                                                char digest_fill,
+                                                                                const std::string &next_url_path) {
+	return BuildResponseNextCompatibilityGeneration(package_version, digest_fill, next_url_path);
+}
+
+cuac::CompiledPackageGeneration BuildCursorCompatibilityGenerationFixture(const std::string &package_version,
+                                                                          char digest_fill,
+                                                                          const std::string &cursor_path,
+                                                                          const std::string &cursor_parameter,
+                                                                          std::uint64_t max_cursor_bytes) {
+	return BuildCursorCompatibilityGeneration(package_version, digest_fill, cursor_path, cursor_parameter,
+	                                          max_cursor_bytes);
 }
 
 cuac::CompiledPackageGeneration BuildRestPathCompatibilityGenerationFixture(RestPathCompatibilityFixture variant,

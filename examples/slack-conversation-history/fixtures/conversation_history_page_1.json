@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "messages": [
+    {"type": "message", "ts": "1717171717.000100", "user": "U04ALPHA01", "text": "first message"},
+    {"type": "message", "ts": "1717171718.000200", "user": "U04BETA002", "text": "second message"}
+  ],
+  "has_more": true,
+  "response_metadata": {"next_cursor": "bmV4dDpwYWdlMg=="}
+}

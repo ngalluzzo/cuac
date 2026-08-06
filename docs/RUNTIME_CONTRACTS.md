@@ -730,6 +730,56 @@ continuation long enough for the common scan ledger to own this terminal
 `RESOURCE/pages` decision; the cursor state machine does not reclassify the
 same ceiling as a pagination-policy failure.
 
+### Token-continued REST pagination (`response_cursor`)
+
+`response_cursor` (RFC 0029) reuses the same page-level scalar extraction slot
+`response_next` established: the token is read at the declared `cursor_path`
+during the single decode pass that produces rows, with no second parse and no
+retained intermediate tree. It does **not** reuse `ValidateNextTarget`, because
+an opaque token cannot be compared against a locally reconstructed expectation.
+
+Its state is `OpaqueCursorState`, the same bounded forward-traversal mechanism
+the structured GraphQL Relay profile uses. There is exactly one such state
+machine: two would have to be kept identical by review alone and would drift at
+the first divergent fix. It bounds pages at 32 and retained token bytes at 512,
+rejects a repeated token, and releases retained storage on exhaustion or failure.
+
+That retained storage is inside the scan's admitted memory envelope, not beside
+it. A full traversal can hold `max_pages_per_scan * max_cursor_bytes` of
+heap-backed tokens, so the executor measures the state before each decode,
+subtracts it from the page's decoded-memory allowance, and includes it in the
+committed figure and reported peak afterwards. A scan therefore cannot exceed
+the envelope it was admitted under while reporting that it stayed inside it.
+
+The strategy is restricted to object-rooted `terminal_collection` responses.
+`cursor_path` is walked from the document root, so a `root_array` response has
+nowhere to carry the token; the decoder reads an array root as an absent path,
+which is indistinguishable from exhaustion. Such a declaration is refused in the
+schema phase rather than executing as a silently truncated single-page scan.
+
+The first request omits `cursor_parameter` entirely. Every later request appends
+it once with the token percent-encoded by the shared `form_urlencoded` encoder;
+received bytes never enter a target unencoded. Admission proves up front that
+the worst-case encoded token — three bytes per received byte — still fits the
+request target, so a mid-scan continuation cannot overflow it.
+
+Because there is no arithmetic page progression to verify, the unseen-token set
+plus `max_pages_per_scan` are the whole progress proof. An absent path, a JSON
+`null`, and an empty string all mean exhaustion; a present non-string value is a
+SCHEMA-phase rejection; a repeated token is a terminal PROTOCOL failure; an
+over-budget token is a terminal RESOURCE_BUDGET failure. A continuation offered
+at the page ceiling is a terminal `RESOURCE/pages` decision owned by the common
+scan ledger, not reclassified as a pagination-policy failure.
+
+The continuation is validated while the page is decoded, before any row is
+exposed, so a rejected token fails replayable-before-exposure rather than after a
+partial result. The token is received state: it never enters the planned or
+admitted profile, explanation, diagnostics, or `CacheSemanticIdentity`. The
+credential authenticators cannot verify a cursor request by enumerating page
+numbers, so they verify it structurally instead — the first-page target, or that
+target plus exactly one appended parameter bearing the declared name and a
+bounded, canonically percent-encoded value.
+
 ### Count-terminated REST pagination (`short_page`)
 
 `short_page` reuses the identical local page-reconstruction model

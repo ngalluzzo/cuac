@@ -135,6 +135,13 @@ struct RestPaginationDeclaration {
 	// Runtime extracts the body-embedded continuation URL. Empty for disabled
 	// and link_next strategies.
 	LocatedText next_url_path;
+	// RFC 0029, response_cursor only: declared JSON path (under json_path_v1)
+	// from which Runtime extracts the opaque continuation token, the
+	// pagination-owned query parameter that carries it on every later page, and
+	// the token's retained byte budget. Empty for every other strategy.
+	LocatedText cursor_path;
+	LocatedText cursor_parameter;
+	LocatedText max_cursor_bytes;
 	LocatedText page_size_parameter;
 	LocatedText page_size;
 	LocatedText page_number_parameter;

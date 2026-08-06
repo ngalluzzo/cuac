@@ -4,7 +4,7 @@
 #include "cuac/internal/runtime/authentication/bearer_authenticator.hpp"
 #include "cuac/internal/runtime/decoding/decoded_page_buffer.hpp"
 #include "cuac/internal/runtime/decoding/graphql_response_decoder.hpp"
-#include "cuac/internal/runtime/pagination/graphql_cursor_pagination.hpp"
+#include "cuac/internal/runtime/pagination/opaque_cursor_pagination.hpp"
 #include "cuac/internal/runtime/policy/scan_resource_accounting.hpp"
 #include "cuac/internal/runtime/transport/graphql_request_body.hpp"
 
@@ -88,28 +88,28 @@ void CheckStatus(uint32_t status, bool retry_after_present) {
 	}
 }
 
-// RFC 0021: map a GraphqlCursorErrorKind to failure properties so the scan catch
+// RFC 0021: map a OpaqueCursorErrorKind to failure properties so the scan catch
 // boundary classifies cursor failures structurally rather than by message text.
 // The ErrorStage/field/safe_message still render unchanged; this only attaches
 // the additive FailureClass. step/rows_exposed default to zero and are enriched
 // at the catch boundary.
-FailureProperties GraphqlCursorFailureProperties(GraphqlCursorErrorKind kind) {
+FailureProperties GraphqlCursorFailureProperties(OpaqueCursorErrorKind kind) {
 	FailureProperties properties {};
 	properties.phase = FailurePhase::PAGINATE;
 	properties.attempt = 1;
 	properties.replay_classification = ReplayClassification::REPLAYABLE_BEFORE_EXPOSURE;
 	switch (kind) {
-	case GraphqlCursorErrorKind::PROFILE:
+	case OpaqueCursorErrorKind::PROFILE:
 		properties.failure_class = FailureClass::CONFIGURATION;
 		return properties;
-	case GraphqlCursorErrorKind::RESOURCE_BUDGET:
+	case OpaqueCursorErrorKind::RESOURCE_BUDGET:
 		properties.failure_class = FailureClass::RESOURCE_BUDGET;
 		return properties;
-	case GraphqlCursorErrorKind::PROTOCOL:
+	case OpaqueCursorErrorKind::PROTOCOL:
 		properties.failure_class = FailureClass::PROTOCOL;
 		return properties;
 	}
-	throw std::logic_error("unknown GraphqlCursorErrorKind");
+	throw std::logic_error("unknown OpaqueCursorErrorKind");
 }
 
 class CombinedControl final : public ExecutionControl {
@@ -136,7 +136,7 @@ public:
 	      authorization(new ScanAuthorization(std::move(authorization_p))),
 	      column_types(ColumnTypes(*admitted_profile)),
 	      accounting(ResourceProfile(*admitted_profile, max_wall_milliseconds_p)),
-	      cursor(new GraphqlCursorState(admitted_profile->MaxPages(), 512)), cancelled(false), closed(false),
+	      cursor(new OpaqueCursorState(admitted_profile->MaxPages(), 512)), cancelled(false), closed(false),
 	      exhausted(false), page_loaded(false), page_has_next(false), decoded_memory_bytes(0),
 	      decoded_memory_allowance(0), offset(0), rows_emitted(0),
 	      retry_seed(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(this)) ^
@@ -226,7 +226,7 @@ public:
 			            FailurePropertiesFromError(error), accounting.Counters().pages, accounting.CurrentAttempt(),
 			            rows_emitted, accounting.Counters().cumulative_retry_waiting_milliseconds, CurrentExposure()),
 			        accounting.Counters(), resilience_state));
-		} catch (const GraphqlCursorError &error) {
+		} catch (const OpaqueCursorError &error) {
 			FailWithExecutionError(
 			    ErrorStage::POLICY, error.Field(), error.SafeMessage(),
 			    EnrichRateLimitFailureProperties(
@@ -499,7 +499,7 @@ private:
 	std::unique_ptr<ScanAuthorization> authorization;
 	const std::vector<OutputValueType> column_types;
 	ScanResourceAccounting accounting;
-	std::unique_ptr<GraphqlCursorState> cursor;
+	std::unique_ptr<OpaqueCursorState> cursor;
 	mutable std::mutex mutex;
 	std::atomic<bool> cancelled;
 	bool closed;
@@ -556,7 +556,7 @@ OpenGraphqlPaginatedScan(std::unique_ptr<const AdmittedGraphqlRequestProfile> ad
 		throw;
 	} catch (const ScanResourceError &error) {
 		throw ExecutionError(ErrorStage::RESOURCE, error.Field(), error.SafeMessage());
-	} catch (const GraphqlCursorError &error) {
+	} catch (const OpaqueCursorError &error) {
 		throw ExecutionError(ErrorStage::RESOURCE, error.Field(), error.SafeMessage(),
 		                     GraphqlCursorFailureProperties(error.Kind()));
 	} catch (const std::bad_alloc &) {

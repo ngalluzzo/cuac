@@ -310,6 +310,8 @@ const char *PaginationStrategyName(cuac::PlannedPaginationStrategy strategy) {
 		return "graphql_cursor";
 	case cuac::PlannedPaginationStrategy::SHORT_PAGE:
 		return "short_page";
+	case cuac::PlannedPaginationStrategy::RESPONSE_CURSOR:
+		return "response_cursor";
 	}
 	throw InternalException("cuac scan plan contains an unknown pagination strategy");
 }
@@ -383,6 +385,20 @@ void AddPaginationFacts(InsertionOrderPreservingMap<string> &result, const cuac:
 		result["Page Consistency"] = PageConsistencyName(plan.Pagination().Consistency());
 		result["Page Size"] = std::to_string(plan.Pagination().Target().page_size);
 		result["Maximum Pages"] = std::to_string(plan.Pagination().ScanBudgets().pages);
+		result["Total Support"] = plan.Pagination().SupportsTotal() ? "available" : "unavailable";
+		result["Resume Support"] = plan.Pagination().SupportsResume() ? "available" : "unavailable";
+	} else if (strategy == cuac::PlannedPaginationStrategy::RESPONSE_CURSOR) {
+		// RFC 0029: render the declared structure only. The cursor parameter
+		// name and cursor path are package facts; the token itself is received
+		// state and never reaches explanation, exactly as a credential value
+		// never does.
+		const auto &cursor = plan.Pagination().ResponseCursor();
+		result["Page Dependency"] = PageDependencyName(plan.Pagination().Dependency());
+		result["Page Consistency"] = PageConsistencyName(plan.Pagination().Consistency());
+		result["Page Size"] = "none";
+		result["Maximum Pages"] = std::to_string(plan.Pagination().ScanBudgets().pages);
+		result["Continuation Cursor"] = cursor.cursor_path + " -> " + cursor.cursor_parameter;
+		result["Cursor Byte Bound"] = std::to_string(cursor.max_cursor_bytes);
 		result["Total Support"] = plan.Pagination().SupportsTotal() ? "available" : "unavailable";
 		result["Resume Support"] = plan.Pagination().SupportsResume() ? "available" : "unavailable";
 	} else if (strategy == cuac::PlannedPaginationStrategy::GRAPHQL_CURSOR) {

@@ -53,6 +53,12 @@ public:
 	static CompiledPagination ShortPagePagination(std::string page_size_parameter, std::uint64_t page_size,
 	                                              std::string page_number_parameter, std::uint64_t first_page,
 	                                              std::uint64_t page_increment, std::uint64_t max_pages_per_scan);
+	// RESPONSE_CURSOR pagination (RFC 0029): no page number at all. The token
+	// path and its pagination-owned parameter replace page addressing, and the
+	// page-size pair stays optional.
+	static CompiledPagination ResponseCursorPagination(std::string cursor_path, std::string cursor_parameter,
+	                                                   std::uint64_t max_cursor_bytes,
+	                                                   std::uint64_t max_pages_per_scan);
 	static CompiledQueryParameter FixedQueryParameter(std::string name, CompiledScalarValue decoded_value);
 	static CompiledQueryParameter RelationInputQueryParameter(std::string name, std::string input_id);
 	static CompiledQueryParameter ConditionalInputQueryParameter(std::string name, std::string conditional_id);

@@ -87,7 +87,36 @@ enum class RuntimeFixturePaginationFailureVariant {
 	REST_MAX_PAGES_EXHAUSTED,
 	GRAPHQL_MISSING_CURSOR_REJECTED,
 	GRAPHQL_REPEATED_CURSOR_REJECTED,
-	GRAPHQL_MAX_PAGES_EXHAUSTED
+	GRAPHQL_MAX_PAGES_EXHAUSTED,
+	// RFC 0029: response_cursor rejections. There is deliberately no
+	// malformed/replayed-target variant: an opaque token is never compared
+	// against a reconstructed target, so those categories do not exist here.
+	// What replaces them is a repeated token, an over-budget token, a
+	// wrong-typed continuation, and the page ceiling.
+	REST_CURSOR_REPEATED_REJECTED,
+	REST_CURSOR_BUDGET_EXCEEDED_REJECTED,
+	REST_CURSOR_WRONG_TYPE_REJECTED,
+	REST_CURSOR_MAX_PAGES_EXHAUSTED
+};
+
+// RFC 0029: the response_cursor success observations. These are project-owned
+// because no author transcript can assert them: whether the first request
+// omitted the parameter, whether the token reached the wire percent-encoded,
+// and whether it stayed out of explanation are all properties of what Runtime
+// did, not of what the server returned.
+enum class RuntimeFixturePaginationSuccessVariant {
+	CURSOR_FIRST_PAGE_OMITS_CURSOR,
+	CURSOR_TRANSITION,
+	CURSOR_MULTI_PAGE,
+	CURSOR_TERMINATION_EMPTY,
+	CURSOR_TERMINATION_ABSENT,
+	CURSOR_TERMINATION_NULL,
+	CURSOR_EMPTY_PAGE_WITH_CURSOR_CONTINUES,
+	CURSOR_RESERVED_CHARACTER_ENCODED,
+	CURSOR_BYTE_BUDGET_BOUNDARY,
+	CURSOR_AT_PAGE_CEILING_RESOURCE_FAILURE,
+	CURSOR_ABSENT_FROM_EXPLANATION,
+	CURSOR_ABSENT_FROM_CACHE_IDENTITY
 };
 
 // Successful return is evidence that Runtime observed and internally
@@ -236,6 +265,14 @@ public:
 	RuntimeFixtureVariantObservation ExecutePaginationFailureVariant(const cuac::ScanPlan &plan,
 	                                                                 const RuntimeFixtureTranscript &transcript,
 	                                                                 RuntimeFixturePaginationFailureVariant variant,
+	                                                                 cuac::ExecutionControl &control) const;
+	// RFC 0029: the success counterpart. Each variant synthesizes its own
+	// transcript from the author's base page and asserts one observable Runtime
+	// property; a variant that cannot observe its property fails rather than
+	// silently reporting success.
+	RuntimeFixtureVariantObservation ExecutePaginationSuccessVariant(const cuac::ScanPlan &plan,
+	                                                                 const RuntimeFixtureTranscript &transcript,
+	                                                                 RuntimeFixturePaginationSuccessVariant variant,
 	                                                                 cuac::ExecutionControl &control) const;
 };
 

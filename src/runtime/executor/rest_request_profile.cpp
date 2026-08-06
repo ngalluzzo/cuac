@@ -81,17 +81,45 @@ AdmittedPaginatedRestRequestProfile::AdmittedPaginatedRestRequestProfile(
     AdmittedRateLimitPolicy rate_limit_p, AdmittedResiliencePolicy resilience_p)
     : method("GET"), scheme(RestSchemeName(plan.Operation().Rest().origin.scheme)),
       host(plan.Operation().Rest().origin.host), port(plan.Operation().Rest().origin.port),
+      // A structural path substitutes input segments during materialization, so
+      // the materialized request path -- not the planned template -- is the
+      // authority. The cursor page builder reads Path(), so a structural-path
+      // cursor relation would otherwise request the wrong target.
       path(std::move(request.path)), query_parameters(std::move(request.query)), headers(std::move(request.headers)),
       columns(std::move(request.columns)), response_source(plan.Operation().Rest().response_source),
       records_path(std::move(request.records_path)),
-      page_size_parameter(plan.Pagination().Target().page_size_parameter),
-      page_size(plan.Pagination().Target().page_size),
-      page_number_parameter(plan.Pagination().Target().page_number_parameter),
-      first_page(plan.Pagination().Target().first_page), page_increment(plan.Pagination().Target().page_increment),
+      // RFC 0029: a cursor traversal owns no page size either. An author that
+      // wants one declares it as an ordinary fixed query field.
+      page_size_parameter(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                              ? std::string()
+                              : plan.Pagination().Target().page_size_parameter),
+      page_size(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                    ? 0
+                    : plan.Pagination().Target().page_size),
+      // RFC 0029: nor a page number. These stay empty and zero rather than
+      // reporting a page it does not have.
+      page_number_parameter(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                                ? std::string()
+                                : plan.Pagination().Target().page_number_parameter),
+      first_page(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                     ? 0
+                     : plan.Pagination().Target().first_page),
+      page_increment(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                         ? 0
+                         : plan.Pagination().Target().page_increment),
       max_pages(plan.Pagination().ScanBudgets().pages), pagination_strategy(plan.Pagination().Strategy()),
       next_url_path(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_NEXT_URL
                         ? plan.Pagination().NextUrlPath()
                         : std::string()),
+      cursor_path(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                      ? plan.Pagination().ResponseCursor().cursor_path
+                      : std::string()),
+      cursor_parameter(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                           ? plan.Pagination().ResponseCursor().cursor_parameter
+                           : std::string()),
+      max_cursor_bytes(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
+                           ? plan.Pagination().ResponseCursor().max_cursor_bytes
+                           : 0),
       credential(std::move(credential_p)), page_budgets(plan.Pagination().PageBudgets()),
       scan_budgets(plan.Pagination().ScanBudgets()), retry(retry_p), rate_limit(std::move(rate_limit_p)),
       resilience(resilience_p) {
@@ -153,6 +181,18 @@ PlannedPaginationStrategy AdmittedPaginatedRestRequestProfile::PaginationStrateg
 const std::string &AdmittedPaginatedRestRequestProfile::NextUrlPath() const {
 	return next_url_path;
 }
+
+const std::string &AdmittedPaginatedRestRequestProfile::CursorPath() const {
+	return cursor_path;
+}
+
+const std::string &AdmittedPaginatedRestRequestProfile::CursorParameter() const {
+	return cursor_parameter;
+}
+
+uint64_t AdmittedPaginatedRestRequestProfile::MaxCursorBytes() const {
+	return max_cursor_bytes;
+}
 bool AdmittedPaginatedRestRequestProfile::RequiresBearer() const {
 	return credential.bearer;
 }
@@ -208,6 +248,46 @@ HttpRequest BuildAdmittedPaginatedRestPageRequest(const AdmittedPaginatedRestReq
 	        profile.Host(),
 	        profile.Port(),
 	        BuildRestTarget(profile.Path(), profile.QueryParameters(), &profile.PageNumberParameter(), page),
+	        profile.Headers(),
+	        {},
+	        {}};
+}
+
+// RFC 0029: build one cursor page. An empty token is the first page, which
+// carries no cursor parameter at all — v1 has no emit-null query encoding, so
+// omission and not an empty value is the correct first-page shape. Every later
+// page appends exactly one parameter whose value is the token run through the
+// same form_urlencoded encoder every other query value uses; received bytes are
+// never spliced into a target unencoded. The extended vector is handed to
+// BuildRestTarget so the byte-budget and capacity laws are the identical ones
+// every other REST target obeys, rather than a second copy of them here.
+HttpRequest BuildAdmittedPaginatedRestCursorPageRequest(const AdmittedPaginatedRestRequestProfile &profile,
+                                                        const std::string &cursor) {
+	if (profile.PaginationStrategy() != PlannedPaginationStrategy::RESPONSE_CURSOR ||
+	    profile.CursorParameter().empty() || profile.MaxCursorBytes() == 0) {
+		throw ExecutionError(ErrorStage::POLICY, "pagination.cursor",
+		                     "cursor page request built from a non-cursor profile");
+	}
+	if (static_cast<uint64_t>(cursor.size()) > profile.MaxCursorBytes()) {
+		throw ExecutionError(ErrorStage::RESOURCE, "pagination.cursor",
+		                     "REST continuation cursor exceeded its admitted byte budget");
+	}
+	auto query = profile.QueryParameters();
+	if (!cursor.empty()) {
+		for (const auto &parameter : query) {
+			// The cursor may never shadow or be shadowed by a declared field.
+			if (parameter.name == profile.CursorParameter()) {
+				throw ExecutionError(ErrorStage::POLICY, "pagination.cursor",
+				                     "cursor parameter collides with an admitted query field");
+			}
+		}
+		query.push_back({profile.CursorParameter(), FormUrlEncode(cursor)});
+	}
+	return {profile.Method(),
+	        profile.Scheme(),
+	        profile.Host(),
+	        profile.Port(),
+	        BuildRestTarget(profile.Path(), query, nullptr, 0),
 	        profile.Headers(),
 	        {},
 	        {}};

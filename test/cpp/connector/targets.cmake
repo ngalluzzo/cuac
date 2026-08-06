@@ -92,6 +92,21 @@ target_link_libraries(
   PRIVATE cuac_package_fixture_service
           cuac_package_compiler_fixture_service)
 
+# RFC 0029 evidence layer 8: the independently authored response_cursor package
+# under examples/ is the only package in the tree that derives the cursor
+# coverage keys, so it is also layer 6's claims reconciliation.
+add_executable(
+  cuac_slack_independent_package_tests
+  test/cpp/connector/compiler/slack_independent_package_tests.cpp)
+configure_cuac_cpp_target(cuac_slack_independent_package_tests)
+target_include_directories(
+  cuac_slack_independent_package_tests
+  PRIVATE test/cpp)
+target_link_libraries(
+  cuac_slack_independent_package_tests
+  PRIVATE cuac_package_fixture_service
+          cuac_package_compiler_fixture_service)
+
 # Package-independence oracle: proves equivalent package inputs across
 # the github and rickandmorty package profiles compile to equivalent output and
 # fail with equivalent diagnostics, including unsupported spec/dialect. The

@@ -14,7 +14,14 @@ namespace internal {
 // without parsing the safe-message text. Mirrors the LinkPaginationErrorKind
 // precedent. The field/safe_message still carry the specific reason for the
 // rendered diagnostic.
-enum class GraphqlCursorErrorKind : uint8_t {
+//
+// RFC 0029 generalized this mechanism from GraphQL-only to protocol-neutral.
+// Nothing here is GraphQL- or REST-specific: it is a bounded forward traversal
+// over opaque received tokens. GraphQL reaches it through the structured Relay
+// profile; REST reaches it through the response_cursor strategy. There is
+// exactly one such state machine on purpose — two would have to be kept
+// identical by review alone, and would drift at the first divergent fix.
+enum class OpaqueCursorErrorKind : uint8_t {
 	// -> FailureClass::CONFIGURATION: invalid cursor profile.
 	PROFILE,
 	// -> FailureClass::RESOURCE_BUDGET: page authority, cursor byte budget, or memory.
@@ -23,27 +30,33 @@ enum class GraphqlCursorErrorKind : uint8_t {
 	PROTOCOL
 };
 
-class GraphqlCursorError : public std::exception {
+class OpaqueCursorError : public std::exception {
 public:
-	GraphqlCursorError(GraphqlCursorErrorKind kind, std::string field, std::string safe_message);
+	OpaqueCursorError(OpaqueCursorErrorKind kind, std::string field, std::string safe_message);
 	const char *what() const noexcept override;
 	const std::string &Field() const noexcept;
 	const std::string &SafeMessage() const noexcept;
-	GraphqlCursorErrorKind Kind() const noexcept;
+	OpaqueCursorErrorKind Kind() const noexcept;
 
 private:
-	GraphqlCursorErrorKind kind;
+	OpaqueCursorErrorKind kind;
 	std::string field;
 	std::string safe_message;
 };
 
-// One stream owns one forward cursor state. The first request uses null. Every
-// accepted continuation is nonempty, unseen, and bounded; exhaustion and any
-// rejected transition are terminal. No cursor grants ordering or resume.
-class GraphqlCursorState {
+// One stream owns one forward cursor state. The first request carries no cursor
+// at all. Every accepted continuation is nonempty, unseen, and bounded;
+// exhaustion and any rejected transition are terminal. No cursor grants
+// ordering, snapshot, resume, or deduplication.
+//
+// The unseen-token set is what replaces the arithmetic progress proof a
+// page-numbered strategy gets for free: an opaque token cannot be checked
+// against a locally reconstructed expectation, so a repeat is the only
+// detectable loop signal, backed by the hard page ceiling.
+class OpaqueCursorState {
 public:
-	GraphqlCursorState(uint64_t max_pages, uint64_t max_cursor_bytes);
-	GraphqlCursorState(const GraphqlCursorState &) = delete;
+	OpaqueCursorState(uint64_t max_pages, uint64_t max_cursor_bytes);
+	OpaqueCursorState(const OpaqueCursorState &) = delete;
 
 	const std::string *CurrentCursor() const noexcept;
 	uint64_t RequestedPages() const noexcept;
@@ -57,7 +70,7 @@ public:
 	void Release() noexcept;
 
 private:
-	[[noreturn]] void Reject(GraphqlCursorErrorKind kind, std::string field, std::string safe_message);
+	[[noreturn]] void Reject(OpaqueCursorErrorKind kind, std::string field, std::string safe_message);
 
 	uint64_t max_pages;
 	uint64_t max_cursor_bytes;

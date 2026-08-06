@@ -36,6 +36,9 @@ static const uint64_t HOST_MAX_SERIALIZED_REQUEST_BODY_BYTES = 16 * 1024;
 static const uint64_t PAGINATION_MAX_REQUEST_ATTEMPTS_PER_PAGE = 1;
 static const uint64_t PAGINATION_MAX_REQUEST_ATTEMPTS_PER_SCAN = 32;
 static const uint64_t PAGINATION_MAX_PAGES_PER_SCAN = 32;
+// RFC 0029: the retained-token byte ceiling shared by the GraphQL Relay profile
+// and the REST response_cursor strategy, so one budget governs both.
+static const uint64_t PAGINATION_MAX_CURSOR_BYTES = 512;
 static const uint64_t PAGINATION_MAX_RESPONSE_BYTES_PER_PAGE = 8 * 1024 * 1024;
 static const uint64_t PAGINATION_MAX_RESPONSE_BYTES_PER_SCAN = 64 * 1024 * 1024;
 static const uint64_t PAGINATION_MAX_HEADER_BYTES_PER_PAGE = 16 * 1024;
@@ -351,7 +354,17 @@ struct ScanResourceBudgets {
 	bool IsWithinPaginatedScanBounds() const;
 };
 
-enum class PlannedPaginationStrategy { DISABLED, LINK_HEADER, RESPONSE_NEXT_URL, GRAPHQL_CURSOR, SHORT_PAGE };
+enum class PlannedPaginationStrategy {
+	DISABLED,
+	LINK_HEADER,
+	RESPONSE_NEXT_URL,
+	GRAPHQL_CURSOR,
+	SHORT_PAGE,
+	// RFC 0029: REST traversal driven by an opaque body token that fills one
+	// pagination-owned query value. Distinct from GRAPHQL_CURSOR, which reaches
+	// the same bounded cursor mechanism through the structured GraphQL profile.
+	RESPONSE_CURSOR
+};
 enum class PlannedPageDependency { SEQUENTIAL };
 enum class PlannedPageConsistency { MUTABLE };
 enum class PlannedLinkRelation { NEXT };
@@ -370,6 +383,19 @@ struct PlannedPaginationTarget {
 	std::string page_number_parameter;
 	uint64_t first_page;
 	uint64_t page_increment;
+};
+
+// RFC 0029: the RESPONSE_CURSOR continuation target. Deliberately NOT
+// PlannedPaginationTarget with unused page-number members — a cursor traversal
+// has no page number, and carrying zeroed page facts would be exactly the
+// dormant-state reuse the RFC forbids. Holds only declared facts: no received
+// token ever enters a planned value.
+struct PlannedCursorContinuationTarget {
+	PlannedHttpOrigin origin;
+	std::string path;
+	std::string cursor_path;
+	std::string cursor_parameter;
+	uint64_t max_cursor_bytes;
 };
 
 // Relational Semantics' closed pagination handoff. Disabled pagination has no
@@ -398,6 +424,9 @@ public:
 	// extract the continuation URL. Accessing on a non-RESPONSE_NEXT_URL
 	// plan is a logic error.
 	const std::string &NextUrlPath() const;
+	// RESPONSE_CURSOR only (RFC 0029). Accessing on another strategy is a
+	// logic error, as is reading Target() on a cursor plan.
+	const PlannedCursorContinuationTarget &ResponseCursor() const;
 	const ResourceBudgets &PageBudgets() const;
 	const ScanResourceBudgets &ScanBudgets() const;
 
@@ -409,6 +438,9 @@ private:
 
 	PaginationPlan();
 	void RequirePaginated() const;
+	// Narrower than RequirePaginated: page-numbered strategies only.
+	void RequirePageNumbered() const;
+	void RequireResponseCursor() const;
 
 	PlannedPaginationStrategy strategy;
 	PlannedPageDependency dependency;
@@ -421,6 +453,8 @@ private:
 	PlannedGraphqlCursor graphql_cursor;
 	// RESPONSE_NEXT_URL only: empty for other strategies.
 	std::string next_url_path;
+	// RESPONSE_CURSOR only: default-valued for other strategies.
+	PlannedCursorContinuationTarget cursor_target;
 	ResourceBudgets page_budgets;
 	ScanResourceBudgets scan_budgets;
 };

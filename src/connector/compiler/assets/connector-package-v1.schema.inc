@@ -477,6 +477,22 @@ R"CUACV1({
         "max_pages_per_scan": {"$ref": "#/$defs/positiveInteger"}
       }
     },
+    "cursorPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "RFC 0029: one opaque response token becomes the value of one pagination-owned query parameter on a locally reconstructed request. There is no page number, so the page-number fields of every other strategy are unknown here, next_url_path belongs to response_next, and the page-size pair is rejected because a cursor traversal never owns it - an author declares a page size as an ordinary fixed query field.",
+      "required": ["strategy", "dependency", "consistency", "target_scope", "cursor_path", "cursor_parameter", "max_cursor_bytes", "max_pages_per_scan"],
+      "properties": {
+        "strategy": {"const": "response_cursor"},
+        "dependency": {"const": "sequential"},
+        "consistency": {"const": "mutable"},
+        "target_scope": {"const": "exact_operation_origin_and_path"},
+        "cursor_path": {"$ref": "#/$defs/extractPath"},
+        "cursor_parameter": {"type": "string", "pattern": "^[A-Za-z0-9._~-]{1,63}$"},
+        "max_cursor_bytes": {"type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]|[1-4][0-9][0-9]|50[0-9]|51[0-2])$"},
+        "max_pages_per_scan": {"type": "string", "pattern": "^(?:[1-9]|[12][0-9]|3[0-2])$"}
+      }
+    },
 
     "retry": {
       "type": "object",
@@ -582,7 +598,8 @@ R"CUACV1({
             {"$ref": "#/$defs/disabledPagination"},
             {"$ref": "#/$defs/linkPagination"},
             {"$ref": "#/$defs/responsePagination"},
-            {"$ref": "#/$defs/shortPagePagination"}
+            {"$ref": "#/$defs/shortPagePagination"},
+            {"$ref": "#/$defs/cursorPagination"}
           ]
         }
       },

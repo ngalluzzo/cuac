@@ -22,7 +22,8 @@ BaseDomain ExpectedRestDomain(const PlannedRestOperation &operation, PlannedPagi
 	// mechanism signals continuation.
 	if (pagination == PlannedPaginationStrategy::LINK_HEADER ||
 	    pagination == PlannedPaginationStrategy::RESPONSE_NEXT_URL ||
-	    pagination == PlannedPaginationStrategy::SHORT_PAGE) {
+	    pagination == PlannedPaginationStrategy::SHORT_PAGE ||
+	    pagination == PlannedPaginationStrategy::RESPONSE_CURSOR) {
 		return operation.response_source == PlannedResponseSource::ROOT_ARRAY ? BaseDomain::PAGINATED_ROOT_ARRAY_RECORDS
 		                                                                      : BaseDomain::PAGINATED_JSON_PATH_RECORDS;
 	}

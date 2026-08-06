@@ -471,6 +471,50 @@ void TestRateLimitChangesRequireAnIncompatibleReload() {
 	                      "package-major rate-limit policy change was treated as an in-place compatible reload");
 }
 
+// A gap found while reviewing RFC 0029's work, not introduced by it: response_next
+// declares where the body continuation is read from, and that path was absent
+// from reload comparison, so moving it normalized as an equal reload.
+void TestResponseNextContinuationPathChangeRequiresAnIncompatibleReload() {
+	const auto active = cuac_test::BuildResponseNextCompatibilityGenerationFixture("1.2.3", 'a', "$.info.next");
+	RequireClassification(active,
+	                      cuac_test::BuildResponseNextCompatibilityGenerationFixture("1.2.4", 'b', "$.info.next"),
+	                      PackageReloadClassification::COMPATIBLE_PROVENANCE_PATCH,
+	                      "an unchanged response_next profile was not structurally comparable");
+	RequireClassification(active,
+	                      cuac_test::BuildResponseNextCompatibilityGenerationFixture("1.3.0", 'c', "$.info.following"),
+	                      PackageReloadClassification::INCOMPATIBLE_RELOAD,
+	                      "a changed response_next continuation path escaped the compatibility boundary");
+}
+
+// RFC 0029: a cursor traversal's continuation identity is its declared token
+// path, its pagination-owned parameter, and its retained byte budget. Each one
+// changes request behavior, so none of them may normalize as an equal reload -
+// and reading a page number from such a plan must never be attempted at all.
+void TestCursorContinuationChangesRequireAnIncompatibleReload() {
+	const auto active =
+	    cuac_test::BuildCursorCompatibilityGenerationFixture("1.2.3", 'a', "$.paging.next", "cursor", 256);
+	RequireClassification(
+	    active, cuac_test::BuildCursorCompatibilityGenerationFixture("1.2.4", 'b', "$.paging.next", "cursor", 256),
+	    PackageReloadClassification::COMPATIBLE_PROVENANCE_PATCH,
+	    "an unchanged response_cursor profile was not structurally comparable");
+	RequireClassification(
+	    active, cuac_test::BuildCursorCompatibilityGenerationFixture("1.3.0", 'c', "$.paging.after", "cursor", 256),
+	    PackageReloadClassification::INCOMPATIBLE_RELOAD,
+	    "a changed cursor path escaped the package-major compatibility boundary");
+	RequireClassification(
+	    active, cuac_test::BuildCursorCompatibilityGenerationFixture("1.3.0", 'd', "$.paging.next", "after", 256),
+	    PackageReloadClassification::INCOMPATIBLE_RELOAD,
+	    "a changed cursor parameter escaped the package-major compatibility boundary");
+	RequireClassification(
+	    active, cuac_test::BuildCursorCompatibilityGenerationFixture("1.3.0", 'e', "$.paging.next", "cursor", 512),
+	    PackageReloadClassification::INCOMPATIBLE_RELOAD,
+	    "a changed cursor byte budget escaped the package-major compatibility boundary");
+	RequireClassification(
+	    active, cuac_test::BuildCursorCompatibilityGenerationFixture("2.0.0", 'f', "$.paging.after", "after", 512),
+	    PackageReloadClassification::INCOMPATIBLE_RELOAD,
+	    "a package-major cursor change was treated as an in-place compatible reload");
+}
+
 void TestStructuralPathChangesRequireAnIncompatibleReload() {
 	const auto active =
 	    cuac_test::BuildRestPathCompatibilityGenerationFixture(RestPathCompatibilityFixture::BASELINE, "1.2.3", 'a');
@@ -504,6 +548,8 @@ int main() {
 		TestIdentityAndVersionRejections();
 		TestStructuralRejections();
 		TestRateLimitChangesRequireAnIncompatibleReload();
+		TestCursorContinuationChangesRequireAnIncompatibleReload();
+		TestResponseNextContinuationPathChangeRequiresAnIncompatibleReload();
 		TestStructuralPathChangesRequireAnIncompatibleReload();
 		std::cout << "package compatibility contract tests passed" << std::endl;
 		return EXIT_SUCCESS;

@@ -38,7 +38,8 @@ Near-term work should prioritize operating evidence over surface expansion:
 
 1. continuous verification and sanitizer coverage;
 2. additional DuckDB and platform cells;
-3. independently authored provider packages;
+3. independently authored provider packages, begun with the Slack
+   `response_cursor` package under `examples/`;
 4. installation and signed distribution;
 5. external-user feedback and multi-maintainer operation; and
 6. only then, carefully governed connector-language expansion.

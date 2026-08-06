@@ -52,6 +52,7 @@ R"CUAC_COVER({
       "each Link-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "link_next"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each ResponseNext-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "response_next"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each ShortPage-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "short_page"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
+      "each ResponseCursor-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "rest"]}, {"equals": ["operation.pagination.strategy", "response_cursor"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each Relay-pagination operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "graphql"]}, {"equals": ["operation.request.pagination.strategy", "relay_forward"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each GraphQL operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"equals": ["operation.request.protocol", "graphql"]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each declared relation resource field": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"fields": "derivation_language.resource_fields.relation", "from": "relation.resources", "as": "resource"}], "bindings": {"relation": "relation.id", "resource": "resource.name"}},
@@ -200,6 +201,11 @@ R"CUAC_COVER({
       "scope": "each ShortPage-pagination operation",
       "template": "pagination_{relation}_{operation}_{variant}",
       "variants": ["first_page", "multi_page", "termination_on_short_page", "termination_on_empty_page", "exact_multiple_page_boundary", "max_pages_exhausted"]
+    },
+    {
+      "scope": "each ResponseCursor-pagination operation",
+      "template": "pagination_{relation}_{operation}_{variant}",
+      "variants": ["first_page_omits_cursor", "cursor_transition", "multi_page", "termination_empty_cursor", "termination_absent_cursor", "termination_null_cursor", "cursor_wrong_type_rejected", "empty_page_with_cursor_continues", "repeated_cursor_rejected", "reserved_character_cursor_encoded", "cursor_byte_budget_boundary", "cursor_byte_budget_one_over_rejected", "max_pages_exhausted", "cursor_at_page_ceiling_resource_failure", "cursor_absent_from_explanation", "cursor_absent_from_cache_identity"]
     },
     {
       "scope": "each Relay-pagination operation",

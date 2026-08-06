@@ -17,5 +17,5 @@ while IFS= read -r source; do
     sources+=("${source}")
 done < <(find "${REPOSITORY_ROOT}/src" "${REPOSITORY_ROOT}/test/cpp" \
     -type f \( -name '*.cpp' -o -name '*.hpp' \) -print | sort)
-"${CLANG_FORMAT}" --dry-run --Werror "${sources[@]}"
+"${CLANG_FORMAT}" --dry-run --Werror ${sources[@]+"${sources[@]}"}
 echo "native format check passed with $("${CLANG_FORMAT}" --version)"
