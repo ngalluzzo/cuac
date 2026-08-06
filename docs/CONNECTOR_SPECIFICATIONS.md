@@ -629,6 +629,14 @@ pagination:
   max_pages_per_scan: 16
 ```
 
+This strategy requires a `terminal_collection` response. The continuation is read
+by walking `cursor_path` from the document root, so a `root_array` response has
+nowhere to carry the token: the decoder reads an array root as an absent path,
+which is indistinguishable from exhaustion, and the scan would stop after its
+first page and return an incomplete result *successfully*. That combination is
+rejected in the schema phase (`CUAC_UNSUPPORTED_DECLARATION`) rather than
+silently truncating.
+
 `cursor_path` is a required scalar `json_path_v1` path (the terminal collection
 marker is invalid); `cursor_parameter` is the required pagination-owned query
 parameter that carries the token; `max_cursor_bytes` is a required `1..512`
@@ -655,7 +663,11 @@ becomes one declared query field's value on a request whose origin, path, method
 headers, other query values, and credential placement are all still built from
 admitted facts alone. `cursor_parameter` may not collide with any fixed,
 input-bound, or conditional query field, with `page_size_parameter`, or with an
-`api_key` credential's `query_param`.
+`api_key` credential's `query_param`. Retained tokens are part of the scan's
+declared resource envelope: the bounded state holds every token it has accepted,
+so that storage is charged to `decoded_memory_bytes` before each page is decoded
+and included in the reported peak, the same way a GraphQL cursor's retained
+storage is charged.
 
 The permanent exclusion is narrower than a body-embedded token: a received value
 used **as** the request — dereferenced as a fetch target, or trusted for its

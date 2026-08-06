@@ -16,7 +16,8 @@
     "max_pages": 32,
     "max_cursor_bytes": 512,
     "shared_with_protocol": "graphql",
-    "duplicate_state_machines": 0
+    "duplicate_state_machines": 0,
+  "retained_cursor_bytes": "charged_to_decoded_memory"
   },
   "corpus_relations": [
     "kubernetes_namespace_pods",
@@ -136,6 +137,7 @@
     "later_pages": "cursor_parameter_appended_once_percent_encoded",
     "encoding": "form_urlencoded",
     "owner": "pagination_block_not_query_list",
+  "required_response_source": "terminal_collection_object_rooted",
     "received_value_may_alter": "one_declared_query_value",
     "received_value_may_never_alter": [
       "origin",
@@ -242,7 +244,9 @@
     "received_value_altering_a_parameter_name_or_request_authority",
     "parallel_concurrent_or_speculative_page_fetching",
     "author_declared_cursor_persistence_snapshot_or_deduplication",
-    "relaxing_the_response_next_reconstruct_and_verify_rule"
+    "relaxing_the_response_next_reconstruct_and_verify_rule",
+  "root_array_responses_which_cannot_carry_an_object_rooted_continuation",
+  "retained_cursor_storage_outside_the_decoded_memory_envelope"
   ],
   "open_decisions": [],
   "resolved_decisions": [

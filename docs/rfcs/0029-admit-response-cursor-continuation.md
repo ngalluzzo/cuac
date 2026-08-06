@@ -343,7 +343,21 @@ This RFC does not admit, and an implementation must reject rather than ignore:
 - parallel, concurrent, or speculative page fetching; the REST state machine
   stays pull-driven with at most one request and one decoded page in flight;
 - author-declared cursor persistence, snapshot, or deduplication semantics; and
-- relaxing the `response_next` reconstruct-and-verify rule, which is untouched.
+- relaxing the `response_next` reconstruct-and-verify rule, which is untouched;
+- a root-array response under this strategy. The continuation is read by walking
+  an object-rooted path from the document root, so an array root has nowhere to
+  carry the token. The decoder treats it as an absent path, which is
+  indistinguishable from exhaustion, so such a scan would stop after its first
+  page and return an incomplete result *successfully* — the exact silent-
+  truncation failure this strategy exists to make impossible. The combination is
+  refused at schema phase; and
+- retained cursor storage outside the decoded-memory envelope. The bounded state
+  holds every token it has accepted, so a full traversal can retain
+  `max_pages * max_cursor_bytes` of heap. That storage is charged against the
+  page allowance before decoding and included in the committed figure
+  afterwards, exactly as the GraphQL cursor executor charges it, so a scan
+  cannot exceed the envelope it was admitted under while reporting that it
+  stayed inside it.
 
 ## Delivery sequence
 

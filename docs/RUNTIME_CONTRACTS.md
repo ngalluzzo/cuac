@@ -744,6 +744,19 @@ machine: two would have to be kept identical by review alone and would drift at
 the first divergent fix. It bounds pages at 32 and retained token bytes at 512,
 rejects a repeated token, and releases retained storage on exhaustion or failure.
 
+That retained storage is inside the scan's admitted memory envelope, not beside
+it. A full traversal can hold `max_pages_per_scan * max_cursor_bytes` of
+heap-backed tokens, so the executor measures the state before each decode,
+subtracts it from the page's decoded-memory allowance, and includes it in the
+committed figure and reported peak afterwards. A scan therefore cannot exceed
+the envelope it was admitted under while reporting that it stayed inside it.
+
+The strategy is restricted to object-rooted `terminal_collection` responses.
+`cursor_path` is walked from the document root, so a `root_array` response has
+nowhere to carry the token; the decoder reads an array root as an absent path,
+which is indistinguishable from exhaustion. Such a declaration is refused in the
+schema phase rather than executing as a silently truncated single-page scan.
+
 The first request omits `cursor_parameter` entirely. Every later request appends
 it once with the token percent-encoded by the shared `form_urlencoded` encoder;
 received bytes never enter a target unencoded. Admission proves up front that

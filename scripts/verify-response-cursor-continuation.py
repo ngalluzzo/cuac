@@ -62,6 +62,9 @@ EXPECTED_BOUNDS = {
     "max_cursor_bytes": 512,
     "shared_with_protocol": "graphql",
     "duplicate_state_machines": 0,
+    # Retained tokens are real heap allocations and are charged to the same
+    # decoded-memory envelope the GraphQL cursor executor charges them to.
+    "retained_cursor_bytes": "charged_to_decoded_memory",
 }
 
 # name: (requirement, value law)
@@ -106,6 +109,9 @@ EXPECTED_PLACEMENT = {
     "later_pages": "cursor_parameter_appended_once_percent_encoded",
     "encoding": "form_urlencoded",
     "owner": "pagination_block_not_query_list",
+    # The continuation is read from an object-rooted path, so a root array has
+    # nowhere to carry it and is refused rather than silently truncating.
+    "required_response_source": "terminal_collection_object_rooted",
     "received_value_may_alter": "one_declared_query_value",
     "received_value_may_never_alter": [
         "origin",
@@ -191,6 +197,12 @@ EXPECTED_EXCLUSIONS = {
     ),
     "relaxing_the_response_next_reconstruct_and_verify_rule": (
         "relaxing the `response_next` reconstruct-and-verify rule"
+    ),
+    "root_array_responses_which_cannot_carry_an_object_rooted_continuation": (
+        "a root-array response"
+    ),
+    "retained_cursor_storage_outside_the_decoded_memory_envelope": (
+        "retained cursor storage outside the decoded-memory envelope"
     ),
 }
 

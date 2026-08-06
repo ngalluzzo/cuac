@@ -68,8 +68,38 @@ class ResponseCursorContinuationContractTests(unittest.TestCase):
         self.assertEqual(result["rfc"], "0029")
         self.assertEqual(result["strategy"], "response_cursor")
         self.assertEqual(result["coverage_keys"], 16)
-        self.assertEqual(result["exclusions"], 10)
+        self.assertEqual(result["exclusions"], 12)
         self.assertIn(result["delivery_state"], {"unimplemented", "in_progress", "shipped"})
+
+    # --- laws added after the two shipped-code defects ----------------------
+
+    # A root array cannot carry an object-rooted continuation, and the decoder
+    # reads an absent path as exhaustion. Dropping this requirement from the
+    # record would let a package declare the silently-truncating combination.
+    def test_placement_without_the_object_rooted_requirement_fails(self) -> None:
+        self.reject_record(
+            lambda value: value["placement"].pop("required_response_source"),
+            "placement keys differ",
+        )
+
+    def test_placement_with_a_root_array_response_source_fails(self) -> None:
+        self.reject_record(
+            lambda value: value["placement"].__setitem__("required_response_source", "root_array"),
+            "continuation placement law drifted",
+        )
+
+    # Retained tokens are heap allocations inside the scan's admitted envelope.
+    def test_bounds_without_the_retained_cursor_charge_fails(self) -> None:
+        self.reject_record(
+            lambda value: value["shared_cursor_bounds"].pop("retained_cursor_bytes"),
+            "shared cursor bounds",
+        )
+
+    def test_bounds_with_unaccounted_cursor_storage_fails(self) -> None:
+        self.reject_record(
+            lambda value: value["shared_cursor_bounds"].__setitem__("retained_cursor_bytes", "unaccounted"),
+            "shared cursor bounds drifted",
+        )
 
     # --- delivery-state invariant -------------------------------------------
 
