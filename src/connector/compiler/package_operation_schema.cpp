@@ -273,6 +273,18 @@ OperationDeclaration DecodeOperationSchema(const SchemaReader &reader) {
 		operation.rest = DecodeRestRequestSchema(request);
 		operation.response = DecodeRestResponseSchema(reader.Child("response"));
 		operation.rest_pagination = DecodeRestPaginationSchema(reader.Child("pagination"));
+		// RFC 0029: the continuation decoder walks an object-rooted path from the
+		// document root, so a root array has nowhere to carry the token.
+		// ExtractContinuation treats an array root as an absent path, which is
+		// indistinguishable from exhaustion, so such a scan would stop after one
+		// page and silently return an incomplete result instead of failing.
+		// Refuse the combination here, where the response source and the
+		// strategy are first known together.
+		if (operation.rest_pagination.strategy.value == "response_cursor" &&
+		    operation.response.source.value != "terminal_collection") {
+			reader.Diagnostics().Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::SCHEMA,
+			                         operation.response.source.mark);
+		}
 	}
 	return operation;
 }

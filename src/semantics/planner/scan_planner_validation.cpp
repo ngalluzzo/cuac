@@ -273,8 +273,8 @@ void ValidatePagination(const CompiledOperation &operation, const CompiledResour
 		        PlannedContinuationTargetScope::EXACT_OPERATION_ORIGIN_AND_PATH ||
 		    pagination.SupportsTotal() || pagination.SupportsResume() ||
 		    operation.cardinality != CompiledOperationCardinality::ZERO_TO_MANY ||
-		    (rest.response_source != CompiledResponseSource::JSON_PATH_MANY &&
-		     rest.response_source != CompiledResponseSource::ROOT_ARRAY)) {
+		    // Object-rooted only: a root array has nowhere to carry the token.
+		    rest.response_source != CompiledResponseSource::JSON_PATH_MANY) {
 			throw std::logic_error("selected relation contains an unsupported pagination capability profile");
 		}
 		if (pagination.CursorPath().empty() || pagination.CursorPath()[0] != '$' ||

@@ -704,6 +704,42 @@ void TestUnsupportedPaginationStrategyRejected() {
 	                       "a response-body URL pagination strategy escaped the closed v1 pagination set");
 }
 
+// RFC 0029: response_cursor reads its continuation from an object-rooted path,
+// so a root_array response has nowhere to carry the token. ExtractContinuation
+// treats an array root as an absent path, which is indistinguishable from
+// exhaustion -- the scan would stop after one page and silently return an
+// incomplete result rather than failing. authenticated_repositories.yaml
+// declares source: root_array, so swapping only its pagination block produces
+// exactly that combination, and it must be refused at compile time.
+void TestResponseCursorRejectsRootArrayResponse() {
+	TemporaryPackage package;
+	cuac_test::WriteGithubPackage(package);
+	const std::string link_next_block = "      strategy: link_next\n"
+	                                    "      dependency: sequential\n"
+	                                    "      consistency: mutable\n"
+	                                    "      target_scope: exact_operation_origin_and_path\n"
+	                                    "      page_size_parameter: per_page\n"
+	                                    "      page_size: 100\n"
+	                                    "      page_number_parameter: page\n"
+	                                    "      first_page: 1\n"
+	                                    "      page_increment: 1\n"
+	                                    "      max_pages_per_scan: 32\n";
+	const std::string cursor_block = "      strategy: response_cursor\n"
+	                                 "      dependency: sequential\n"
+	                                 "      consistency: mutable\n"
+	                                 "      target_scope: exact_operation_origin_and_path\n"
+	                                 "      cursor_path: $.paging.next\n"
+	                                 "      cursor_parameter: cursor\n"
+	                                 "      max_cursor_bytes: 512\n"
+	                                 "      max_pages_per_scan: 32\n";
+	package.Write("relations/authenticated_repositories.yaml",
+	              cuac_test::ReplaceOnce(GithubRelation("authenticated_repositories"), link_next_block, cursor_block));
+	NeverCancel cancellation;
+	RequireFirstDiagnostic(cuac_test::CompileRoot(package.Root(), cancellation),
+	                       PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::SCHEMA,
+	                       "a response_cursor relation over a root array escaped the object-rooted continuation law");
+}
+
 // RFC 0019: authenticated_repositories.yaml already declares page_size_parameter/
 // page_size (link_next's RFC 0017 optionality does not remove them here), so a
 // short_page relation reusing this exact shape needs only its strategy changed.
@@ -857,6 +893,7 @@ int main() {
 		TestDiagnosticCodePhaseContract();
 		TestArrayColumnSchemaAndGraphqlDoubleGap();
 		TestUnsupportedPaginationStrategyRejected();
+		TestResponseCursorRejectsRootArrayResponse();
 		TestShortPagePaginationCompiles();
 		TestShortPageMissingPageSizeRejected();
 		TestShortPagePageSizeNameCollisionRejected();

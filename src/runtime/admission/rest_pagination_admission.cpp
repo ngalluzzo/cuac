@@ -98,6 +98,11 @@ bool HasSupportedRestCursorPagination(const ScanPlan &plan, const HttpExecutionP
                                       const std::vector<AdmittedQueryParameter> &query) {
 	const auto &operation = plan.Operation().Rest();
 	const auto &pagination = plan.Pagination();
+	// The continuation is read from an object-rooted path, so a root array would
+	// always decode as absent and terminate the scan after one page.
+	if (operation.response_source != PlannedResponseSource::JSON_PATH_MANY) {
+		return false;
+	}
 	if (!HasCoherentPageAndScanBudgets(pagination, profile, plan)) {
 		return false;
 	}

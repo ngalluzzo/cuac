@@ -313,10 +313,13 @@ void ValidatePagination(const CompiledOperation &operation) {
 	// page number, so every page-addressing law below is inapplicable to it and
 	// checking it here would read values it does not carry.
 	if (pagination.Strategy() == CompiledPaginationStrategy::RESPONSE_CURSOR) {
+		// A root array cannot carry an object-rooted continuation path, and an
+		// absent path is indistinguishable from exhaustion, so this strategy is
+		// restricted to a terminal collection under an object root.
 		if (operation.cardinality != CompiledOperationCardinality::ZERO_TO_MANY ||
-		    (rest.response_source != CompiledResponseSource::JSON_PATH_MANY &&
-		     rest.response_source != CompiledResponseSource::ROOT_ARRAY)) {
-			throw std::invalid_argument("compiled pagination requires a many-row response source");
+		    rest.response_source != CompiledResponseSource::JSON_PATH_MANY) {
+			throw std::invalid_argument(
+			    "compiled response_cursor pagination requires an object-rooted terminal-collection response");
 		}
 		if (pagination.Dependency() != CompiledPageDependency::SEQUENTIAL ||
 		    pagination.Consistency() != CompiledPageConsistency::MUTABLE ||
