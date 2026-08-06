@@ -345,6 +345,44 @@ void TestResponseCursorTraversesAndTerminates() {
 	Require(runtime->ConsumeBearerExpectation(2), "response_cursor pages did not carry their credential");
 }
 
+// RFC 0029: retained cursor storage is part of the decoded-memory envelope.
+// The bounded state holds every token it has accepted, so 32 pages of 512-byte
+// tokens is roughly 16KB of heap the scan never declared. Two traversals with
+// identical rows isolate that storage exactly: RetainedMemoryBytes() charges
+// only tokens that actually allocate, so 6-byte tokens live inside the string
+// object and cost nothing, while 16-byte tokens each allocate capacity + 1.
+// The decoder's own page charge is 279 either way -- it accounts for the
+// continuation scalar separately -- so the whole difference between the two
+// reported peaks is retained cursor state. Before this storage was charged
+// both figures read 279, understating a real allocation and letting a scan
+// exceed its admitted envelope by the cursor's share.
+void TestResponseCursorChargesRetainedTokensToDecodedMemory() {
+	const uint64_t decoded_page_bytes = 279;
+	const uint64_t two_retained_tokens = 34;
+	auto peak_for = [](const std::string &first_token, const std::string &second_token, uint64_t token_suffix) {
+		const auto runtime = cuac_test::BuildControlledHttpRuntime();
+		runtime->RespondSequence({ControlledResponse(200, CursorPageOf({{1, "first"}}, first_token)),
+		                          ControlledResponse(200, CursorPageOf({{2, "second"}}, second_token)),
+		                          ControlledResponse(200, CursorPageOf({{3, "third"}}, ""))});
+		ManualHttpExecutionControl control;
+		auto stream = OpenResponseCursor(runtime, control, token_suffix);
+		cuac::TypedBatch batch;
+		uint64_t rows = 0;
+		while (stream->Next(control, batch)) {
+			rows += batch.rows.size();
+		}
+		Require(rows == 3, "the cursor traversal did not return every page");
+		return stream->Diagnostics().peak_decoded_memory_bytes;
+	};
+	// Small tokens: no allocation, so the peak is the decoded page alone.
+	Require(peak_for("a+b/c=", "d-e_f~", 951) == decoded_page_bytes,
+	        "a cursor traversal holding no heap-backed token did not report the decoded page alone");
+	// Tokens at the fixture's declared 16-byte budget, one byte past the
+	// small-string threshold: both allocate and both must be charged.
+	Require(peak_for("aaaaaaaaaaaaaaa1", "aaaaaaaaaaaaaaa2", 952) == decoded_page_bytes + two_retained_tokens,
+	        "peak decoded memory did not include the retained cursor tokens");
+}
+
 // Without a page number there is no arithmetic progress proof, so a repeated
 // token is the only detectable loop signal and must be terminal.
 void TestResponseCursorRejectsRepeatedToken() {
@@ -781,6 +819,7 @@ int main() {
 		TestGenericPaginatedRestUsesCopiedExecutableFacts();
 		TestShortPageTerminatesOnShortPage();
 		TestResponseCursorTraversesAndTerminates();
+		TestResponseCursorChargesRetainedTokensToDecodedMemory();
 		TestResponseCursorRejectsRepeatedToken();
 		TestResponseCursorRejectsOversizedToken();
 		TestShortPageTerminatesOnEmptyPage();

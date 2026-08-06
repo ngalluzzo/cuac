@@ -478,7 +478,28 @@ private:
 			throw ExecutionError(ErrorStage::RESOURCE, "decoded_memory_bytes",
 			                     "HTTP response metadata exhausted the decoded-page memory budget");
 		}
-		const auto decoder_memory = allowance.decoded_memory_bytes - response.metadata.retained_bytes;
+		// RFC 0029: the bounded cursor state retains every token it has accepted,
+		// so a full traversal can hold max_pages * max_cursor_bytes of it. That
+		// storage is part of this scan's decoded-memory footprint and is charged
+		// against the page allowance before decoding and included in the
+		// committed figure afterwards -- the same discipline the GraphQL cursor
+		// executor applies. Without it a long traversal could exceed its
+		// admitted envelope while accounting underreported the usage.
+		//
+		// RetainedMemoryBytes counts only tokens that actually allocate. Added
+		// to it are the two live copies of the active token FetchPage holds --
+		// the local and the request builder's capture, which must survive a
+		// retry -- charged at full size rather than measured, which errs toward
+		// reserving more than the copies can cost.
+		const auto cursor_memory_before =
+		    cursor_mode ? cursor->RetainedMemoryBytes() + static_cast<uint64_t>(current_cursor.size()) * 2
+		                : static_cast<uint64_t>(0);
+		if (cursor_memory_before >= allowance.decoded_memory_bytes - response.metadata.retained_bytes) {
+			throw ExecutionError(ErrorStage::RESOURCE, "decoded_memory_bytes",
+			                     "REST cursor state exhausted the decoded-page memory budget");
+		}
+		const auto decoder_memory =
+		    allowance.decoded_memory_bytes - response.metadata.retained_bytes - cursor_memory_before;
 		auto decoded_bytes_reservation =
 		    rate_limit_detail::ReserveDecodedBytes(admission_runtime, accounting, allowance.decoded_memory_bytes);
 		auto decoded_rows_reservation =
@@ -515,7 +536,20 @@ private:
 		} else {
 			transition = staged_pagination->Advance(response.metadata.link_field_values);
 		}
-		const auto retained_memory = page.retained_memory_bytes + response.metadata.retained_bytes;
+		// Advance may have accepted a new token or released the state on
+		// termination, so the committed figure reads the state after the
+		// transition rather than reusing the pre-decode measurement.
+		const auto decoded_page_memory = page.retained_memory_bytes + response.metadata.retained_bytes;
+		uint64_t cursor_memory_after = 0;
+		if (cursor_mode) {
+			cursor_memory_after = cursor->RetainedMemoryBytes();
+			if (decoded_page_memory > allowance.decoded_memory_bytes ||
+			    cursor_memory_after > allowance.decoded_memory_bytes - decoded_page_memory) {
+				throw ExecutionError(ErrorStage::RESOURCE, "decoded_memory_bytes",
+				                     "decoded page and REST cursor state exceeded the decoded-memory budget");
+			}
+		}
+		const auto retained_memory = decoded_page_memory + cursor_memory_after;
 		accounting.CommitDecodedPage({static_cast<uint64_t>(page.rows.size()), retained_memory});
 		decoded_memory_bytes = retained_memory;
 		decoded_memory_allowance = allowance.decoded_memory_bytes;
