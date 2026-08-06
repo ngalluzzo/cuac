@@ -53,8 +53,8 @@
           "release": "0.1.0",
           "state": "active",
           "classification": "baseline",
-          "shape": "sha256.62ccdea7f8f2b6ee7fb258db617f7598d2fd63e7797fc8db3177899d8fa4fbf5",
-          "rfc": "RFC 0000"
+          "shape": "sha256.323cbe1544142cb3653570f94138218f978b8ade6760b6f81960fb96d63c9b81",
+          "rfc": "RFC 0030"
         }
       ]
     },

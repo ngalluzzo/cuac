@@ -194,6 +194,18 @@ void AddColumnCoverage(CoverageBuilder &coverage, const CompiledConnector &conne
 			}
 		}
 	}
+	for (const auto &relation : connector.Relations()) {
+		for (const auto &column : relation.Columns()) {
+			if (column.Shape() == CompiledColumnShape::SCALAR &&
+			    column.ElementType() == CompiledScalarType::TIMESTAMPTZ) {
+				coverage.Variants("column_" + relation.Name() + "_" + column.name + "_",
+				                  {"minimum", "maximum", "offset_normalized", "fractional_precision",
+				                   "invalid_spelling_rejected", "numeric_epoch_rejected",
+				                   "normalized_out_of_range_rejected"},
+				                  PackageFixtureCoverageScope::COLUMN, relation.Name(), "", "", column.name);
+			}
+		}
+	}
 }
 
 void AddArrayCoverage(CoverageBuilder &coverage, const CompiledConnector &connector) {
@@ -225,6 +237,12 @@ void AddArrayCoverage(CoverageBuilder &coverage, const CompiledConnector &connec
 					                   "smallest_subnormal", "magnitude_overflow_rejected"},
 					                  PackageFixtureCoverageScope::ARRAY, relation.Name(), operation.name, "",
 					                  column.name);
+				} else if (column.ElementType() == CompiledScalarType::TIMESTAMPTZ) {
+					coverage.Variants(
+					    prefix,
+					    {"minimum", "maximum", "offset_normalized", "fractional_precision", "invalid_spelling_rejected",
+					     "numeric_epoch_rejected", "normalized_out_of_range_rejected"},
+					    PackageFixtureCoverageScope::ARRAY, relation.Name(), operation.name, "", column.name);
 				}
 			}
 		}

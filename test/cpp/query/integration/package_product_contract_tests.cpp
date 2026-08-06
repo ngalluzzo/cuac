@@ -17,6 +17,7 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -133,6 +134,9 @@ cuac::ValueKind KindFor(const std::string &logical_type) {
 	if (logical_type == "DOUBLE") {
 		return cuac::ValueKind::DOUBLE;
 	}
+	if (logical_type == "TIMESTAMPTZ") {
+		return cuac::ValueKind::TIMESTAMPTZ;
+	}
 	throw std::logic_error("package product fake received an unsupported output type");
 }
 
@@ -165,6 +169,9 @@ public:
 				break;
 			case cuac::ValueKind::DOUBLE:
 				row.values.push_back(cuac::TypedValue::Double(1.5));
+				break;
+			case cuac::ValueKind::TIMESTAMPTZ:
+				row.values.push_back(cuac::TypedValue::Timestamptz(0));
 				break;
 			}
 		}
@@ -207,8 +214,15 @@ public:
 	void Close() const noexcept override {
 	}
 
+	std::string LastRestPath() const {
+		std::lock_guard<std::mutex> guard(observation_lock);
+		return last_rest_path;
+	}
+
 	mutable std::atomic<std::uint64_t> anonymous_opens;
 	mutable std::atomic<std::uint64_t> authenticated_opens;
+	mutable std::mutex observation_lock;
+	mutable std::string last_rest_path;
 
 protected:
 	std::unique_ptr<cuac::BatchStream> OpenCredentialProviderEnvelope(const cuac::ScanPlan &plan,
@@ -226,6 +240,10 @@ protected:
 	                                                             cuac::ExecutionControl &control) const override {
 		if (control.IsCancellationRequested()) {
 			throw cuac::ExecutionCancelled();
+		}
+		if (plan.Operation().Protocol() == cuac::PlannedProtocol::REST) {
+			std::lock_guard<std::mutex> guard(observation_lock);
+			last_rest_path = plan.Operation().Rest().path;
 		}
 		const auto alternative = AlternativeOf(authorization);
 		// Query's credential provider supplies the kind-neutral CREDENTIAL
@@ -245,6 +263,90 @@ protected:
 		return std::unique_ptr<cuac::BatchStream>(new PlanEchoStream(plan));
 	}
 };
+
+void TestStructuralPathsReachActualDuckdbSql(const std::string &repository_root) {
+	auto executor = std::shared_ptr<PlanEchoExecutor>(new PlanEchoExecutor());
+	duckdb::DuckDB database(nullptr);
+	duckdb::ExtensionLoader loader(*database.instance, "cuac_structural_path_product_test");
+	duckdb::RegisterCuacPackageSurface(loader, cuac::BuildPackageGenerationComposition(executor));
+	duckdb::Connection connection(database);
+
+	auto github = connection.Query("CALL system.main.cuac_load_connector(package_root := '" + repository_root +
+	                               "/test/fixtures/package_rest_structural_path_github')");
+	auto gitlab = connection.Query("CALL system.main.cuac_load_connector(package_root := '" + repository_root +
+	                               "/test/fixtures/package_rest_structural_path_gitlab')");
+	Require(!github->HasError() && github->GetValue(4, 0).GetValue<std::uint64_t>() == 1 && !gitlab->HasError() &&
+	            gitlab->GetValue(4, 0).GetValue<std::uint64_t>() == 4,
+	        "actual DuckDB did not load both structural-path provider packages");
+
+	auto github_result = connection.Query(
+	    "SELECT number, title FROM system.main.github_paths_repository_issues(owner := 'open ai', repository := "
+	    "'cuac \xCE\xB2')");
+	Require(!github_result->HasError() && github_result->RowCount() == 1 &&
+	            executor->LastRestPath() == "/repos/open%20ai/cuac%20%CE%B2/issues",
+	        "actual DuckDB SQL did not materialize the GitHub structural path");
+
+	auto gitlab_result = connection.Query(
+	    "SELECT iid, title FROM system.main.gitlab_paths_project_issue(project_id := -42, issue_iid := 7)");
+	Require(!gitlab_result->HasError() && gitlab_result->RowCount() == 1 &&
+	            executor->LastRestPath() == "/projects/-42/issues/7",
+	        "actual DuckDB SQL did not materialize the independent GitLab structural path");
+
+	auto typed = connection.Query(
+	    "SELECT value FROM system.main.gitlab_paths_typed_segments(enabled := TRUE, \"count\" := -42, label := 'a "
+	    "b', ratio := 3.5)");
+	Require(!typed->HasError() && typed->RowCount() == 1 && executor->LastRestPath() == "/typed/true/-42/a%20b/3.5",
+	        "actual DuckDB SQL did not preserve BOOLEAN, BIGINT, VARCHAR, and DOUBLE path values");
+	auto defaulted = connection.Query(
+	    "SELECT value FROM system.main.gitlab_paths_typed_segments(enabled := FALSE, \"count\" := 9, ratio := 2.5)");
+	Require(!defaulted->HasError() && defaulted->RowCount() == 1 &&
+	            executor->LastRestPath() == "/typed/false/9/default%20value/2.5",
+	        "actual DuckDB SQL did not materialize an omitted input's typed path default");
+
+	auto timestamped = connection.Query("SELECT updated_at FROM "
+	                                    "system.main.gitlab_paths_project_issue_timestamps("
+	                                    "updated_after := TIMESTAMPTZ '2026-07-01 01:30:00+01:30', "
+	                                    "updated_before := TIMESTAMPTZ '2026-07-02 02:00:00+02:00')");
+	Require(!timestamped->HasError() && timestamped->RowCount() == 1 &&
+	            timestamped->GetValue(0, 0).type() == duckdb::LogicalType::TIMESTAMP_TZ &&
+	            timestamped->GetValue(0, 0).GetValue<duckdb::timestamp_tz_t>().value == 0 &&
+	            executor->LastRestPath() == "/issues/2026-07-01T00%3A00%3A00.000000Z",
+	        "independent GitLab actual SQL lost native TIMESTAMPTZ output or canonical structural encoding: error=" +
+	            (timestamped->HasError() ? timestamped->GetError() : std::string("none")) +
+	            " rows=" + std::to_string(timestamped->RowCount()) + " path=" + executor->LastRestPath() +
+	            (timestamped->HasError() || timestamped->RowCount() == 0
+	                 ? std::string()
+	                 : " value=" + timestamped->GetValue(0, 0).ToString() +
+	                       " type=" + timestamped->GetValue(0, 0).type().ToString()));
+	auto timestamp_default =
+	    connection.Query("SELECT updated_at FROM system.main.gitlab_paths_project_issue_timestamps("
+	                     "updated_before := TIMESTAMPTZ '2026-07-02 00:00:00+00')");
+	Require(!timestamp_default->HasError() && timestamp_default->RowCount() == 1 &&
+	            timestamp_default->GetValue(0, 0).GetValue<duckdb::timestamp_tz_t>().value == 0 &&
+	            executor->LastRestPath() == "/issues/2026-07-01T00%3A00%3A00.000000Z",
+	        "independent GitLab actual SQL did not apply a typed TIMESTAMPTZ default");
+	const auto last_timestamp_path = executor->LastRestPath();
+	auto infinity = connection.Query(
+	    "SELECT * FROM system.main.gitlab_paths_project_issue_timestamps("
+	    "updated_after := TIMESTAMPTZ 'infinity', updated_before := TIMESTAMPTZ '2026-07-02 00:00:00+00')");
+	Require(infinity->HasError() && executor->LastRestPath() == last_timestamp_path,
+	        "DuckDB positive TIMESTAMPTZ infinity reached Runtime through the independent provider relation");
+	auto negative_infinity = connection.Query(
+	    "SELECT * FROM system.main.gitlab_paths_project_issue_timestamps("
+	    "updated_after := TIMESTAMPTZ '-infinity', updated_before := TIMESTAMPTZ '2026-07-02 00:00:00+00')");
+	Require(negative_infinity->HasError() && executor->LastRestPath() == last_timestamp_path,
+	        "DuckDB negative TIMESTAMPTZ infinity reached Runtime through the independent provider relation");
+	auto outside_profile = connection.Query("SELECT * FROM system.main.gitlab_paths_project_issue_timestamps("
+	                                        "updated_after := TIMESTAMPTZ '10000-01-01 00:00:00+00', "
+	                                        "updated_before := TIMESTAMPTZ '2026-07-02 00:00:00+00')");
+	Require(outside_profile->HasError() && executor->LastRestPath() == last_timestamp_path,
+	        "finite DuckDB TIMESTAMPTZ outside CUAC's year range reached Runtime");
+
+	const auto last_valid_path = executor->LastRestPath();
+	auto omitted = connection.Query("SELECT * FROM system.main.github_paths_repository_issues(owner := 'openai')");
+	Require(omitted->HasError() && executor->LastRestPath() == last_valid_path,
+	        "omitted structural path input reached Runtime through actual DuckDB SQL");
+}
 
 void TestRealCatalogCompositionQueriesAnonymousAndAuthenticated(const std::string &repository_root) {
 	auto executor = std::shared_ptr<PlanEchoExecutor>(new PlanEchoExecutor());
@@ -548,15 +650,30 @@ void TestGeneratedRelationsExecuteThroughRuntime(const std::string &repository_r
 		duckdb::Connection connection(database);
 		LoadRepositoryPackage(connection, repository_root);
 		CreatePackageRuntimeSecret(connection);
+		auto described = connection.Query(
+		    "DESCRIBE SELECT * FROM system.main.github_viewer_repository_metrics(secret := 'package_runtime')");
+		bool found_updated_at = false;
+		for (duckdb::idx_t row = 0; !described->HasError() && row < described->RowCount(); row++) {
+			found_updated_at =
+			    found_updated_at || (described->GetValue(0, row).ToString() == "updated_at" &&
+			                         described->GetValue(1, row).ToString() == "TIMESTAMP WITH TIME ZONE");
+		}
+		Require(!described->HasError() && found_updated_at,
+		        "maintained GitHub relation did not publish updated_at as native TIMESTAMPTZ");
 		for (std::uint64_t execution = 0; execution < 2; execution++) {
-			auto result =
-			    connection.Query("SELECT id, primary_language FROM system.main.github_viewer_repository_metrics("
-			                     "secret := 'package_runtime') ORDER BY primary_language NULLS FIRST");
+			auto result = connection.Query(
+			    "SELECT id, primary_language, updated_at FROM system.main.github_viewer_repository_metrics("
+			    "secret := 'package_runtime') ORDER BY primary_language NULLS FIRST");
 			Require(!result->HasError() && result->RowCount() == 2 &&
 			            result->GetValue(0, 0).ToString() == "R-duplicate" &&
 			            result->GetValue(0, 1).ToString() == "R-duplicate" && result->GetValue(1, 0).IsNull() &&
-			            result->GetValue(1, 1).ToString() == "C++",
-			        "compiler-generated GraphQL relation changed Runtime's nullable duplicate bag");
+			            result->GetValue(1, 1).ToString() == "C++" &&
+			            result->GetValue(2, 0).type() == duckdb::LogicalType::TIMESTAMP_TZ &&
+			            result->GetValue(2, 1).type() == duckdb::LogicalType::TIMESTAMP_TZ &&
+			            result->GetValue(2, 0).GetValue<duckdb::timestamp_tz_t>().value == INT64_C(1782864000000000) &&
+			            result->GetValue(2, 1).GetValue<duckdb::timestamp_tz_t>().value == INT64_C(1782864000000000),
+			        "compiler-generated GraphQL relation changed Runtime's nullable duplicate bag or native "
+			        "TIMESTAMPTZ value");
 		}
 		const auto observation = scenario->Observation();
 		Require(observation.request_count == observation.expected_request_count,
@@ -1018,6 +1135,7 @@ int main(int argc, char **argv) {
 			throw std::invalid_argument("usage: package_product_contract_tests ABSOLUTE_REPOSITORY_ROOT");
 		}
 		TestRealCatalogCompositionQueriesAnonymousAndAuthenticated(argv[1]);
+		TestStructuralPathsReachActualDuckdbSql(argv[1]);
 		TestShortPageReachesRealExplainOutput(argv[1]);
 		TestRateLimitPlanReachesRealExplainOutput(argv[1]);
 		TestDoubleColumnReachesRealDescribeAndSelectOutput(argv[1]);

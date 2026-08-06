@@ -1,6 +1,7 @@
 #include "package_fixture_execution.hpp"
 
 #include "runtime/fixtures/package_fixture_variant_test_support.hpp"
+#include "semantics/support/repository_graphql_scan_plan_test_fixtures.hpp"
 #include "semantics/support/scan_plan_test_fixtures.hpp"
 #include "support/require.hpp"
 
@@ -16,6 +17,7 @@ using cuac_test::RuntimeFixtureColumnVariant;
 using cuac_test::RuntimeFixtureVariantOutcome;
 using cuac_test::RuntimePackageFixtureExecutionService;
 using cuac_test::variant_test::AnonymousTranscript;
+using cuac_test::variant_test::GraphqlTranscript;
 using cuac_test::variant_test::ManualControl;
 
 void RequireOutcome(const cuac_test::RuntimeFixtureVariantObservation &result, RuntimeFixtureVariantOutcome outcome) {
@@ -112,6 +114,33 @@ void TestVarcharBudgetClosedVariants() {
 	        "VARCHAR one-over variant did not report the exact attempted byte count");
 }
 
+void TestTimestamptzClosedVariants() {
+	const auto plan = cuac_test::BuildRepositoryGithubPackageGraphqlPlan(CUAC_SOURCE_ROOT, "runtime_variant_secret");
+	const auto transcript = GraphqlTranscript();
+	RuntimePackageFixtureExecutionService service;
+	const RuntimeFixtureColumnVariant values[] = {
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_MINIMUM,
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_MAXIMUM,
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_OFFSET_NORMALIZED,
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_FRACTIONAL_PRECISION,
+	};
+	for (const auto variant : values) {
+		ManualControl control;
+		RequireOutcome(service.ExecuteColumnVariant(plan, transcript, {7, variant}, control),
+		               RuntimeFixtureVariantOutcome::VALUE_SUCCEEDED);
+	}
+	const RuntimeFixtureColumnVariant rejected[] = {
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_INVALID_SPELLING_REJECTED,
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_NUMERIC_EPOCH_REJECTED,
+	    RuntimeFixtureColumnVariant::TIMESTAMPTZ_NORMALIZED_OUT_OF_RANGE_REJECTED,
+	};
+	for (const auto variant : rejected) {
+		ManualControl control;
+		RequireOutcome(service.ExecuteColumnVariant(plan, transcript, {7, variant}, control),
+		               RuntimeFixtureVariantOutcome::EXPECTED_REJECTION);
+	}
+}
+
 void TestAmbiguousSelectedPathFailsBeforeExecution() {
 	const auto plan = cuac_test::BuildValidAnonymousPlanFixture();
 	auto transcript = AnonymousTranscript();
@@ -148,6 +177,7 @@ int main() {
 		TestBigintClosedVariants();
 		TestDoubleClosedVariants();
 		TestVarcharBudgetClosedVariants();
+		TestTimestamptzClosedVariants();
 		TestAmbiguousSelectedPathFailsBeforeExecution();
 		std::cout << "package fixture Runtime column variant tests passed\n";
 		return EXIT_SUCCESS;

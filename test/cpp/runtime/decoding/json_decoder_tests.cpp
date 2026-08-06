@@ -326,6 +326,74 @@ void TestDoubleFormatEquivalence() {
 	}
 }
 
+void TestTimestamptzScalarsAndArrays() {
+	ManualControl control;
+	const auto scalar = SingleColumnPlan(cuac::OutputValueType::Scalar(cuac::ValueKind::TIMESTAMPTZ));
+	struct ValidInstant {
+		const char *text;
+		std::int64_t microseconds;
+	};
+	const ValidInstant valid[] = {{"1970-01-01T00:00:00Z", 0},
+	                              {"1970-01-01T00:00:00.1Z", INT64_C(100000)},
+	                              {"1970-01-01T00:00:00.12Z", INT64_C(120000)},
+	                              {"1970-01-01T00:00:00.123Z", INT64_C(123000)},
+	                              {"1970-01-01T00:00:00.1234Z", INT64_C(123400)},
+	                              {"1970-01-01T00:00:00.12345Z", INT64_C(123450)},
+	                              {"2000-02-29T12:34:56.123456Z", INT64_C(951827696123456)},
+	                              {"2026-07-01T01:30:00+01:30", INT64_C(1782864000000000)},
+	                              {"2026-06-30T10:00:00-14:00", INT64_C(1782864000000000)},
+	                              {"0001-01-01T00:00:00.000000Z", -INT64_C(62135596800000000)},
+	                              {"9999-12-31T23:59:59.999999Z", INT64_C(253402300799999999)}};
+	for (const auto &instant : valid) {
+		const auto page = cuac::internal::DecodeJsonPage(
+		    std::string("{\"items\":[{\"value\":\"") + instant.text + "\"}]}", scalar, control);
+		Require(page.rows.size() == 1 && page.rows[0].values[0].kind == cuac::ValueKind::TIMESTAMPTZ &&
+		            page.rows[0].values[0].timestamptz_microseconds == instant.microseconds &&
+		            page.rows[0].values[0].varchar_value.empty(),
+		        "strict JSON TIMESTAMPTZ vector did not become one typed UTC-microsecond value");
+		auto exact = scalar;
+		exact.max_decoded_memory_bytes = page.peak_memory_bytes;
+		(void)cuac::internal::DecodeJsonPage(std::string("{\"items\":[{\"value\":\"") + instant.text + "\"}]}", exact,
+		                                     control);
+	}
+	const std::vector<std::string> invalid = {"1970-01-01 00:00:00Z",
+	                                          "1970-01-01t00:00:00z",
+	                                          "1970-01-01T00:00:00",
+	                                          "1970-01-01T00:00:00-00:00",
+	                                          "1970-01-01T00:00:00+14:01",
+	                                          "1970-01-01T00:00:60Z",
+	                                          "2001-02-29T00:00:00Z",
+	                                          "1970-01-01T00:00:00.1234567Z",
+	                                          "0001-01-01T00:00:00+00:01",
+	                                          "0",
+	                                          "infinity"};
+	for (const auto &instant : invalid) {
+		RequireError(
+		    [&]() {
+			    (void)cuac::internal::DecodeJsonPage(std::string("{\"items\":[{\"value\":\"") + instant + "\"}]}",
+			                                         scalar, control);
+		    },
+		    cuac::ErrorStage::SCHEMA, "value", instant);
+	}
+	RequireError([&]() { (void)cuac::internal::DecodeJsonPage("{\"items\":[{\"value\":0}]}", scalar, control); },
+	             cuac::ErrorStage::SCHEMA, "value");
+
+	const auto array = SingleColumnPlan(cuac::OutputValueType::Array(cuac::ValueKind::TIMESTAMPTZ, true));
+	const auto rows = DecodeRows(
+	    "{\"items\":[{\"value\":[\"1970-01-01T00:00:00Z\",null,\"2026-07-01T01:30:00+01:30\"]}]}", array, control);
+	Require(rows.size() == 1 && rows[0].values[0].elements.size() == 3 &&
+	            rows[0].values[0].elements[0].timestamptz_microseconds == 0 && !rows[0].values[0].elements[1].valid &&
+	            rows[0].values[0].elements[1].kind == cuac::ValueKind::TIMESTAMPTZ &&
+	            rows[0].values[0].elements[2].timestamptz_microseconds == INT64_C(1782864000000000),
+	        "JSON TIMESTAMPTZ ARRAY lost order, NULL, or offset-normalized microseconds");
+	RequireError(
+	    [&]() {
+		    (void)cuac::internal::DecodeJsonPage("{\"items\":[{\"value\":[\"1970-01-01T00:00:00Z\",\"infinity\"]}]}",
+		                                         array, control);
+	    },
+	    cuac::ErrorStage::SCHEMA, "value", "infinity");
+}
+
 void TestFlatScalarArraysAndFailures() {
 	ManualControl control;
 	auto plan = ArrayPlan();
@@ -548,6 +616,7 @@ int main() {
 		TestRequiredShapeAndStrictTypes();
 		TestExactResourceBoundaries();
 		TestDoubleFormatEquivalence();
+		TestTimestamptzScalarsAndArrays();
 		TestFlatScalarArraysAndFailures();
 		TestReplacementAllocationsUseIndependentPeakOracles();
 		TestContinuationMemoryBoundaries();

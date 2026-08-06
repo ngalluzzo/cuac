@@ -22,6 +22,7 @@ struct TypedEqualityDecision {
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 	std::string conditional_input_id;
 	std::string proof_identity;
 	std::string base_domain_identity;

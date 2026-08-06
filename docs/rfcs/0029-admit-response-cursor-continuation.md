@@ -268,7 +268,7 @@ mechanism.
 ### Compiled and planned facts
 
 - `PlannedPaginationStrategy` gains `RESPONSE_CURSOR`
-  ([scan_plan.hpp:354](../../src/include/cuac/semantics/scan_plan.hpp:354)).
+  ([scan_plan.hpp:357](../../src/include/cuac/semantics/scan_plan.hpp:357)).
 - A distinct `PlannedCursorContinuationTarget` carries origin, path,
   `cursor_parameter`, `cursor_path`, `max_cursor_bytes`, optional page size, and
   `max_pages_per_scan`. `PlannedPaginationTarget` is **not** reused with unused

@@ -38,7 +38,8 @@ ColumnDeclaration DecodeColumn(const SchemaReader &reader) {
 			reader.Diagnostics().Add(PackageDiagnosticCode::MISSING_FIELD, PackageDiagnosticPhase::SCHEMA,
 			                         column.element_type.mark);
 		} else if (column.element_type.value != "BOOLEAN" && column.element_type.value != "BIGINT" &&
-		           column.element_type.value != "VARCHAR" && column.element_type.value != "DOUBLE") {
+		           column.element_type.value != "VARCHAR" && column.element_type.value != "DOUBLE" &&
+		           column.element_type.value != "TIMESTAMPTZ") {
 			reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA,
 			                         column.element_type.mark);
 		}
@@ -53,7 +54,7 @@ ColumnDeclaration DecodeColumn(const SchemaReader &reader) {
 			}
 		}
 	} else if (column.type.value != "BOOLEAN" && column.type.value != "BIGINT" && column.type.value != "VARCHAR" &&
-	           column.type.value != "DOUBLE") {
+	           column.type.value != "DOUBLE" && column.type.value != "TIMESTAMPTZ") {
 		reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA, column.type.mark);
 	} else {
 		if (reader.Field("element_type") != nullptr) {
@@ -116,7 +117,7 @@ InputDeclaration DecodeInput(const SchemaReader &reader) {
 		reader.Diagnostics().Add(PackageDiagnosticCode::RESERVED_INPUT, PackageDiagnosticPhase::SCHEMA, input.id.mark);
 	}
 	if (input.type.value != "BOOLEAN" && input.type.value != "BIGINT" && input.type.value != "VARCHAR" &&
-	    input.type.value != "DOUBLE") {
+	    input.type.value != "DOUBLE" && input.type.value != "TIMESTAMPTZ") {
 		reader.Diagnostics().Add(PackageDiagnosticCode::INVALID_TYPE, PackageDiagnosticPhase::SCHEMA, input.type.mark);
 	}
 	bool nullable = false;

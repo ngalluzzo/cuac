@@ -8,6 +8,7 @@
 #include "cuac/internal/query/adapter/typed_value_adapter.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -35,6 +36,8 @@ LogicalType RegistrationLogicalType(cuac::CompiledScalarType type) {
 		return LogicalType::VARCHAR;
 	case cuac::CompiledScalarType::DOUBLE:
 		return LogicalType::DOUBLE;
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return LogicalType::TIMESTAMP_TZ;
 	}
 	throw InternalException("generated relation contains an unsupported structural type");
 }
@@ -73,6 +76,8 @@ cuac::PlannedColumnScalarKind PlannedKind(cuac::CompiledScalarType type) {
 		return cuac::PlannedColumnScalarKind::VARCHAR;
 	case cuac::CompiledScalarType::DOUBLE:
 		return cuac::PlannedColumnScalarKind::DOUBLE;
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return cuac::PlannedColumnScalarKind::TIMESTAMPTZ;
 	}
 	throw InternalException("generated relation contains an unsupported scalar type");
 }
@@ -88,6 +93,8 @@ cuac::ExplicitInput ExplicitInputValue(const cuac::CompiledRelationInput &descri
 			return cuac::ExplicitInput::Null(descriptor.Name(), cuac::ExplicitInputValueKind::VARCHAR);
 		case cuac::CompiledScalarType::DOUBLE:
 			return cuac::ExplicitInput::Null(descriptor.Name(), cuac::ExplicitInputValueKind::DOUBLE);
+		case cuac::CompiledScalarType::TIMESTAMPTZ:
+			return cuac::ExplicitInput::Null(descriptor.Name(), cuac::ExplicitInputValueKind::TIMESTAMPTZ);
 		}
 	}
 	switch (descriptor.Type()) {
@@ -99,6 +106,13 @@ cuac::ExplicitInput ExplicitInputValue(const cuac::CompiledRelationInput &descri
 		return cuac::ExplicitInput::Varchar(descriptor.Name(), StringValue::Get(value));
 	case cuac::CompiledScalarType::DOUBLE:
 		return cuac::ExplicitInput::Double(descriptor.Name(), DoubleValue::Get(value));
+	case cuac::CompiledScalarType::TIMESTAMPTZ: {
+		const auto microseconds = value.GetValue<timestamp_tz_t>().value;
+		if (!cuac::IsTimestamptzMicroseconds(microseconds)) {
+			throw BinderException("[cuac][bind] relation input TIMESTAMPTZ is outside the supported instant range");
+		}
+		return cuac::ExplicitInput::Timestamptz(descriptor.Name(), microseconds);
+	}
 	}
 	throw InternalException("generated relation contains an unsupported input type");
 }

@@ -56,7 +56,7 @@ void TestAcceptedGithubDigest() {
 	     ReadFile("connectors/github/relations/duckdb_login_search_page.yaml")},
 	    {"relations/viewer_repository_metrics.yaml",
 	     ReadFile("connectors/github/relations/viewer_repository_metrics.yaml")}};
-	const auto expected = "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c";
+	const auto expected = "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c";
 	Require(Digest(files) == expected, "accepted GitHub package digest drifted");
 	std::reverse(files.begin(), files.end());
 	Require(Digest(files) == expected, "package digest depends on caller file order");

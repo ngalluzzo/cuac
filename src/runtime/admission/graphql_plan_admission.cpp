@@ -47,6 +47,10 @@ bool TryScalarKind(PlannedGraphqlScalarKind planned, ValueKind &kind, const char
 		kind = ValueKind::BOOLEAN;
 		logical = "BOOLEAN";
 		return true;
+	case PlannedGraphqlScalarKind::TIMESTAMPTZ:
+		kind = ValueKind::TIMESTAMPTZ;
+		logical = "TIMESTAMPTZ";
+		return true;
 	}
 	return false;
 }
@@ -86,6 +90,9 @@ bool TryColumnElementKind(PlannedColumnScalarKind planned, ValueKind &kind) {
 		return true;
 	case PlannedColumnScalarKind::DOUBLE:
 		kind = ValueKind::DOUBLE;
+		return true;
+	case PlannedColumnScalarKind::TIMESTAMPTZ:
+		kind = ValueKind::TIMESTAMPTZ;
 		return true;
 	}
 	return false;

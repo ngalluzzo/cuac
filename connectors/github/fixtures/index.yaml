@@ -1,6 +1,6 @@
 api_version: cuac/v1
 kind: fixture_index
-package_digest: sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c
+package_digest: sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c
 
 cases:
   - id: github_search_base
@@ -518,8 +518,13 @@ cases:
       - column_viewer_repository_metrics_owner_login_string_budget_one_over_rejected
       - column_viewer_repository_metrics_primary_language_string_budget_boundary
       - column_viewer_repository_metrics_primary_language_string_budget_one_over_rejected
-      - column_viewer_repository_metrics_updated_at_string_budget_boundary
-      - column_viewer_repository_metrics_updated_at_string_budget_one_over_rejected
+      - column_viewer_repository_metrics_updated_at_minimum
+      - column_viewer_repository_metrics_updated_at_maximum
+      - column_viewer_repository_metrics_updated_at_offset_normalized
+      - column_viewer_repository_metrics_updated_at_fractional_precision
+      - column_viewer_repository_metrics_updated_at_invalid_spelling_rejected
+      - column_viewer_repository_metrics_updated_at_numeric_epoch_rejected
+      - column_viewer_repository_metrics_updated_at_normalized_out_of_range_rejected
       - pagination_viewer_repository_metrics_github_viewer_repository_metrics_first_page
       - pagination_viewer_repository_metrics_github_viewer_repository_metrics_multi_page
       - pagination_viewer_repository_metrics_github_viewer_repository_metrics_termination
@@ -594,8 +599,8 @@ cases:
       residual_owner: duckdb
       remote_accuracy: unsupported
       rows:
-        - {id: R1, full_name: duckdb/duckdb, owner_login: duckdb, stars: 42, primary_language: "C++", private: false, archived: false, updated_at: "2026-07-01T00:00:00Z"}
-        - {id: R2, full_name: duckdb/community-extension, owner_login: duckdb, stars: 7, primary_language: {kind: null}, private: false, archived: false, updated_at: "2026-07-02T00:00:00Z"}
+        - {id: R1, full_name: duckdb/duckdb, owner_login: duckdb, stars: 42, primary_language: "C++", private: false, archived: false, updated_at: "2026-07-01T00:00:00.000000Z"}
+        - {id: R2, full_name: duckdb/community-extension, owner_login: duckdb, stars: 7, primary_language: {kind: null}, private: false, archived: false, updated_at: "2026-07-02T00:00:00.000000Z"}
       explain: {protocol: graphql, pagination: relay_forward, auth: bearer_capability}
 
   - id: github_viewer_repository_metrics_missing_bearer

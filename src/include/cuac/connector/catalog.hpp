@@ -19,15 +19,6 @@ class CompiledModelBuilder;
 
 class CompiledConnector;
 
-// Closed scalar vocabulary shared by package-declared columns, relation
-// inputs, typed defaults, and consumer projections. Consumers switch on this
-// enum; they never parse YAML or logical-type strings to recover authority.
-// DOUBLE (RFC 0020) is IEEE-754 double precision; -0.0 is normalized to 0.0
-// at construction so every consumer sees a single canonical zero value.
-enum class CompiledScalarType { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
-
-const char *CompiledScalarTypeName(CompiledScalarType type);
-
 // Output columns may retain one scalar directly or one flat variable-length
 // collection of that scalar. This shape is deliberately separate from
 // CompiledScalarType so relation inputs, defaults, predicates, and request
@@ -50,13 +41,14 @@ public:
 	std::int64_t Bigint() const;
 	const std::string &Varchar() const;
 	double Double() const;
+	std::int64_t TimestamptzMicroseconds() const;
 
 private:
 	friend class internal::CompiledModelBuilder;
 	friend class CompiledPredicateMapping;
 
 	CompiledScalarValue(CompiledScalarType type, bool is_null, bool boolean_value, std::int64_t bigint_value,
-	                    std::string varchar_value, double double_value);
+	                    std::string varchar_value, double double_value, std::int64_t timestamptz_microseconds = 0);
 
 	CompiledScalarType type;
 	bool is_null;
@@ -64,6 +56,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 // Default presence is structural. HasDefault() false never aliases a present

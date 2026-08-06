@@ -87,8 +87,9 @@ void ValidatePackageRequestBindings(const CompiledRelation &relation, const Comp
 	for (const auto &parameter : operation.Rest().request.query_parameters) {
 		switch (parameter.source) {
 		case CompiledQueryValueSource::FIXED:
-			if (!parameter.HasDecodedValue() || parameter.DecodedValue().Type() != CompiledScalarType::VARCHAR) {
-				throw std::invalid_argument("compiled package fixed query field is not an author VARCHAR");
+			if (!parameter.HasDecodedValue() ||
+			    parameter.encoded_value != EncodeCompiledQueryScalar(parameter.DecodedValue(), parameter.encoding)) {
+				throw std::invalid_argument("compiled package fixed query field lacks canonical typed authority");
 			}
 			break;
 		case CompiledQueryValueSource::PAGE_SIZE:
@@ -295,6 +296,10 @@ CompiledScalarValue CompiledModelBuilder::Double(double value) {
 	// RFC 0020: -0.0 is normalized to 0.0 at construction so every consumer
 	// (equality comparison, encoding, diagnostics) sees one canonical zero.
 	return CompiledScalarValue(CompiledScalarType::DOUBLE, false, false, 0, "", value == 0.0 ? 0.0 : value);
+}
+
+CompiledScalarValue CompiledModelBuilder::Timestamptz(std::int64_t microseconds) {
+	return CompiledScalarValue(CompiledScalarType::TIMESTAMPTZ, false, false, 0, "", 0.0, microseconds);
 }
 
 CompiledInputDefault CompiledModelBuilder::NoDefault() {

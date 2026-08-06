@@ -299,7 +299,7 @@ public:
 // DuckDB-free scalar kinds supported by Runtime. DOUBLE
 // (RFC 0020) is IEEE-754 double precision; -0.0 is normalized to 0.0 at
 // construction.
-enum class ValueKind : uint8_t { BIGINT, VARCHAR, BOOLEAN, DOUBLE };
+enum class ValueKind : uint8_t { BIGINT, VARCHAR, BOOLEAN, DOUBLE, TIMESTAMPTZ };
 
 enum class ValueShape : uint8_t { SCALAR, ARRAY };
 
@@ -329,6 +329,7 @@ struct TypedScalarValue {
 	static TypedScalarValue Varchar(std::string value);
 	static TypedScalarValue Boolean(bool value);
 	static TypedScalarValue Double(double value);
+	static TypedScalarValue Timestamptz(std::int64_t microseconds);
 	static TypedScalarValue Null(ValueKind kind);
 
 	ValueKind kind = ValueKind::VARCHAR;
@@ -337,6 +338,7 @@ struct TypedScalarValue {
 	std::string varchar_value;
 	bool boolean_value = false;
 	double double_value = 0.0;
+	std::int64_t timestamptz_microseconds = 0;
 };
 
 // Protocol-neutral scalar handoff owned by Remote Runtime and consumed by
@@ -356,6 +358,7 @@ struct TypedValue {
 	static TypedValue Varchar(std::string value);
 	static TypedValue Boolean(bool value);
 	static TypedValue Double(double value);
+	static TypedValue Timestamptz(std::int64_t microseconds);
 	static TypedValue Null(ValueKind kind);
 	static TypedValue Null(OutputValueType type);
 	static TypedValue Array(ValueKind element_kind, bool element_nullable, std::vector<TypedScalarValue> elements);
@@ -370,6 +373,7 @@ struct TypedValue {
 	std::string varchar_value;
 	bool boolean_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 	std::vector<TypedScalarValue> elements;
 };
 

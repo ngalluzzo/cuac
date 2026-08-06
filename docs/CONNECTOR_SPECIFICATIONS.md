@@ -7,9 +7,13 @@ responses. The schema below closes every source shape.
 
 The accepted pre-1.0 evolution policy and capability corpus are recorded in
 [RFC 0028](rfcs/0028-evolve-cuac-v1-from-a-coverage-corpus.md). That RFC
-classifies future declaration work; it does not make an included declaration
-valid before its complete schema, compiler, planning, execution, fixture, and
-compatibility slice lands in this document and the product.
+classifies declaration work; it does not make an included declaration valid
+before its complete schema, compiler, planning, execution, fixture, and
+compatibility slice lands in this document and the product. Typed structural
+REST paths are the first delivered slice, specified by
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md). Strict native
+`TIMESTAMPTZ` instants are the second, specified by
+[RFC 0030](rfcs/0030-add-timestamptz-scalars.md).
 
 The specification describes immutable metadata. It does not grant network or
 credential authority by itself, and it does not contain DuckDB catalog state,
@@ -57,10 +61,13 @@ rejected before catalog, credential, or network work. Unknown specification
 identifiers are also rejected; CUAC does not dispatch to a second compiler.
 
 RFC 0028's included classifications are delivery candidates, not accepted
-source syntax. Deferred and rejected classifications likewise grant no package
-or Runtime authority. A future change to existing `cuac/v1` meaning requires a
-separate RFC and one breaking cutover that removes the old compiler path rather
-than operating old and new paths in parallel.
+source syntax until a complete vertical RFC lands. RFCs 0029 and 0030 have
+delivered their classifications; the remaining included classifications are
+still absent.
+Deferred and rejected classifications likewise grant no package or Runtime
+authority. A future change to existing `cuac/v1` meaning requires a separate
+RFC and one breaking cutover that removes the old compiler path rather than
+operating old and new paths in parallel.
 
 Package version components are unsigned 32-bit canonical decimals. Signs,
 leading zeroes, omitted components, prerelease labels, and build metadata are
@@ -250,9 +257,10 @@ schema: static
 ```
 
 `schema` is exactly `static`. Scalar column types are `BOOLEAN`, `BIGINT`,
-`VARCHAR`, and `DOUBLE`. A column may instead declare `type: ARRAY` with one
-required scalar `element_type` from that same set and an explicit required
-`element_nullable` Boolean. Columns retain declaration order:
+`VARCHAR`, `DOUBLE`, and `TIMESTAMPTZ`. A column may instead declare
+`type: ARRAY` with one required scalar `element_type` from that same set and an
+explicit required `element_nullable` Boolean. Columns retain declaration
+order:
 
 ```yaml
 columns:
@@ -281,6 +289,19 @@ decodes to the nearest IEEE-754 double; a magnitude too large to represent as
 any finite double is rejected, while underflow to a subnormal or exact zero is
 a legitimate decoded result, not an error.
 
+`TIMESTAMPTZ` represents a finite instant as signed UTC microseconds. A JSON
+value must be a string matching
+`YYYY-MM-DDTHH:MM:SS[.1-6DIGIT](Z|+HH:MM|-HH:MM)`. Years are exactly `0001`
+through `9999`; dates and offsets are validated, offsets are bounded by
+`14:00`, and `-00:00`, leap seconds, whitespace, lowercase separators,
+timezone-free values, names, numeric epochs, excess precision, and DuckDB
+infinities are rejected. The inclusive instant range is
+`0001-01-01T00:00:00.000000Z` through
+`9999-12-31T23:59:59.999999Z`. Canonical text is always UTC with six fraction
+digits. DuckDB exposes the value only as `TIMESTAMP WITH TIME ZONE`; no
+`VARCHAR` or timezone-free `TIMESTAMP` fallback exists. The complete profile
+and vectors are defined by [RFC 0030](rfcs/0030-add-timestamptz-scalars.md).
+
 ### Relation inputs and defaults
 
 Relation inputs are ordered named DuckDB arguments:
@@ -303,8 +324,10 @@ the declared type plus `null` for a nullable typed NULL default. Boolean
 defaults use plain `true` or `false`; `BIGINT` defaults use canonical signed
 64-bit decimal; `VARCHAR` defaults use a double-quoted scalar; `DOUBLE`
 defaults use a plain JSON-number-shaped literal under the same conversion
-rule as a column value. A default's type must exactly match its input. A
-non-nullable input cannot default to NULL.
+rule as a column value. `TIMESTAMPTZ` defaults use a double-quoted string under
+the strict instant profile above and compile to exact UTC microseconds. A
+default's type must exactly match its input. A non-nullable input cannot
+default to NULL.
 
 `secret` is reserved and cannot be a relation input. Query synthesizes a
 separate required `secret VARCHAR` argument only for an authenticated
@@ -447,7 +470,8 @@ identity.
 
 ## REST operations
 
-REST v1 admits replay-safe HTTPS `GET` with a fixed origin and path:
+REST v1 admits replay-safe HTTPS `GET` with a fixed origin and either a fixed
+path or a typed structural path:
 
 ```yaml
 operations:
@@ -473,6 +497,71 @@ operations:
 
 `cardinality` is `one` or `many`. `one` requires a root object response;
 `many` accepts `root_array` or `terminal_collection` with a records path.
+
+Exactly one of `request.path` and `request.path_segments` is required. A fixed
+path starts with `/`, is at most 2,048 bytes, and remains byte-identical to the
+existing contract. A structural path contains one through 64 complete segments
+and at least one relation-input segment:
+
+```yaml
+inputs:
+  - id: owner
+    type: VARCHAR
+    nullable: false
+  - id: repository
+    type: VARCHAR
+    nullable: false
+
+operations:
+  - id: list_repository_issues
+    when:
+      required_inputs: [input.owner, input.repository]
+    cardinality: many
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: api.github.com
+        port: 443
+      path_segments:
+        - {literal: repos}
+        - {input: owner, encoding: rfc3986_percent_encoded}
+        - {input: repository, encoding: rfc3986_percent_encoded}
+        - {literal: issues}
+      query: []
+      headers: []
+    response:
+      source: root_array
+    pagination:
+      strategy: disabled
+```
+
+A literal segment is one through 255 ASCII RFC 3986 unreserved bytes and is
+neither `.` nor `..`. An input segment is exactly
+`{input: <relation_input_id>, encoding: rfc3986_percent_encoded}`. Each named
+input may occupy only one path slot, must have one of the five v1 scalar types,
+and must be a tagged `input.<id>` required reference in the same operation's
+selector. An input-bearing path therefore cannot belong to a fallback
+operation. All-literal `path_segments` declarations are rejected; use `path`.
+
+Semantics converts non-NULL typed values to canonical text: lower-case Boolean,
+signed base-10 `BIGINT`, the v1 finite 17-significant-digit `DOUBLE` spelling,
+exact canonical UTF-8 `VARCHAR`, or canonical UTC `TIMESTAMPTZ` with six
+fraction digits. Raw segment text must be nonempty, at most
+1,024 bytes, free of C0/C1 controls and DEL, not `.` or `..`, and contain none
+of `/`, `\\`, `?`, `#`, or `%`. Non-finite doubles and malformed UTF-8 are
+rejected before Runtime authority exists.
+
+Encoding leaves ASCII unreserved bytes unchanged and encodes every other UTF-8
+byte as uppercase `%HH`; space is `%20`, never `+`. The caller supplies only a
+complete typed value. It cannot select the origin, insert separators, provide
+pre-encoded bytes, alter literals, or supply a template. The materialized path
+remains within 2,048 bytes and the complete path-plus-query target remains
+within 8,192 bytes. See
+[RFC 0029](rfcs/0029-add-typed-structural-rest-path-segments.md) for the
+cross-layer authority and failure contract.
 
 Ordered query fields contain exactly one value source:
 
@@ -595,8 +684,9 @@ introspection, caller-supplied documents, fragments, directives, arbitrary
 variables, partial-data recovery, and reverse pagination are invalid.
 
 Generated GraphQL supports scalar results and flat `ARRAY` results whose
-elements are `BOOLEAN`, `BIGINT`, or `VARCHAR`. `ARRAY<DOUBLE>` remains
-rejected because this GraphQL profile has no declared floating-point scalar.
+elements are `BOOLEAN`, `BIGINT`, `VARCHAR`, or `TIMESTAMPTZ` JSON strings.
+`ARRAY<DOUBLE>` remains rejected because this GraphQL profile has no declared
+floating-point scalar.
 
 Relay pagination is sequential and mutable with exact names for page size,
 cursor, `pageInfo`, `hasNextPage`, and `endCursor`; `max_concurrent_pages` is
@@ -712,7 +802,7 @@ runner retains the mapping rule, scope, variant, and bound identifiers as
 typed derivation facts and never reconstructs them by splitting the key.
 
 For the repository GitHub package, the independently derived contract contains
-258 unique coverage keys. The checked-in RFC decision cases are examples; the
+271 unique coverage keys. The checked-in RFC decision cases are examples; the
 delivery gate executes the complete set.
 
 ## Reload compatibility

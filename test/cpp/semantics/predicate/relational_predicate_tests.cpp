@@ -44,6 +44,7 @@ void TestTypedValuesAndSafeSnapshots() {
 	const auto bigint = cuac::RequestedPredicateValue::BigInt(-42);
 	const auto varchar_value = cuac::RequestedPredicateValue::Varchar("private;\n");
 	const auto boolean = cuac::RequestedPredicateValue::Boolean(true);
+	const auto timestamptz = cuac::RequestedPredicateValue::Timestamptz(INT64_C(1782864000000000));
 	Require(bigint.Kind() == cuac::RequestedPredicateValueKind::BIGINT && bigint.BigIntValue() == -42 &&
 	            bigint.Snapshot() == "bigint:-42",
 	        "BIGINT predicate value lost its typed identity");
@@ -54,7 +55,13 @@ void TestTypedValuesAndSafeSnapshots() {
 	Require(boolean.Kind() == cuac::RequestedPredicateValueKind::BOOLEAN && boolean.BooleanValue() &&
 	            boolean.Snapshot() == "boolean:true",
 	        "BOOLEAN predicate value lost its typed identity");
+	Require(timestamptz.Kind() == cuac::RequestedPredicateValueKind::TIMESTAMPTZ &&
+	            timestamptz.TimestamptzMicroseconds() == INT64_C(1782864000000000) &&
+	            timestamptz.Snapshot() == "timestamptz:2026-07-01T00:00:00.000000Z",
+	        "TIMESTAMPTZ predicate value lost canonical instant identity");
 	RequireLogicError([&]() { (void)bigint.VarcharValue(); }, "BIGINT value exposed a VARCHAR payload");
+	RequireInvalid([]() { (void)cuac::RequestedPredicateValue::Timestamptz(INT64_C(253402300800000000)); },
+	               "out-of-profile TIMESTAMPTZ predicate value was accepted");
 	RequireInvalid(
 	    []() {
 		    (void)cuac::RequestedPredicate::Comparison(0, cuac::RequestedPredicateValueKind::BIGINT,

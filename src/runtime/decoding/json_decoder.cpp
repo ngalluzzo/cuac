@@ -1,4 +1,5 @@
 #include "cuac/internal/runtime/decoding/json_decoder.hpp"
+#include "cuac/internal/runtime/decoding/timestamptz_codec.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -64,6 +65,7 @@ bool IsValidOutputType(const OutputValueType &type) {
 	case ValueKind::VARCHAR:
 	case ValueKind::BOOLEAN:
 	case ValueKind::DOUBLE:
+	case ValueKind::TIMESTAMPTZ:
 		break;
 	default:
 		return false;
@@ -175,13 +177,16 @@ public:
 
 private:
 	struct ParsedSlot {
-		ParsedSlot() : bigint_value(0), boolean_value(false), double_value(0.0), seen(false), valid(true) {
+		ParsedSlot()
+		    : bigint_value(0), boolean_value(false), double_value(0.0), timestamptz_microseconds(0), seen(false),
+		      valid(true) {
 		}
 
 		int64_t bigint_value;
 		std::string varchar_value;
 		bool boolean_value;
 		double double_value;
+		std::int64_t timestamptz_microseconds;
 		bool seen;
 		bool valid;
 		std::vector<TypedScalarValue> elements;
@@ -882,6 +887,21 @@ private:
 		return result;
 	}
 
+	std::int64_t ParseTimestamptz(const JsonColumnPlan &column) {
+		auto text = ParseVarchar(column);
+		std::int64_t result = 0;
+		if (!runtime_timestamptz::Parse(text, result)) {
+			throw ExecutionError(ErrorStage::SCHEMA, column.output_name,
+			                     "required response field is not a supported TIMESTAMPTZ instant");
+		}
+		const auto capacity = static_cast<std::uint64_t>(text.capacity());
+		if (capacity > pending_string_memory) {
+			throw ExecutionError(ErrorStage::INTERNAL, "", "JSON timestamp memory accounting failed");
+		}
+		pending_string_memory -= capacity;
+		return result;
+	}
+
 	bool ParseBoolean(const JsonColumnPlan &column) {
 		SkipWhitespace();
 		if (Peek() == 't') {
@@ -907,6 +927,8 @@ private:
 			return TypedScalarValue::Boolean(ParseBoolean(column));
 		case ValueKind::DOUBLE:
 			return TypedScalarValue::Double(ParseDouble(column));
+		case ValueKind::TIMESTAMPTZ:
+			return TypedScalarValue::Timestamptz(ParseTimestamptz(column));
 		}
 		throw ExecutionError(ErrorStage::INTERNAL, "", "JSON decoder received an invalid array element type");
 	}
@@ -1028,6 +1050,9 @@ private:
 			break;
 		case ValueKind::DOUBLE:
 			slot.double_value = ParseDouble(column);
+			break;
+		case ValueKind::TIMESTAMPTZ:
+			slot.timestamptz_microseconds = ParseTimestamptz(column);
 			break;
 		}
 		slot.seen = true;
@@ -1198,6 +1223,9 @@ private:
 				break;
 			case ValueKind::DOUBLE:
 				row.values.push_back(TypedValue::Double(slots[index].double_value));
+				break;
+			case ValueKind::TIMESTAMPTZ:
+				row.values.push_back(TypedValue::Timestamptz(slots[index].timestamptz_microseconds));
 				break;
 			}
 		}

@@ -160,6 +160,8 @@ std::string ScalarTypeName(CompiledScalarType type) {
 		return "VARCHAR";
 	case CompiledScalarType::DOUBLE:
 		return "DOUBLE";
+	case CompiledScalarType::TIMESTAMPTZ:
+		return "TIMESTAMPTZ";
 	}
 	throw std::logic_error("compiled column has an unknown scalar type");
 }
@@ -174,6 +176,8 @@ std::string ScalarLiteral(CompiledScalarType type) {
 		return "fixture";
 	case CompiledScalarType::DOUBLE:
 		return "0.0";
+	case CompiledScalarType::TIMESTAMPTZ:
+		return "1970-01-01T00:00:00.000000Z";
 	}
 	throw std::logic_error("compiled column has an unknown scalar type");
 }

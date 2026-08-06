@@ -172,6 +172,27 @@ cuac::CompiledPackageGeneration CompileRateLimitGenerationFixture(const std::str
 	return result.Package()->Generation();
 }
 
+cuac::CompiledPackageGeneration CompileStructuralPathGenerationFixture(const std::string &absolute_repository_root,
+                                                                       StructuralPathProvider provider) {
+	const char *relative = nullptr;
+	switch (provider) {
+	case StructuralPathProvider::GITHUB:
+		relative = "/test/fixtures/package_rest_structural_path_github";
+		break;
+	case StructuralPathProvider::GITLAB:
+		relative = "/test/fixtures/package_rest_structural_path_gitlab";
+		break;
+	default:
+		throw std::invalid_argument("unknown structural path provider fixture");
+	}
+	NeverCancel cancellation;
+	const auto result = cuac::connector::CompileLocalPackageRoot(absolute_repository_root + relative, cancellation);
+	if (!result.Succeeded() || result.Package() == nullptr) {
+		throw std::runtime_error("repository structural-path package fixture did not compile");
+	}
+	return result.Package()->Generation();
+}
+
 // The canonical package-independence relation. Every field is identical across
 // both package envelopes except the operation origin host, which must track
 // each envelope's network policy. It deliberately exercises the v1 mechanisms

@@ -148,6 +148,9 @@ void ScanPlanFixtureBuilder::SetRestExecutionAuthority(cuac::ScanPlan &plan,
 		case cuac::PlannedColumnScalarKind::DOUBLE:
 			kind = cuac::PlannedRestScalarKind::DOUBLE;
 			break;
+		case cuac::PlannedColumnScalarKind::TIMESTAMPTZ:
+			kind = cuac::PlannedRestScalarKind::TIMESTAMPTZ;
+			break;
 		}
 		operation.result_columns.push_back({column.name,
 		                                    kind,

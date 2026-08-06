@@ -15,6 +15,7 @@ namespace {
 using cuac::PackageReloadClassification;
 using cuac_test::PackageCompatibilityFixture;
 using cuac_test::Require;
+using cuac_test::RestPathCompatibilityFixture;
 
 template <class Exception, class Callable>
 void RequireThrows(Callable callable, const std::string &message) {
@@ -148,11 +149,11 @@ void TestPackageGenerationFixtureBoundary() {
 	    "predicate conflict fixture lost its package-selected conflict or unaffected empty fallback");
 
 	const auto typed_predicates = cuac_test::BuildTypedPredicatePackageGenerationFixture();
-	const std::vector<std::string> typed_relation_names = {"boolean_predicates", "bigint_predicates",
-	                                                       "varchar_predicates", "double_predicates"};
+	const std::vector<std::string> typed_relation_names = {
+	    "boolean_predicates", "bigint_predicates", "varchar_predicates", "double_predicates", "timestamptz_predicates"};
 	const std::vector<cuac::CompiledScalarType> typed_relation_types = {
 	    cuac::CompiledScalarType::BOOLEAN, cuac::CompiledScalarType::BIGINT, cuac::CompiledScalarType::VARCHAR,
-	    cuac::CompiledScalarType::DOUBLE};
+	    cuac::CompiledScalarType::DOUBLE, cuac::CompiledScalarType::TIMESTAMPTZ};
 	Require(typed_predicates.Connector().Relations().size() == typed_relation_names.size(),
 	        "typed predicate fixture relation inventory drifted");
 	for (std::size_t index = 0; index < typed_relation_names.size(); index++) {
@@ -201,18 +202,30 @@ void TestPackageGenerationFixtureBoundary() {
 	const auto &materialized_operation = materialized->Operations()[0];
 	const auto &materialized_rest = materialized_operation.Rest();
 	const auto &materialized_query = materialized_rest.request.query_parameters;
-	Require(materialized_query.size() == 4 && materialized_query[0].source == cuac::CompiledQueryValueSource::FIXED &&
-	            materialized_query[0].name == "view" &&
-	            materialized_query[1].source == cuac::CompiledQueryValueSource::RELATION_INPUT &&
-	            materialized_query[1].name == "scope_name" && materialized_query[1].source_id == "scope" &&
-	            materialized_query[2].source == cuac::CompiledQueryValueSource::PAGE_SIZE &&
-	            materialized_query[2].name == "per_page" &&
-	            materialized_query[3].source == cuac::CompiledQueryValueSource::PAGE_NUMBER &&
-	            materialized_query[3].name == "page" && materialized_rest.pagination.PageIncrement() == 2 &&
-	            materialized_rest.records_extractor_segments == std::vector<std::string>({"payload", "records"}) &&
-	            materialized->Columns()[0].ExtractorSegments() == std::vector<std::string>({"identity", "record_id"}) &&
-	            materialized->Columns()[1].ExtractorSegments() == std::vector<std::string>({"attributes", "label"}),
-	        "REST materialization fixture lost query order, pagination, or nested structural paths");
+	Require(
+	    materialized_rest.request.path == "/fixtures/materialized-records/{input.scope}" &&
+	        materialized_rest.request.path_segments.size() == 3 &&
+	        materialized_rest.request.path_segments[2].source == cuac::CompiledRestPathSegmentSource::RELATION_INPUT &&
+	        materialized_rest.request.path_segments[2].value == "scope" &&
+	        materialized_rest.request.path_segments[2].input_type == cuac::CompiledScalarType::VARCHAR &&
+	        materialized_rest.request.path_segments[2].encoding ==
+	            cuac::CompiledRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED &&
+	        materialized_query.size() == 4 && materialized_query[0].source == cuac::CompiledQueryValueSource::FIXED &&
+	        materialized_query[0].name == "view" &&
+	        materialized_query[1].source == cuac::CompiledQueryValueSource::RELATION_INPUT &&
+	        materialized_query[1].name == "scope_name" && materialized_query[1].source_id == "scope" &&
+	        materialized_query[2].source == cuac::CompiledQueryValueSource::PAGE_SIZE &&
+	        materialized_query[2].name == "per_page" &&
+	        materialized_query[3].source == cuac::CompiledQueryValueSource::PAGE_NUMBER &&
+	        materialized_query[3].name == "page" && materialized_rest.pagination.PageIncrement() == 2 &&
+	        materialized_rest.records_extractor_segments == std::vector<std::string>({"payload", "records"}) &&
+	        materialized->Columns()[0].ExtractorSegments() == std::vector<std::string>({"identity", "record_id"}) &&
+	        materialized->Columns()[1].ExtractorSegments() == std::vector<std::string>({"attributes", "label"}),
+	    "REST materialization fixture lost path/query order, pagination, or nested structural paths");
+	Require(materialized->Snapshot().find(
+	            "path_segments:[literal:fixtures,literal:materialized-records,input:scope:VARCHAR:"
+	            "rfc3986_percent_encoded]") != std::string::npos,
+	        "compiled relation snapshot omitted typed structural REST path identity");
 	Require(typed_predicates.Connector()
 	                .FindRelation("boolean_predicates")
 	                ->PredicateMappings()[0]
@@ -502,6 +515,27 @@ void TestCursorContinuationChangesRequireAnIncompatibleReload() {
 	    "a package-major cursor change was treated as an in-place compatible reload");
 }
 
+void TestStructuralPathChangesRequireAnIncompatibleReload() {
+	const auto active =
+	    cuac_test::BuildRestPathCompatibilityGenerationFixture(RestPathCompatibilityFixture::BASELINE, "1.2.3", 'a');
+	RequireClassification(
+	    active,
+	    cuac_test::BuildRestPathCompatibilityGenerationFixture(RestPathCompatibilityFixture::BASELINE, "1.2.4", 'b'),
+	    PackageReloadClassification::COMPATIBLE_PROVENANCE_PATCH,
+	    "unchanged structural REST path was not compatibility-comparable");
+	const RestPathCompatibilityFixture incompatible[] = {RestPathCompatibilityFixture::LITERAL_CHANGED,
+	                                                     RestPathCompatibilityFixture::INPUT_SOURCE_CHANGED,
+	                                                     RestPathCompatibilityFixture::FIXED_FORM};
+	for (std::size_t index = 0; index < sizeof(incompatible) / sizeof(incompatible[0]); index++) {
+		RequireClassification(active,
+		                      cuac_test::BuildRestPathCompatibilityGenerationFixture(incompatible[index], "1.3.0",
+		                                                                             static_cast<char>('c' + index)),
+		                      PackageReloadClassification::INCOMPATIBLE_RELOAD,
+		                      "structural REST path mutation escaped compatibility classification at index " +
+		                          std::to_string(index));
+	}
+}
+
 } // namespace
 
 int main() {
@@ -516,6 +550,7 @@ int main() {
 		TestRateLimitChangesRequireAnIncompatibleReload();
 		TestCursorContinuationChangesRequireAnIncompatibleReload();
 		TestResponseNextContinuationPathChangeRequiresAnIncompatibleReload();
+		TestStructuralPathChangesRequireAnIncompatibleReload();
 		std::cout << "package compatibility contract tests passed" << std::endl;
 		return EXIT_SUCCESS;
 	} catch (const std::exception &error) {

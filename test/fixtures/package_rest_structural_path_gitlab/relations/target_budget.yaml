@@ -1,0 +1,58 @@
+api_version: cuac/v1
+kind: relation
+id: target_budget
+schema: static
+
+columns:
+  - id: value
+    type: VARCHAR
+    nullable: false
+    extract: $.value
+
+inputs:
+  - id: item
+    type: VARCHAR
+    nullable: false
+  - id: filter
+    type: VARCHAR
+    nullable: false
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 4096
+  max_response_bytes_per_scan: 4096
+  max_records_per_page: 1
+  max_records_per_scan: 1
+  max_extracted_string_bytes: 1024
+
+operations:
+  - id: get_target_budget
+    when:
+      required_inputs: [input.item, input.filter]
+    cardinality: one
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: gitlab.com
+        port: 443
+      path_segments:
+        - {literal: items}
+        - {input: item, encoding: rfc3986_percent_encoded}
+      query:
+        - name: filter
+          input: filter
+          encoding: form_urlencoded
+          omit_when_unbound: true
+          omit_when_null: true
+      headers:
+        - name: Accept
+          value: application/json
+    response:
+      source: root_object
+    pagination:
+      strategy: disabled

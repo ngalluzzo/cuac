@@ -37,12 +37,14 @@ R"CUAC_COVER({
       "each BIGINT output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "BIGINT"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
       "each VARCHAR output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "VARCHAR"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
       "each DOUBLE output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "DOUBLE"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
+      "each TIMESTAMPTZ output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "TIMESTAMPTZ"]}], "bindings": {"relation": "relation.id", "column": "column.id"}},
       "each operation and ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and element-nullable ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_nullable", "true"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and element-non-nullable ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_nullable", "false"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and BIGINT ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_type", "BIGINT"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and VARCHAR ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_type", "VARCHAR"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation and DOUBLE ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_type", "DOUBLE"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
+      "each operation and TIMESTAMPTZ ARRAY output column": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}, {"iterate": "relation.columns", "as": "column"}], "where": [{"equals": ["column.type", "ARRAY"]}, {"equals": ["column.element_type", "TIMESTAMPTZ"]}], "bindings": {"relation": "relation.id", "operation": "operation.id", "column": "column.id"}},
       "each operation in a relation containing more than one operation": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.operations", "as": "operation"}], "where": [{"count_gt": ["relation.operations", 1]}], "bindings": {"relation": "relation.id", "operation": "operation.id"}},
       "each relation containing more than one operation": {"selector": [{"iterate": "package.relations", "as": "relation"}], "where": [{"count_gt": ["relation.operations", 1]}], "bindings": {"relation": "relation.id"}},
       "each predicate mapping": {"selector": [{"iterate": "package.relations", "as": "relation"}, {"iterate": "relation.predicates", "as": "predicate"}], "bindings": {"relation": "relation.id", "predicate": "predicate.id"}},
@@ -126,6 +128,11 @@ R"CUAC_COVER({
       "variants": ["minimum", "maximum", "magnitude_overflow_rejected"]
     },
     {
+      "scope": "each TIMESTAMPTZ output column",
+      "template": "column_{relation}_{column}_{variant}",
+      "variants": ["minimum", "maximum", "offset_normalized", "fractional_precision", "invalid_spelling_rejected", "numeric_epoch_rejected", "normalized_out_of_range_rejected"]
+    },
+    {
       "scope": "each operation and ARRAY output column",
       "template": "array_{relation}_{operation}_{column}_{variant}",
       "variants": ["success", "empty", "singleton", "ordered_duplicates", "outer_type_rejected", "element_type_rejected", "nested_rejected", "late_invalid_element_rejected", "decode_cancellation", "query_transfer_cancellation"]
@@ -154,6 +161,11 @@ R"CUAC_COVER({
       "scope": "each operation and DOUBLE ARRAY output column",
       "template": "array_{relation}_{operation}_{column}_{variant}",
       "variants": ["zero", "negative_zero", "largest_finite", "smallest_normal", "smallest_subnormal", "magnitude_overflow_rejected"]
+    },
+    {
+      "scope": "each operation and TIMESTAMPTZ ARRAY output column",
+      "template": "array_{relation}_{operation}_{column}_{variant}",
+      "variants": ["minimum", "maximum", "offset_normalized", "fractional_precision", "invalid_spelling_rejected", "numeric_epoch_rejected", "normalized_out_of_range_rejected"]
     },
     {
       "scope": "each operation in a relation containing more than one operation",
@@ -270,9 +282,9 @@ R"CUAC_COVER({
     ]
   },
   "github_golden": {
-    "semantic_package_digest": "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c",
-    "required_key_count": 266,
-    "ordered_keys_digest": "sha256.555116e3bd3f0dd28164e0e24218a14f536c054ff1cac1ded2b1cb6d33ccdfa5",
+    "semantic_package_digest": "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c",
+    "required_key_count": 271,
+    "ordered_keys_digest": "sha256.dc525ba200cf80c046f64354e14920c514a6fca9dfdf234cef357342e7c5d725",
     "selected_keys": [
       "resource_viewer_repository_metrics_max_response_bytes_per_page_boundary",
       "resource_viewer_repository_metrics_max_response_bytes_per_page_one_over_rejected",

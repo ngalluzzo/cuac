@@ -176,7 +176,7 @@ void TestAcceptedSnapshotAndCanonicalReload() {
 	Require(snapshot.RelationIds()[0] == "duckdb_login_search_page" &&
 	            snapshot.RelationIds()[3] == "viewer_repository_metrics",
 	        "manifest relation order was not preserved");
-	Require(snapshot.Digest() == "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c",
+	Require(snapshot.Digest() == "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c",
 	        "accepted package snapshot has the wrong digest");
 	const auto original_manifest = snapshot.Files()[0].bytes;
 	WriteFile(root + "/connector.yaml", "\n", O_WRONLY | O_APPEND);

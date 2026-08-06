@@ -138,6 +138,41 @@ ColumnMutation BuildColumnMutation(const cuac::ScanPlan &plan, const internal::R
 		}
 		return {"1e400", false, false, cuac::ErrorStage::SCHEMA, RuntimeFixtureVariantOutcome::EXPECTED_REJECTION,
 		        0,       0};
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_MINIMUM:
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_MAXIMUM:
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_OFFSET_NORMALIZED:
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_FRACTIONAL_PRECISION:
+		if (kind != cuac::ValueKind::TIMESTAMPTZ) {
+			throw std::invalid_argument("TIMESTAMPTZ value variant requires a TIMESTAMPTZ planned column");
+		}
+		return {variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_MINIMUM   ? "\"0001-01-01T00:00:00.000000Z\""
+		        : variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_MAXIMUM ? "\"9999-12-31T23:59:59.999999Z\""
+		        : variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_OFFSET_NORMALIZED
+		            ? "\"2026-07-01T01:30:00+01:30\""
+		            : "\"1970-01-01T00:00:00.1234Z\"",
+		        false,
+		        true,
+		        cuac::ErrorStage::INTERNAL,
+		        RuntimeFixtureVariantOutcome::VALUE_SUCCEEDED,
+		        0,
+		        0};
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_INVALID_SPELLING_REJECTED:
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_NUMERIC_EPOCH_REJECTED:
+	case RuntimeFixtureColumnVariant::TIMESTAMPTZ_NORMALIZED_OUT_OF_RANGE_REJECTED:
+		if (kind != cuac::ValueKind::TIMESTAMPTZ) {
+			throw std::invalid_argument("TIMESTAMPTZ rejection variant requires a TIMESTAMPTZ planned column");
+		}
+		return {variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_INVALID_SPELLING_REJECTED
+		            ? "\"1970-01-01 00:00:00Z\""
+		        : variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_NUMERIC_EPOCH_REJECTED
+		            ? "0"
+		            : "\"0001-01-01T00:00:00+00:01\"",
+		        false,
+		        false,
+		        cuac::ErrorStage::SCHEMA,
+		        RuntimeFixtureVariantOutcome::EXPECTED_REJECTION,
+		        0,
+		        0};
 	}
 	throw std::invalid_argument("unknown closed Runtime column variant");
 }
@@ -174,6 +209,22 @@ void ValidateColumnObservation(const RuntimeFixtureExecutionObservation &executi
 		}
 		if (scenario.variant == RuntimeFixtureColumnVariant::DOUBLE_SUBNORMAL && value.double_value != 4.9e-324) {
 			throw std::logic_error("closed Runtime DOUBLE subnormal variant decoded the wrong value");
+		}
+		if (scenario.variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_MINIMUM &&
+		    value.timestamptz_microseconds != -INT64_C(62135596800000000)) {
+			throw std::logic_error("closed Runtime TIMESTAMPTZ minimum variant decoded the wrong value");
+		}
+		if (scenario.variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_MAXIMUM &&
+		    value.timestamptz_microseconds != INT64_C(253402300799999999)) {
+			throw std::logic_error("closed Runtime TIMESTAMPTZ maximum variant decoded the wrong value");
+		}
+		if (scenario.variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_OFFSET_NORMALIZED &&
+		    value.timestamptz_microseconds != INT64_C(1782864000000000)) {
+			throw std::logic_error("closed Runtime TIMESTAMPTZ offset variant decoded the wrong value");
+		}
+		if (scenario.variant == RuntimeFixtureColumnVariant::TIMESTAMPTZ_FRACTIONAL_PRECISION &&
+		    value.timestamptz_microseconds != INT64_C(123400)) {
+			throw std::logic_error("closed Runtime TIMESTAMPTZ fractional variant decoded the wrong value");
 		}
 		return;
 	}

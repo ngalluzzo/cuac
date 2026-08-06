@@ -96,10 +96,20 @@ struct ResourceDeclaration {
 
 enum class QueryFieldKind : std::uint8_t { LITERAL, INPUT, CONDITIONAL };
 
+enum class RestPathSegmentKind : std::uint8_t { LITERAL, INPUT };
+
+struct RestPathSegmentDeclaration {
+	RestPathSegmentKind kind = RestPathSegmentKind::LITERAL;
+	LocatedText source;
+	LocatedText encoding;
+	SourceMark mark;
+};
+
 struct QueryFieldDeclaration {
 	QueryFieldKind kind;
 	LocatedText name;
 	LocatedText source;
+	LocatedText literal_type;
 	LocatedText encoding;
 	SourceMark mark;
 };
@@ -200,6 +210,8 @@ struct RestRequestDeclaration {
 	LocatedText method;
 	OriginDeclaration origin;
 	LocatedText path;
+	bool structural_path = false;
+	std::vector<RestPathSegmentDeclaration> path_segments;
 	std::vector<QueryFieldDeclaration> query;
 	std::vector<HeaderDeclaration> headers;
 	SourceMark mark;

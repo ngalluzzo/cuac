@@ -19,7 +19,7 @@ void TestGithubPackageCompilesAsOneGeneration() {
 	            generation->Identity().ConnectorId() == "github" &&
 	            generation->Identity().PackageVersion() == "1.0.0" &&
 	            generation->Identity().PackageDigest() ==
-	                "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c",
+	                "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c",
 	        "compiled generation lost stable package identity");
 	const auto &connector = generation->Connector();
 	Require(connector.Relations().size() == 4 && connector.Relations()[0].Name() == "duckdb_login_search_page" &&
@@ -60,7 +60,7 @@ void TestLocalRootSourceFailuresStayDiagnosticOnly() {
 
 void TestSchemaAssetIdentity() {
 	Require(std::string(cuac::connector::ConnectorPackageV1SchemaDigest()) ==
-	                "sha256.637ad71241c419bb052772e363f1c12572c7d05adfaf4a2b289343aeb021cb0e" &&
+	                "sha256.ee4a724ea1d98654f569f20c12c619ab4cd439559166474eadd477bcdccd60a0" &&
 	            cuac::connector::VerifyConnectorPackageV1SchemaAsset(),
 	        "permanent connector schema asset drifted");
 }

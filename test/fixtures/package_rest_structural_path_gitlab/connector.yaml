@@ -1,0 +1,24 @@
+api_version: cuac/v1
+kind: connector
+id: gitlab_paths
+version: 1.0.0
+extractor_dialect: cuac/json_path_v1
+
+credentials: []
+
+network_policy:
+  origins:
+    - scheme: https
+      host: gitlab.com
+      port: 443
+  redirects: deny
+  private_addresses: deny
+  link_local_addresses: deny
+  loopback_addresses: deny
+  max_response_bytes: 1048576
+
+relations:
+  - project_issue
+  - project_issue_timestamps
+  - typed_segments
+  - target_budget

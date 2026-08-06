@@ -217,7 +217,7 @@ SOURCE_ANCHORS = (
     ),
     (
         "src/include/cuac/semantics/scan_plan.hpp",
-        354,
+        357,
         ("enum class PlannedPaginationStrategy",),
     ),
 )

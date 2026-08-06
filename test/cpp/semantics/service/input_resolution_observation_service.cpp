@@ -14,16 +14,19 @@ public:
 	static ObservedInputResolution Input(std::string input_id, ObservedScalarKind kind,
 	                                     ObservedCallerInputState caller_state, ObservedInputState state,
 	                                     ObservedInputSource source, bool completed, bool boolean_value,
-	                                     std::int64_t bigint_value, std::string varchar_value, double double_value) {
+	                                     std::int64_t bigint_value, std::string varchar_value, double double_value,
+	                                     std::int64_t timestamptz_microseconds) {
 		return ObservedInputResolution(std::move(input_id), kind, caller_state, state, source, completed, boolean_value,
-		                               bigint_value, std::move(varchar_value), double_value);
+		                               bigint_value, std::move(varchar_value), double_value, timestamptz_microseconds);
 	}
 
 	static ObservedRequestBinding Binding(std::string name, std::string source_id, ObservedScalarKind kind,
 	                                      bool boolean_value, std::int64_t bigint_value, std::string varchar_value,
-	                                      double double_value, std::string encoded_value) {
+	                                      double double_value, std::int64_t timestamptz_microseconds,
+	                                      std::string encoded_value) {
 		return ObservedRequestBinding(std::move(name), std::move(source_id), kind, boolean_value, bigint_value,
-		                              std::move(varchar_value), double_value, std::move(encoded_value));
+		                              std::move(varchar_value), double_value, timestamptz_microseconds,
+		                              std::move(encoded_value));
 	}
 };
 
@@ -39,6 +42,8 @@ ObservedScalarKind ObserveKind(cuac::CompiledScalarType kind) {
 		return ObservedScalarKind::VARCHAR;
 	case cuac::CompiledScalarType::DOUBLE:
 		return ObservedScalarKind::DOUBLE;
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return ObservedScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled relation input contains an unknown scalar kind");
 }
@@ -53,6 +58,8 @@ ObservedScalarKind ObserveKind(cuac::PlannedRestScalarKind kind) {
 		return ObservedScalarKind::VARCHAR;
 	case cuac::PlannedRestScalarKind::DOUBLE:
 		return ObservedScalarKind::DOUBLE;
+	case cuac::PlannedRestScalarKind::TIMESTAMPTZ:
+		return ObservedScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("planned REST binding contains an unknown scalar kind");
 }
@@ -98,6 +105,8 @@ bool ExplicitKindMatches(cuac::CompiledScalarType declared, cuac::ExplicitInputV
 		return supplied == cuac::ExplicitInputValueKind::VARCHAR;
 	case cuac::CompiledScalarType::DOUBLE:
 		return supplied == cuac::ExplicitInputValueKind::DOUBLE;
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return supplied == cuac::ExplicitInputValueKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled relation input contains an unknown scalar kind");
 }
@@ -137,6 +146,7 @@ ObservedInputResolution ObserveCompletedInput(const cuac::input_resolution::Reso
 	std::int64_t bigint_value = 0;
 	std::string varchar_value;
 	double double_value = 0.0;
+	std::int64_t timestamptz_microseconds = 0;
 	if (resolved.State() == cuac::input_resolution::ResolvedInputState::BOUND_VALUE) {
 		switch (resolved.Type()) {
 		case cuac::CompiledScalarType::BOOLEAN:
@@ -151,12 +161,15 @@ ObservedInputResolution ObserveCompletedInput(const cuac::input_resolution::Reso
 		case cuac::CompiledScalarType::DOUBLE:
 			double_value = resolved.DoubleValue();
 			break;
+		case cuac::CompiledScalarType::TIMESTAMPTZ:
+			timestamptz_microseconds = resolved.TimestamptzMicroseconds();
+			break;
 		}
 	}
-	return ObservationFactory::Input(resolved.Name(), ObserveKind(resolved.Type()),
-	                                 ObserveCallerState(explicit_inputs.Find(resolved.Name())),
-	                                 ObserveState(resolved.State()), ObserveSource(resolved.Source()), true,
-	                                 boolean_value, bigint_value, std::move(varchar_value), double_value);
+	return ObservationFactory::Input(
+	    resolved.Name(), ObserveKind(resolved.Type()), ObserveCallerState(explicit_inputs.Find(resolved.Name())),
+	    ObserveState(resolved.State()), ObserveSource(resolved.Source()), true, boolean_value, bigint_value,
+	    std::move(varchar_value), double_value, timestamptz_microseconds);
 }
 
 ObservedInputResolution ObserveRejectedNullAttempt(const cuac::CompiledRelation &relation,
@@ -182,7 +195,7 @@ ObservedInputResolution ObserveRejectedNullAttempt(const cuac::CompiledRelation 
 	(void)cuac::input_resolution::ResolveRelationInputs(relation, cuac::ExplicitInputs(std::move(remaining)));
 	return ObservationFactory::Input(input.Name(), ObserveKind(input.Type()), ObservedCallerInputState::BOUND_NULL,
 	                                 ObservedInputState::BOUND_NULL, ObservedInputSource::EXPLICIT, false, false, 0,
-	                                 std::string(), 0.0);
+	                                 std::string(), 0.0, 0);
 }
 
 std::size_t CountDeclaredBindings(const cuac::CompiledOperation &operation, const std::string &input_id) {
@@ -212,6 +225,7 @@ std::vector<ObservedRequestBinding> ObserveMaterializedBindings(const cuac::Scan
 		std::int64_t bigint_value = 0;
 		std::string varchar_value;
 		double double_value = 0.0;
+		std::int64_t timestamptz_microseconds = 0;
 		switch (binding.Kind()) {
 		case cuac::PlannedRestScalarKind::BOOLEAN:
 			boolean_value = binding.BooleanValue();
@@ -225,10 +239,13 @@ std::vector<ObservedRequestBinding> ObserveMaterializedBindings(const cuac::Scan
 		case cuac::PlannedRestScalarKind::DOUBLE:
 			double_value = binding.DoubleValue();
 			break;
+		case cuac::PlannedRestScalarKind::TIMESTAMPTZ:
+			timestamptz_microseconds = binding.TimestamptzMicroseconds();
+			break;
 		}
 		observed.push_back(ObservationFactory::Binding(binding.Name(), binding.SourceId(), ObserveKind(binding.Kind()),
 		                                               boolean_value, bigint_value, std::move(varchar_value),
-		                                               double_value, binding.EncodedValue()));
+		                                               double_value, timestamptz_microseconds, binding.EncodedValue()));
 	}
 	return observed;
 }

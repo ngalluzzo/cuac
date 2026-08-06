@@ -305,7 +305,7 @@
         "test/cpp/runtime/support/loopback_curl_runtime.cpp",
         "test/cpp/runtime/support/loopback_curl_runtime.hpp"
       ],
-      "sha256": "577067906b0002de11b70f9ecb4fb05f05f0cc5d51c391c57c3cc1e7b64ee855"
+      "sha256": "bad75015aa008087e9eab0d5631419e64593b26dc68a7f2876c77d63c2cc6d69"
     },
     "native_product_sources": {
       "algorithm": "sha256-length-prefixed-path-and-bytes-v1",
@@ -441,6 +441,7 @@
         "src/include/cuac/internal/runtime/decoding/graphql_response_decoder.hpp",
         "src/include/cuac/internal/runtime/decoding/json_decoder.hpp",
         "src/include/cuac/internal/runtime/decoding/strict_json_reader.hpp",
+        "src/include/cuac/internal/runtime/decoding/timestamptz_codec.hpp",
         "src/include/cuac/internal/runtime/executor/graphql_paginated_scan.hpp",
         "src/include/cuac/internal/runtime/executor/http_paginated_scan.hpp",
         "src/include/cuac/internal/runtime/executor/http_scan_executor.hpp",
@@ -474,6 +475,7 @@
         "src/include/cuac/internal/semantics/planner/scan_plan_builder.hpp",
         "src/include/cuac/internal/semantics/planner/scan_planner.hpp",
         "src/include/cuac/internal/semantics/predicate/predicate_classifier.hpp",
+        "src/include/cuac/internal/semantics/timestamptz.hpp",
         "src/include/cuac/query/duckdb_secret.hpp",
         "src/include/cuac/query/package_generation_composition.hpp",
         "src/include/cuac/query/product_composition.hpp",
@@ -580,10 +582,10 @@
         "src/semantics/sources.cmake",
         "src/semantics/targets.cmake"
       ],
-      "sha256": "4f9574e09f2d982e85888da762e493b10ab02b0e0107a488dfd3ee74449f1f8c"
+      "sha256": "c01644815a18b6534c7ad1274ecf29cda4710fbaefba4ab2e239f96c0f0e2b57"
     },
     "public_contract": {
-      "canonical_json_sha256": "27713609f5a076199e5ab8825f98d97489f42c3de83b2412edc33c3c14ecf799",
+      "canonical_json_sha256": "b4a6d43b9055bab950e47bbbb53b6ffaeec48d54553afeab319028111f0408ae",
       "path": "release/0.1.0/public_contract.json"
     },
     "resilience_certification": {
@@ -613,7 +615,7 @@
         "connectors/github/relations/duckdb_login_search_page.yaml",
         "connectors/github/relations/viewer_repository_metrics.yaml"
       ],
-      "sha256": "5b72d95c9610524ca9975b8e5f365baf755f2d40ea442db8aebf35326c8a2108"
+      "sha256": "1fdb715c9e3c1c853328f7e7d1503c73c57181ddfe81851c821e71ea6161d73c"
     }
   },
   "release_cells": {

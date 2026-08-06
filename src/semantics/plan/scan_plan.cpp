@@ -21,6 +21,8 @@ bool SameTypedValue(const PlannedEqualityPredicate &predicate, const PlannedRest
 		return predicate.VarcharValue() == binding.VarcharValue();
 	case PlannedRestScalarKind::DOUBLE:
 		return predicate.DoubleValue() == binding.DoubleValue();
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		return predicate.TimestamptzMicroseconds() == binding.TimestamptzMicroseconds();
 	}
 	throw std::logic_error("planned typed equality contains an unknown scalar kind");
 }
@@ -37,6 +39,9 @@ PlannedColumnScalarKind ScalarKindFromLogicalType(const std::string &logical_typ
 	}
 	if (logical_type == "VARCHAR") {
 		return PlannedColumnScalarKind::VARCHAR;
+	}
+	if (logical_type == "TIMESTAMPTZ") {
+		return PlannedColumnScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("planned column contains an unsupported logical type");
 }
@@ -94,18 +99,16 @@ PlannedColumn::PlannedColumn(std::string name_p, std::string logical_type_p, boo
       element_nullable(element_nullable_p) {
 }
 
-PlannedEqualityPredicate::PlannedEqualityPredicate(std::string column_name_p,
-                                                   PlannedPredicateOperator predicate_operator_p,
-                                                   PlannedRestScalarKind kind_p, bool boolean_value_p,
-                                                   std::int64_t bigint_value_p, std::string varchar_value_p,
-                                                   double double_value_p, std::string conditional_input_id_p,
-                                                   std::string proof_identity_p, std::string base_domain_identity_p,
-                                                   PlannedOccurrencePreservation occurrence_preservation_p)
+PlannedEqualityPredicate::PlannedEqualityPredicate(
+    std::string column_name_p, PlannedPredicateOperator predicate_operator_p, PlannedRestScalarKind kind_p,
+    bool boolean_value_p, std::int64_t bigint_value_p, std::string varchar_value_p, double double_value_p,
+    std::string conditional_input_id_p, std::string proof_identity_p, std::string base_domain_identity_p,
+    PlannedOccurrencePreservation occurrence_preservation_p, std::int64_t timestamptz_microseconds_p)
     : column_name(std::move(column_name_p)), predicate_operator(predicate_operator_p), kind(kind_p),
       boolean_value(boolean_value_p), bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)),
-      double_value(double_value_p), conditional_input_id(std::move(conditional_input_id_p)),
-      proof_identity(std::move(proof_identity_p)), base_domain_identity(std::move(base_domain_identity_p)),
-      occurrence_preservation(occurrence_preservation_p) {
+      double_value(double_value_p), timestamptz_microseconds(timestamptz_microseconds_p),
+      conditional_input_id(std::move(conditional_input_id_p)), proof_identity(std::move(proof_identity_p)),
+      base_domain_identity(std::move(base_domain_identity_p)), occurrence_preservation(occurrence_preservation_p) {
 	if (column_name.empty() || conditional_input_id.empty() || proof_identity.empty() || base_domain_identity.empty()) {
 		throw std::invalid_argument("planned typed equality requires complete mapping and proof identities");
 	}
@@ -114,23 +117,30 @@ PlannedEqualityPredicate::PlannedEqualityPredicate(std::string column_name_p,
 	}
 	switch (kind) {
 	case PlannedRestScalarKind::BOOLEAN:
-		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0) {
+		if (bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("BOOLEAN typed equality carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::BIGINT:
-		if (boolean_value || !varchar_value.empty() || double_value != 0.0) {
+		if (boolean_value || !varchar_value.empty() || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("BIGINT typed equality carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::VARCHAR:
-		if (boolean_value || bigint_value != 0 || double_value != 0.0) {
+		if (boolean_value || bigint_value != 0 || double_value != 0.0 || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("VARCHAR typed equality carries a noncanonical inactive payload");
 		}
 		break;
 	case PlannedRestScalarKind::DOUBLE:
-		if (boolean_value || bigint_value != 0 || !varchar_value.empty()) {
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || timestamptz_microseconds != 0) {
 			throw std::invalid_argument("DOUBLE typed equality carries a noncanonical inactive payload");
+		}
+		break;
+	case PlannedRestScalarKind::TIMESTAMPTZ:
+		if (boolean_value || bigint_value != 0 || !varchar_value.empty() || double_value != 0.0 ||
+		    timestamptz_microseconds < -INT64_C(62135596800000000) ||
+		    timestamptz_microseconds > INT64_C(253402300799999999)) {
+			throw std::invalid_argument("TIMESTAMPTZ typed equality carries an invalid payload");
 		}
 		break;
 	default:
@@ -183,6 +193,13 @@ double PlannedEqualityPredicate::DoubleValue() const {
 		throw std::logic_error("planned typed equality is not a DOUBLE");
 	}
 	return double_value;
+}
+
+std::int64_t PlannedEqualityPredicate::TimestamptzMicroseconds() const {
+	if (kind != PlannedRestScalarKind::TIMESTAMPTZ) {
+		throw std::logic_error("planned typed equality is not a TIMESTAMPTZ");
+	}
+	return timestamptz_microseconds;
 }
 
 const std::string &PlannedEqualityPredicate::ConditionalInputId() const noexcept {

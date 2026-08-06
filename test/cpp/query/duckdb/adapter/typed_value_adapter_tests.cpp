@@ -1,6 +1,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "cuac/internal/query/adapter/typed_value_adapter.hpp"
 #include "support/require.hpp"
 
@@ -153,7 +154,10 @@ void TestPlannedLogicalTypeMappingIsClosed() {
 	                 cuac::PlannedColumnScalarKind::VARCHAR, false}) == duckdb::LogicalType::VARCHAR &&
 	            duckdb::cuac_query_internal::PlannedLogicalType(
 	                {"flag", "BOOLEAN", false, "flag", cuac::PlannedColumnShape::SCALAR,
-	                 cuac::PlannedColumnScalarKind::BOOLEAN, false}) == duckdb::LogicalType::BOOLEAN,
+	                 cuac::PlannedColumnScalarKind::BOOLEAN, false}) == duckdb::LogicalType::BOOLEAN &&
+	            duckdb::cuac_query_internal::PlannedLogicalType(
+	                {"occurred_at", "TIMESTAMPTZ", false, "occurred_at", cuac::PlannedColumnShape::SCALAR,
+	                 cuac::PlannedColumnScalarKind::TIMESTAMPTZ, false}) == duckdb::LogicalType::TIMESTAMP_TZ,
 	        "planned scalar mapping changed");
 	RequireLogicError(
 	    []() {
@@ -162,6 +166,53 @@ void TestPlannedLogicalTypeMappingIsClosed() {
 		                                                           cuac::PlannedColumnScalarKind::BIGINT, false});
 	    },
 	    "unsupported planned logical type was accepted");
+}
+
+void TestTimestamptzScalarAndArrayWriting() {
+	duckdb::DataChunk output;
+	output.Initialize(
+	    duckdb::Allocator::DefaultAllocator(),
+	    {duckdb::LogicalType::TIMESTAMP_TZ, duckdb::LogicalType::LIST(duckdb::LogicalType::TIMESTAMP_TZ)});
+	cuac::TypedBatch batch;
+	batch.column_types = {cuac::ValueKind::TIMESTAMPTZ,
+	                      cuac::OutputValueType::Array(cuac::ValueKind::TIMESTAMPTZ, true)};
+	batch.rows.push_back(
+	    {{cuac::TypedValue::Timestamptz(INT64_C(1782864000000000)),
+	      cuac::TypedValue::Array(cuac::ValueKind::TIMESTAMPTZ, true,
+	                              {cuac::TypedScalarValue::Timestamptz(-INT64_C(62135596800000000)),
+	                               cuac::TypedScalarValue::Null(cuac::ValueKind::TIMESTAMPTZ),
+	                               cuac::TypedScalarValue::Timestamptz(INT64_C(253402300799999999))})}});
+	batch.rows.push_back({{cuac::TypedValue::Null(cuac::ValueKind::TIMESTAMPTZ),
+	                       cuac::TypedValue::Array(cuac::ValueKind::TIMESTAMPTZ, true, {})}});
+	const std::vector<PlannedValueColumn> columns = {
+	    {cuac::ValueKind::TIMESTAMPTZ, true},
+	    {cuac::OutputValueType::Array(cuac::ValueKind::TIMESTAMPTZ, true), false}};
+	duckdb::cuac_query_internal::WriteTypedBatch(output, batch, columns, 2);
+	const auto scalar = output.GetValue(0, 0);
+	const auto list_value = output.GetValue(1, 0);
+	const auto &elements = duckdb::ListValue::GetChildren(list_value);
+	const auto empty_list_value = output.GetValue(1, 1);
+	Require(output.size() == 2 && scalar.type() == duckdb::LogicalType::TIMESTAMP_TZ &&
+	            scalar.GetValue<duckdb::timestamp_tz_t>().value == INT64_C(1782864000000000) && elements.size() == 3 &&
+	            elements[0].type() == duckdb::LogicalType::TIMESTAMP_TZ &&
+	            elements[0].GetValue<duckdb::timestamp_tz_t>().value == -INT64_C(62135596800000000) &&
+	            elements[1].IsNull() &&
+	            elements[2].GetValue<duckdb::timestamp_tz_t>().value == INT64_C(253402300799999999) &&
+	            output.GetValue(0, 1).IsNull() && duckdb::ListValue::GetChildren(empty_list_value).empty(),
+	        "native DuckDB TIMESTAMP WITH TIME ZONE scalar or ARRAY transfer changed exact microseconds");
+	bool lower_rejected = false;
+	try {
+		(void)cuac::TypedValue::Timestamptz(-INT64_C(62135596800000001));
+	} catch (const std::invalid_argument &) {
+		lower_rejected = true;
+	}
+	bool upper_rejected = false;
+	try {
+		(void)cuac::TypedScalarValue::Timestamptz(INT64_C(253402300800000000));
+	} catch (const std::invalid_argument &) {
+		upper_rejected = true;
+	}
+	Require(lower_rejected && upper_rejected, "Runtime typed-value constructors accepted out-of-profile instants");
 }
 
 void TestArrayVectorWritingAndCancellation() {
@@ -268,6 +319,7 @@ int main() {
 		TestRequiredNullsAndKindDriftFailBeforeWrites();
 		TestArityAndBatchBoundsFailClosed();
 		TestPlannedLogicalTypeMappingIsClosed();
+		TestTimestamptzScalarAndArrayWriting();
 		TestArrayVectorWritingAndCancellation();
 		std::cout << "typed value adapter tests passed" << std::endl;
 		return EXIT_SUCCESS;

@@ -14,11 +14,10 @@ AdmittedRestRequestProfile::AdmittedRestRequestProfile(const ScanPlan &plan, Mat
                                                        AdmittedResiliencePolicy resilience_p)
     : method("GET"), scheme(RestSchemeName(plan.Operation().Rest().origin.scheme)),
       host(plan.Operation().Rest().origin.host), port(plan.Operation().Rest().origin.port),
-      path(plan.Operation().Rest().path), query_parameters(std::move(request.query)),
-      headers(std::move(request.headers)), columns(std::move(request.columns)),
-      response_source(plan.Operation().Rest().response_source), records_path(std::move(request.records_path)),
-      credential(std::move(credential_p)), budgets(plan.Budgets()), retry(retry_p), rate_limit(std::move(rate_limit_p)),
-      resilience(resilience_p) {
+      path(std::move(request.path)), query_parameters(std::move(request.query)), headers(std::move(request.headers)),
+      columns(std::move(request.columns)), response_source(plan.Operation().Rest().response_source),
+      records_path(std::move(request.records_path)), credential(std::move(credential_p)), budgets(plan.Budgets()),
+      retry(retry_p), rate_limit(std::move(rate_limit_p)), resilience(resilience_p) {
 	budgets.request_attempts = resilience.max_attempts_per_step;
 }
 
@@ -82,20 +81,23 @@ AdmittedPaginatedRestRequestProfile::AdmittedPaginatedRestRequestProfile(
     AdmittedRateLimitPolicy rate_limit_p, AdmittedResiliencePolicy resilience_p)
     : method("GET"), scheme(RestSchemeName(plan.Operation().Rest().origin.scheme)),
       host(plan.Operation().Rest().origin.host), port(plan.Operation().Rest().origin.port),
-      path(plan.Operation().Rest().path), query_parameters(std::move(request.query)),
-      headers(std::move(request.headers)), columns(std::move(request.columns)),
-      response_source(plan.Operation().Rest().response_source), records_path(std::move(request.records_path)),
+      // A structural path substitutes input segments during materialization, so
+      // the materialized request path -- not the planned template -- is the
+      // authority. The cursor page builder reads Path(), so a structural-path
+      // cursor relation would otherwise request the wrong target.
+      path(std::move(request.path)), query_parameters(std::move(request.query)), headers(std::move(request.headers)),
+      columns(std::move(request.columns)), response_source(plan.Operation().Rest().response_source),
+      records_path(std::move(request.records_path)),
       // RFC 0029: a cursor traversal owns no page size either. An author that
-      // wants one declares it as an ordinary fixed query field, which arrives
-      // through query_parameters like any other declared value.
+      // wants one declares it as an ordinary fixed query field.
       page_size_parameter(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
                               ? std::string()
                               : plan.Pagination().Target().page_size_parameter),
       page_size(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
                     ? 0
                     : plan.Pagination().Target().page_size),
-      // RFC 0029: a cursor traversal owns no page number. These stay empty and
-      // zero rather than reporting a page it does not have.
+      // RFC 0029: nor a page number. These stay empty and zero rather than
+      // reporting a page it does not have.
       page_number_parameter(plan.Pagination().Strategy() == PlannedPaginationStrategy::RESPONSE_CURSOR
                                 ? std::string()
                                 : plan.Pagination().Target().page_number_parameter),

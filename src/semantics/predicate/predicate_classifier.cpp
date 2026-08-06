@@ -19,17 +19,10 @@ struct MatchedCandidate {
 };
 
 TypedEqualityDecision NoTypedEquality() {
-	return {false,
-	        "",
-	        PlannedRestScalarKind::VARCHAR,
-	        false,
-	        0,
-	        "",
-	        0.0,
-	        "",
-	        "",
-	        "",
-	        PlannedOccurrencePreservation::PRESERVES_ALL_MATCHING_BASE_OCCURRENCES};
+	return {false, "", PlannedRestScalarKind::VARCHAR,
+	        false, 0,  "",
+	        0.0,   0,  "",
+	        "",    "", PlannedOccurrencePreservation::PRESERVES_ALL_MATCHING_BASE_OCCURRENCES};
 }
 
 PlannedRestScalarKind PlanScalarKind(CompiledScalarType kind) {
@@ -42,6 +35,8 @@ PlannedRestScalarKind PlanScalarKind(CompiledScalarType kind) {
 		return PlannedRestScalarKind::VARCHAR;
 	case CompiledScalarType::DOUBLE:
 		return PlannedRestScalarKind::DOUBLE;
+	case CompiledScalarType::TIMESTAMPTZ:
+		return PlannedRestScalarKind::TIMESTAMPTZ;
 	}
 	throw PlanningError(PlanningErrorCode::INVALID_CONTRACT,
 	                    "package predicate mapping contains an unknown scalar kind");
@@ -67,6 +62,7 @@ TypedEqualityDecision PlanTypedEquality(const CompiledPredicateMapping &mapping)
 	std::int64_t bigint_value = 0;
 	std::string varchar_value;
 	double double_value = 0.0;
+	std::int64_t timestamptz_microseconds = 0;
 	switch (literal.Type()) {
 	case CompiledScalarType::BOOLEAN:
 		boolean_value = literal.Boolean();
@@ -80,6 +76,9 @@ TypedEqualityDecision PlanTypedEquality(const CompiledPredicateMapping &mapping)
 	case CompiledScalarType::DOUBLE:
 		double_value = literal.Double();
 		break;
+	case CompiledScalarType::TIMESTAMPTZ:
+		timestamptz_microseconds = literal.TimestamptzMicroseconds();
+		break;
 	}
 	return {true,
 	        mapping.ColumnName(),
@@ -88,6 +87,7 @@ TypedEqualityDecision PlanTypedEquality(const CompiledPredicateMapping &mapping)
 	        bigint_value,
 	        std::move(varchar_value),
 	        double_value,
+	        timestamptz_microseconds,
 	        mapping.RemoteInputName(),
 	        mapping.ProofIdentityValue(),
 	        mapping.BaseDomainValue(),
@@ -169,6 +169,8 @@ bool ColumnTypeMatches(CompiledScalarType scalar_type, RequestedPredicateValueKi
 		return scalar_type == CompiledScalarType::BOOLEAN;
 	case RequestedPredicateValueKind::DOUBLE:
 		return scalar_type == CompiledScalarType::DOUBLE;
+	case RequestedPredicateValueKind::TIMESTAMPTZ:
+		return scalar_type == CompiledScalarType::TIMESTAMPTZ;
 	}
 	throw PlanningError(PlanningErrorCode::INVALID_CONTRACT, "predicate comparison contains an unknown logical type");
 }
@@ -186,6 +188,9 @@ bool TypedLiteralMatches(const CompiledScalarValue &compiled, const RequestedPre
 		return compiled.Type() == CompiledScalarType::VARCHAR && compiled.Varchar() == requested.VarcharValue();
 	case RequestedPredicateValueKind::DOUBLE:
 		return compiled.Type() == CompiledScalarType::DOUBLE && compiled.Double() == requested.DoubleValue();
+	case RequestedPredicateValueKind::TIMESTAMPTZ:
+		return compiled.Type() == CompiledScalarType::TIMESTAMPTZ &&
+		       compiled.TimestamptzMicroseconds() == requested.TimestamptzMicroseconds();
 	}
 	throw PlanningError(PlanningErrorCode::INVALID_CONTRACT, "predicate comparison contains an unknown literal kind");
 }
@@ -206,6 +211,8 @@ bool SameTypedLiteral(const CompiledScalarValue &left, const CompiledScalarValue
 		return left.Varchar() == right.Varchar();
 	case CompiledScalarType::DOUBLE:
 		return left.Double() == right.Double();
+	case CompiledScalarType::TIMESTAMPTZ:
+		return left.TimestamptzMicroseconds() == right.TimestamptzMicroseconds();
 	}
 	return false;
 }

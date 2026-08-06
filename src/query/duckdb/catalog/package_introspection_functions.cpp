@@ -112,6 +112,8 @@ std::string RenderDefault(const cuac::CompiledScalarValue &value) {
 		}
 		return std::string(buffer, static_cast<std::size_t>(written));
 	}
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return "TIMESTAMPTZ '" + cuac::CanonicalTimestamptz(value.TimestamptzMicroseconds()) + "'";
 	}
 	throw std::logic_error("relation input default has an unsupported structural type");
 }

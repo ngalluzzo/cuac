@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <limits>
 #include <ostream>
+#include <set>
 #include <stdexcept>
 #include <utility>
 
@@ -49,6 +50,95 @@ static const std::size_t MAX_COMPILED_COLLECTION_EXTRACTOR_BYTES = 1027;
 
 bool IsAsciiDigit(char value) {
 	return value >= '0' && value <= '9';
+}
+
+bool IsFormUnreserved(unsigned char value);
+
+bool IsIdentifier(const std::string &value) {
+	if (value.empty() || value.size() > 63 || value.front() < 'a' || value.front() > 'z') {
+		return false;
+	}
+	for (const auto character : value) {
+		if (!((character >= 'a' && character <= 'z') || IsAsciiDigit(character) || character == '_')) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsLiteralPathSegment(const std::string &value) {
+	if (value.empty() || value.size() > 255 || value == "." || value == "..") {
+		return false;
+	}
+	for (const auto character : value) {
+		const auto byte = static_cast<unsigned char>(character);
+		if (!IsFormUnreserved(byte)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+std::string PathSnapshot(const std::vector<CompiledRestPathSegment> &segments) {
+	if (segments.empty()) {
+		return "/";
+	}
+	std::string result;
+	for (const auto &segment : segments) {
+		result.push_back('/');
+		if (segment.source == CompiledRestPathSegmentSource::LITERAL) {
+			result += segment.value;
+		} else if (segment.source == CompiledRestPathSegmentSource::RELATION_INPUT) {
+			result += "{input." + segment.value + "}";
+		} else {
+			throw std::invalid_argument("compiled REST path contains an unknown segment source");
+		}
+	}
+	return result;
+}
+
+std::vector<CompiledRestPathSegment> FixedRestPathSegments(const std::string &path) {
+	std::vector<CompiledRestPathSegment> result;
+	std::size_t begin = 1;
+	while (begin < path.size()) {
+		const auto end = path.find('/', begin);
+		const auto segment_end = end == std::string::npos ? path.size() : end;
+		result.push_back({CompiledRestPathSegmentSource::LITERAL, path.substr(begin, segment_end - begin),
+		                  CompiledScalarType::VARCHAR, CompiledRestPathSegmentEncoding::LITERAL});
+		begin = segment_end + 1;
+	}
+	return result;
+}
+
+void ValidateRestPath(const CompiledRestRequest &request) {
+	if (request.path_segments.size() > 64 || request.path != PathSnapshot(request.path_segments)) {
+		throw std::invalid_argument("compiled REST path snapshot disagrees with its structural segments");
+	}
+	std::set<std::string> input_ids;
+	for (const auto &segment : request.path_segments) {
+		if (segment.source == CompiledRestPathSegmentSource::LITERAL) {
+			if (!IsLiteralPathSegment(segment.value) || segment.input_type != CompiledScalarType::VARCHAR ||
+			    segment.encoding != CompiledRestPathSegmentEncoding::LITERAL) {
+				throw std::invalid_argument("compiled REST path contains an invalid literal segment");
+			}
+			continue;
+		}
+		if (segment.source != CompiledRestPathSegmentSource::RELATION_INPUT || !IsIdentifier(segment.value) ||
+		    !input_ids.insert(segment.value).second ||
+		    segment.encoding != CompiledRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED) {
+			throw std::invalid_argument("compiled REST path contains an invalid or duplicate input segment");
+		}
+		switch (segment.input_type) {
+		case CompiledScalarType::BOOLEAN:
+		case CompiledScalarType::BIGINT:
+		case CompiledScalarType::VARCHAR:
+		case CompiledScalarType::DOUBLE:
+		case CompiledScalarType::TIMESTAMPTZ:
+			break;
+		default:
+			throw std::invalid_argument("compiled REST path contains an unknown input type");
+		}
+	}
 }
 
 bool IsFixedHeaderValue(const std::string &value) {
@@ -558,10 +648,10 @@ void ValidateRestOperation(const CompiledOperation &operation) {
 	(void)ReplaySafetyName(rest.replay_safety);
 	ValidateRetryRecommendation(operation, rest.retry_enabled);
 	ValidateRateLimitPolicy(operation);
-	if (rest.request.origin.port == 0 || rest.request.path.empty() || rest.request.path.front() != '/' ||
-	    rest.request.path.find_first_of("?#\r\n") != std::string::npos) {
+	if (rest.request.origin.port == 0) {
 		throw std::invalid_argument("compiled REST operation contains unsupported authority, path, or retry behavior");
 	}
+	ValidateRestPath(rest.request);
 	ValidateQueryParameters(rest.request.query_parameters);
 	ValidateHeaders(rest.request.headers, "REST");
 	if (rest.response_source == CompiledResponseSource::JSON_PATH_MANY) {
@@ -617,6 +707,23 @@ void AppendHeaders(std::ostream &result, const std::vector<CompiledHttpHeader> &
 	}
 }
 
+void AppendRestPath(std::ostream &result, const CompiledRestRequest &request) {
+	result << ",path:" << request.path << ",path_segments:[";
+	for (std::size_t index = 0; index < request.path_segments.size(); index++) {
+		const auto &segment = request.path_segments[index];
+		result << (index == 0 ? "" : ",");
+		if (segment.source == CompiledRestPathSegmentSource::LITERAL) {
+			result << "literal:" << segment.value;
+		} else if (segment.source == CompiledRestPathSegmentSource::RELATION_INPUT) {
+			result << "input:" << segment.value << ':' << CompiledScalarTypeName(segment.input_type)
+			       << ":rfc3986_percent_encoded";
+		} else {
+			throw std::logic_error("compiled REST path snapshot contains an unknown segment source");
+		}
+	}
+	result << ']';
+}
+
 const char *SchemeName(CompiledUrlScheme scheme) {
 	switch (scheme) {
 	case CompiledUrlScheme::HTTP:
@@ -648,6 +755,21 @@ std::string EncodeCanonicalDouble(double value) {
 
 } // namespace
 
+CompiledRestRequest::CompiledRestRequest(CompiledHttpOrigin origin_p, std::string path_p,
+                                         std::vector<CompiledQueryParameter> query_parameters_p,
+                                         std::vector<CompiledHttpHeader> headers_p)
+    : origin(std::move(origin_p)), path(std::move(path_p)), path_segments(FixedRestPathSegments(path)),
+      query_parameters(std::move(query_parameters_p)), headers(std::move(headers_p)) {
+}
+
+CompiledRestRequest::CompiledRestRequest(CompiledHttpOrigin origin_p, std::string path_p,
+                                         std::vector<CompiledRestPathSegment> path_segments_p,
+                                         std::vector<CompiledQueryParameter> query_parameters_p,
+                                         std::vector<CompiledHttpHeader> headers_p)
+    : origin(std::move(origin_p)), path(std::move(path_p)), path_segments(std::move(path_segments_p)),
+      query_parameters(std::move(query_parameters_p)), headers(std::move(headers_p)) {
+}
+
 std::string EncodeCompiledQueryScalar(const CompiledScalarValue &value, CompiledQueryEncoding encoding) {
 	if (value.IsNull()) {
 		throw std::invalid_argument("compiled query scalar encoding requires a concrete value");
@@ -668,6 +790,9 @@ std::string EncodeCompiledQueryScalar(const CompiledScalarValue &value, Compiled
 		break;
 	case CompiledScalarType::DOUBLE:
 		decoded = EncodeCanonicalDouble(value.Double());
+		break;
+	case CompiledScalarType::TIMESTAMPTZ:
+		decoded = CanonicalTimestamptz(value.TimestamptzMicroseconds());
 		break;
 	default:
 		throw std::invalid_argument("compiled query scalar has an unknown type");
@@ -935,7 +1060,8 @@ void AppendProtocolOperation(std::ostream &result, const CompiledOperation &oper
 	const auto &rest = operation.Rest();
 	result << "REST:" << MethodName(rest.method) << ':' << ReplaySafetyName(rest.replay_safety) << ";request=origin:";
 	AppendOrigin(result, rest.request.origin);
-	result << ",path:" << rest.request.path << ",query:[";
+	AppendRestPath(result, rest.request);
+	result << ",query:[";
 	AppendQuery(result, rest.request.query_parameters);
 	result << "],headers:[";
 	AppendHeaders(result, rest.request.headers);

@@ -1,0 +1,62 @@
+api_version: cuac/v1
+kind: relation
+id: project_issue_timestamps
+schema: static
+
+columns:
+  - id: updated_at
+    type: TIMESTAMPTZ
+    nullable: false
+    extract: $.updated_at
+
+inputs:
+  - id: updated_after
+    type: TIMESTAMPTZ
+    nullable: false
+    default: {kind: value, value: "2026-07-01T01:30:00+01:30"}
+  - id: updated_before
+    type: TIMESTAMPTZ
+    nullable: false
+
+auth:
+  mode: anonymous
+
+resources:
+  max_response_bytes_per_page: 4096
+  max_response_bytes_per_scan: 4096
+  max_records_per_page: 1
+  max_records_per_scan: 1
+  max_extracted_string_bytes: 1024
+
+operations:
+  - id: get_project_issue_timestamps
+    when:
+      required_inputs: [input.updated_after, input.updated_before]
+    cardinality: one
+    replay_safety: safe
+    request:
+      protocol: rest
+      method: GET
+      origin:
+        scheme: https
+        host: gitlab.com
+        port: 443
+      path_segments:
+        - {literal: issues}
+        - {input: updated_after, encoding: rfc3986_percent_encoded}
+      query:
+        - name: before
+          input: updated_before
+          encoding: form_urlencoded
+          omit_when_unbound: true
+          omit_when_null: true
+        - name: snapshot
+          literal: {type: TIMESTAMPTZ, value: "2000-02-29T12:34:56.123456Z"}
+          encoding: form_urlencoded
+      headers:
+        - name: Accept
+          value: application/json
+    response:
+      source: root_object
+    pagination:
+      strategy: disabled

@@ -18,7 +18,7 @@ namespace semantics_service {
 enum class ObservedCallerInputState { UNBOUND, BOUND_NULL, BOUND_VALUE };
 enum class ObservedInputState { UNBOUND, BOUND_NULL, BOUND_VALUE };
 enum class ObservedInputSource { NONE, EXPLICIT, DEFAULT_VALUE };
-enum class ObservedScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE };
+enum class ObservedScalarKind { BOOLEAN, BIGINT, VARCHAR, DOUBLE, TIMESTAMPTZ };
 
 // NOT_AVAILABLE is reserved for a planning failure, before any selected
 // operation can grant request authority. NOT_DECLARED means the selected
@@ -44,6 +44,7 @@ public:
 	std::int64_t BigintValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 
 private:
 	friend class ObservationFactory;
@@ -54,7 +55,8 @@ private:
 
 	ObservedInputResolution(std::string input_id, ObservedScalarKind kind, ObservedCallerInputState caller_state,
 	                        ObservedInputState state, ObservedInputSource source, bool completed, bool boolean_value,
-	                        std::int64_t bigint_value, std::string varchar_value, double double_value);
+	                        std::int64_t bigint_value, std::string varchar_value, double double_value,
+	                        std::int64_t timestamptz_microseconds);
 
 	std::string input_id;
 	ObservedScalarKind kind;
@@ -66,6 +68,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 // One materialized REST request field copied from the immutable ScanPlan. An
@@ -80,6 +83,7 @@ public:
 	std::int64_t BigintValue() const;
 	const std::string &VarcharValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 	const std::string &EncodedValue() const noexcept;
 
 private:
@@ -90,7 +94,7 @@ private:
 
 	ObservedRequestBinding(std::string name, std::string source_id, ObservedScalarKind kind, bool boolean_value,
 	                       std::int64_t bigint_value, std::string varchar_value, double double_value,
-	                       std::string encoded_value);
+	                       std::int64_t timestamptz_microseconds, std::string encoded_value);
 
 	std::string name;
 	std::string source_id;
@@ -99,6 +103,7 @@ private:
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 	std::string encoded_value;
 };
 

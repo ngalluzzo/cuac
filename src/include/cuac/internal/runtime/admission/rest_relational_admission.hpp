@@ -21,6 +21,7 @@ struct RestConditionalBindingAuthority {
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 // Validates only the relational ownership and predicate envelope. On success,

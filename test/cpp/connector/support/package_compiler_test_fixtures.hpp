@@ -177,6 +177,14 @@ cuac::CompiledPackageGeneration CompileRetryGenerationFixture(const std::string 
 // receive immutable compiled facts only.
 cuac::CompiledPackageGeneration CompileRateLimitGenerationFixture(const std::string &absolute_repository_root);
 
+enum class StructuralPathProvider { GITHUB, GITLAB };
+
+// Independently authored cuac/v1 packages whose REST operations use two or
+// more typed structural path inputs. The fixtures contain no path template or
+// caller-selected origin authority.
+cuac::CompiledPackageGeneration CompileStructuralPathGenerationFixture(const std::string &absolute_repository_root,
+                                                                       StructuralPathProvider provider);
+
 enum class RepositoryGithubGraphqlCounterexample {
 	DOCUMENT_MISMATCH,
 	DIGEST_MISMATCH,

@@ -26,6 +26,8 @@ PlannedColumnScalarKind PlanColumnKind(CompiledScalarType type) {
 		return PlannedColumnScalarKind::VARCHAR;
 	case CompiledScalarType::DOUBLE:
 		return PlannedColumnScalarKind::DOUBLE;
+	case CompiledScalarType::TIMESTAMPTZ:
+		return PlannedColumnScalarKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("compiled output column contains an unknown element type");
 }
@@ -291,7 +293,8 @@ ScanPlan ScanPlanBuilder::Build(const CompiledConnector &connector, const ScanRe
 		result.typed_equality = std::shared_ptr<const PlannedEqualityPredicate>(new PlannedEqualityPredicate(
 		    equality.column_name, PlannedPredicateOperator::EQUALS, equality.kind, equality.boolean_value,
 		    equality.bigint_value, equality.varchar_value, equality.double_value, equality.conditional_input_id,
-		    equality.proof_identity, equality.base_domain_identity, equality.occurrence_preservation));
+		    equality.proof_identity, equality.base_domain_identity, equality.occurrence_preservation,
+		    equality.timestamptz_microseconds));
 	}
 	result.predicate_category = predicate_decision.category;
 	result.predicate_reason = predicate_decision.reason_code;
@@ -411,18 +414,20 @@ ScanPlan ScanPlanBuilder::Build(const CompiledConnector &connector, const ScanRe
 		if (compiled_pagination.Strategy() == CompiledPaginationStrategy::RESPONSE_CURSOR) {
 			// RFC 0029: a cursor traversal has no page number, so it fills its
 			// own continuation target instead of the page-number target. Both
-			// carry the operation's own origin and path, which is what keeps a
-			// received token from ever influencing where the request goes.
+			// carry the operation's own origin and planned path, which is what
+			// keeps a received token from ever influencing where the request
+			// goes. The planned path -- not the raw declaration -- is the
+			// authority now that a structural path can carry input segments.
 			result.pagination.cursor_target = {
 			    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
-			    rest.request.path,
+			    result.Operation().Rest().path,
 			    compiled_pagination.CursorPath(),
 			    compiled_pagination.CursorParameter(),
 			    compiled_pagination.MaxCursorBytes()};
 		} else {
 			result.pagination.target = {
 			    {PlanUrlScheme(rest.request.origin.scheme), rest.request.origin.host.Value(), rest.request.origin.port},
-			    rest.request.path,
+			    result.Operation().Rest().path,
 			    compiled_pagination.PageSizeParameter(),
 			    compiled_pagination.PageSize(),
 			    compiled_pagination.PageNumberParameter(),

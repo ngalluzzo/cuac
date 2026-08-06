@@ -42,6 +42,8 @@ bool SameScalar(const CompiledScalarValue &left, const CompiledScalarValue &righ
 		return left.Varchar() == right.Varchar();
 	case CompiledScalarType::DOUBLE:
 		return left.Double() == right.Double();
+	case CompiledScalarType::TIMESTAMPTZ:
+		return left.TimestamptzMicroseconds() == right.TimestamptzMicroseconds();
 	}
 	return false;
 }
@@ -70,6 +72,19 @@ bool SameHeaders(const std::vector<CompiledHttpHeader> &left, const std::vector<
 	}
 	for (std::size_t index = 0; index < left.size(); index++) {
 		if (left[index].name != right[index].name || left[index].value != right[index].value) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool SameRestPath(const std::vector<CompiledRestPathSegment> &left, const std::vector<CompiledRestPathSegment> &right) {
+	if (left.size() != right.size()) {
+		return false;
+	}
+	for (std::size_t index = 0; index < left.size(); index++) {
+		if (left[index].source != right[index].source || left[index].value != right[index].value ||
+		    left[index].input_type != right[index].input_type || left[index].encoding != right[index].encoding) {
 			return false;
 		}
 	}
@@ -119,6 +134,7 @@ bool SameRest(const CompiledRestOperation &left, const CompiledRestOperation &ri
 	return left.method == right.method && left.replay_safety == right.replay_safety &&
 	       left.retry_enabled == right.retry_enabled && SamePagination(left.pagination, right.pagination) &&
 	       SameOrigin(left.request.origin, right.request.origin) && left.request.path == right.request.path &&
+	       SameRestPath(left.request.path_segments, right.request.path_segments) &&
 	       SameQuery(left.request.query_parameters, right.request.query_parameters) &&
 	       SameHeaders(left.request.headers, right.request.headers) && left.response_source == right.response_source &&
 	       left.records_extractor == right.records_extractor &&

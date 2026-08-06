@@ -22,6 +22,8 @@ const char *ExplicitInputValueKindName(ExplicitInputValueKind kind) {
 		return "varchar";
 	case ExplicitInputValueKind::DOUBLE:
 		return "double";
+	case ExplicitInputValueKind::TIMESTAMPTZ:
+		return "timestamptz";
 	}
 	throw std::logic_error("explicit input contains an unknown value kind");
 }
@@ -54,9 +56,10 @@ const char *RetainedPredicateScopeName(RetainedPredicateScope scope) {
 
 ExplicitInput::ExplicitInput(std::string identifier_p, ExplicitInputValueKind kind_p, bool is_null_p,
                              bool boolean_value_p, std::int64_t bigint_value_p, std::string varchar_value_p,
-                             double double_value_p)
+                             double double_value_p, std::int64_t timestamptz_microseconds_p)
     : identifier(std::move(identifier_p)), kind(kind_p), is_null(is_null_p), boolean_value(boolean_value_p),
-      bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)), double_value(double_value_p) {
+      bigint_value(bigint_value_p), varchar_value(std::move(varchar_value_p)), double_value(double_value_p),
+      timestamptz_microseconds(timestamptz_microseconds_p) {
 	if (identifier.empty()) {
 		throw std::invalid_argument("explicit input identifier must not be empty");
 	}
@@ -85,6 +88,14 @@ ExplicitInput ExplicitInput::Double(std::string identifier, double value) {
 	// RFC 0020: -0.0 is normalized to 0.0 so every consumer sees one canonical zero.
 	return ExplicitInput(std::move(identifier), ExplicitInputValueKind::DOUBLE, false, false, 0, std::string(),
 	                     value == 0.0 ? 0.0 : value);
+}
+
+ExplicitInput ExplicitInput::Timestamptz(std::string identifier, std::int64_t microseconds) {
+	if (!IsTimestamptzMicroseconds(microseconds)) {
+		throw std::invalid_argument("explicit TIMESTAMPTZ input is outside the CUAC profile");
+	}
+	return ExplicitInput(std::move(identifier), ExplicitInputValueKind::TIMESTAMPTZ, false, false, 0, std::string(),
+	                     0.0, microseconds);
 }
 
 const std::string &ExplicitInput::Identifier() const noexcept {
@@ -127,10 +138,18 @@ double ExplicitInput::DoubleValue() const {
 	return double_value;
 }
 
+std::int64_t ExplicitInput::TimestamptzMicroseconds() const {
+	if (is_null || kind != ExplicitInputValueKind::TIMESTAMPTZ) {
+		throw std::logic_error("explicit input does not contain a TIMESTAMPTZ value");
+	}
+	return timestamptz_microseconds;
+}
+
 bool ExplicitInput::operator==(const ExplicitInput &other) const noexcept {
 	return identifier == other.identifier && kind == other.kind && is_null == other.is_null &&
 	       boolean_value == other.boolean_value && bigint_value == other.bigint_value &&
-	       varchar_value == other.varchar_value && double_value == other.double_value;
+	       varchar_value == other.varchar_value && double_value == other.double_value &&
+	       timestamptz_microseconds == other.timestamptz_microseconds;
 }
 
 bool ExplicitInput::operator!=(const ExplicitInput &other) const noexcept {
@@ -160,6 +179,9 @@ std::string ExplicitInput::Snapshot() const {
 			break;
 		case ExplicitInputValueKind::DOUBLE:
 			result << double_value;
+			break;
+		case ExplicitInputValueKind::TIMESTAMPTZ:
+			result << CanonicalTimestamptz(timestamptz_microseconds);
 			break;
 		}
 	}

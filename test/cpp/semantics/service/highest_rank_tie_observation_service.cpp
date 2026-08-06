@@ -42,6 +42,8 @@ cuac::ExplicitInput ConcreteSentinel(const cuac::CompiledRelationInput &input) {
 		return cuac::ExplicitInput::Varchar(input.Name(), std::string());
 	case cuac::CompiledScalarType::DOUBLE:
 		return cuac::ExplicitInput::Double(input.Name(), 0.0);
+	case cuac::CompiledScalarType::TIMESTAMPTZ:
+		return cuac::ExplicitInput::Timestamptz(input.Name(), 0);
 	}
 	throw std::logic_error("compiled relation input contains an unknown scalar kind");
 }

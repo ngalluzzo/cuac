@@ -49,7 +49,7 @@ EXPECTED_GRAPHQL_SCHEMA = [
     ("primary_language", "VARCHAR"),
     ("private", "BOOLEAN"),
     ("archived", "BOOLEAN"),
-    ("updated_at", "VARCHAR"),
+    ("updated_at", "TIMESTAMP WITH TIME ZONE"),
 ]
 EXPECTED_EXPLAIN_FIELDS = [
     "relation",
@@ -378,7 +378,7 @@ def main() -> int:
             f"package_root := '{escaped_package_root}')"
         ).fetchone()
         expected_package_digest = (
-            "sha256.42f95003eb789235c7c911e3f2ed2a8395373a742c477ab016a0d1e77231920c"
+            "sha256.98925899f3e110a5ed5903dae93f633061ac9800b5b613db3884b02cee65034c"
         )
         if loaded != (
             "github",
@@ -838,7 +838,15 @@ def main() -> int:
                     "operation_kind": "query",
                     "partial_data": "fail_on_any_error",
                 },
-                "rest": {"enabled": True},
+                "rest": {
+                    "enabled": True,
+                    "path_authority": "package_origin_and_typed_complete_segments",
+                    "path_encoding": "rfc3986_percent_encoded_uppercase_hex",
+                    "path_inputs": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"],
+                    "path_limit_bytes": 2048,
+                    "structural_paths": True,
+                    "target_limit_bytes": 8192,
+                },
             },
             "relational_ownership": {
                 "filter": "duckdb",
@@ -918,6 +926,7 @@ def main() -> int:
                 },
                 "over_limit_rejection": EXPECTED_HEADER_BUDGET_REJECTION,
             },
+            "scalar_types": ["BOOLEAN", "BIGINT", "VARCHAR", "DOUBLE", "TIMESTAMPTZ"],
             "removed_relations": [],
             "secret_type": {
                 "ambiguity": "reject_same_name_across_supported_storages",
@@ -949,6 +958,15 @@ def main() -> int:
                 "scan_snapshot": "opaque_authority_and_revision_retained_for_stream",
                 "storages": ["memory", "cuac"],
                 "type": "cuac",
+            },
+            "timestamptz": {
+                "canonical_text": "YYYY-MM-DDTHH:MM:SS.ffffffZ",
+                "duckdb_type": "TIMESTAMP WITH TIME ZONE",
+                "maximum_microseconds": 253402300799999999,
+                "minimum_microseconds": -62135596800000000,
+                "numeric_epoch": False,
+                "response_json": "strict_string",
+                "varchar_fallback": False,
             },
         }
         if behavior != expected_behavior:

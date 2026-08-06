@@ -9,7 +9,7 @@ namespace cuac {
 namespace {
 
 TypedScalarValue Scalar(ValueKind kind, bool valid, int64_t bigint_value, std::string varchar_value, bool boolean_value,
-                        double double_value) {
+                        double double_value, std::int64_t timestamptz_microseconds = 0) {
 	TypedScalarValue result;
 	result.kind = kind;
 	result.valid = valid;
@@ -17,25 +17,34 @@ TypedScalarValue Scalar(ValueKind kind, bool valid, int64_t bigint_value, std::s
 	result.varchar_value = std::move(varchar_value);
 	result.boolean_value = boolean_value;
 	result.double_value = double_value == 0.0 ? 0.0 : double_value;
+	result.timestamptz_microseconds = timestamptz_microseconds;
 	return result;
 }
 
 bool ScalarPayloadAligned(ValueKind kind, bool valid, int64_t bigint_value, const std::string &varchar_value,
-                          bool boolean_value, double double_value) noexcept {
+                          bool boolean_value, double double_value, std::int64_t timestamptz_microseconds) noexcept {
 	const bool canonical_zero = double_value != 0.0 || !std::signbit(double_value);
 	if (!valid) {
-		return bigint_value == 0 && varchar_value.empty() && !boolean_value && double_value == 0.0 && canonical_zero;
+		return bigint_value == 0 && varchar_value.empty() && !boolean_value && double_value == 0.0 && canonical_zero &&
+		       timestamptz_microseconds == 0;
 	}
 	switch (kind) {
 	case ValueKind::BIGINT:
-		return varchar_value.empty() && !boolean_value && double_value == 0.0 && canonical_zero;
+		return varchar_value.empty() && !boolean_value && double_value == 0.0 && canonical_zero &&
+		       timestamptz_microseconds == 0;
 	case ValueKind::VARCHAR:
-		return bigint_value == 0 && !boolean_value && double_value == 0.0 && canonical_zero;
+		return bigint_value == 0 && !boolean_value && double_value == 0.0 && canonical_zero &&
+		       timestamptz_microseconds == 0;
 	case ValueKind::BOOLEAN:
-		return bigint_value == 0 && varchar_value.empty() && double_value == 0.0 && canonical_zero;
+		return bigint_value == 0 && varchar_value.empty() && double_value == 0.0 && canonical_zero &&
+		       timestamptz_microseconds == 0;
 	case ValueKind::DOUBLE:
 		return bigint_value == 0 && varchar_value.empty() && !boolean_value && std::isfinite(double_value) &&
-		       canonical_zero;
+		       canonical_zero && timestamptz_microseconds == 0;
+	case ValueKind::TIMESTAMPTZ:
+		return bigint_value == 0 && varchar_value.empty() && !boolean_value && double_value == 0.0 && canonical_zero &&
+		       timestamptz_microseconds >= -INT64_C(62135596800000000) &&
+		       timestamptz_microseconds <= INT64_C(253402300799999999);
 	}
 	return false;
 }
@@ -72,13 +81,13 @@ bool IsSchemaAligned(const TypedBatch &batch, ExecutionControl *control) {
 			if (type.shape == ValueShape::SCALAR) {
 				if (!value.elements.empty() ||
 				    !ScalarPayloadAligned(value.kind, value.valid, value.bigint_value, value.varchar_value,
-				                          value.boolean_value, value.double_value)) {
+				                          value.boolean_value, value.double_value, value.timestamptz_microseconds)) {
 					return false;
 				}
 				continue;
 			}
 			if (value.bigint_value != 0 || !value.varchar_value.empty() || value.boolean_value ||
-			    value.double_value != 0.0 || std::signbit(value.double_value) ||
+			    value.double_value != 0.0 || std::signbit(value.double_value) || value.timestamptz_microseconds != 0 ||
 			    (!value.valid && !value.elements.empty())) {
 				return false;
 			}
@@ -86,7 +95,8 @@ bool IsSchemaAligned(const TypedBatch &batch, ExecutionControl *control) {
 				CheckAlignmentCancellation(control);
 				if (element.kind != type.element_kind || (!element.valid && !type.element_nullable) ||
 				    !ScalarPayloadAligned(element.kind, element.valid, element.bigint_value, element.varchar_value,
-				                          element.boolean_value, element.double_value)) {
+				                          element.boolean_value, element.double_value,
+				                          element.timestamptz_microseconds)) {
 					return false;
 				}
 			}
@@ -580,18 +590,26 @@ TypedScalarValue TypedScalarValue::Double(double value) {
 	return Scalar(ValueKind::DOUBLE, true, 0, "", false, value);
 }
 
+TypedScalarValue TypedScalarValue::Timestamptz(std::int64_t microseconds) {
+	if (microseconds < -INT64_C(62135596800000000) || microseconds > INT64_C(253402300799999999)) {
+		throw std::invalid_argument("Runtime TIMESTAMPTZ scalar is outside the CUAC profile");
+	}
+	return Scalar(ValueKind::TIMESTAMPTZ, true, 0, "", false, 0.0, microseconds);
+}
+
 TypedScalarValue TypedScalarValue::Null(ValueKind kind) {
 	return Scalar(kind, false, 0, "", false, 0.0);
 }
 
 TypedValue::TypedValue()
     : kind(ValueKind::VARCHAR), shape(ValueShape::SCALAR), element_nullable(false), valid(false), bigint_value(0),
-      varchar_value(), boolean_value(false), double_value(0.0), elements() {
+      varchar_value(), boolean_value(false), double_value(0.0), timestamptz_microseconds(0), elements() {
 }
 
 TypedValue::TypedValue(ValueKind kind_p, int64_t bigint_value_p, std::string varchar_value_p, bool boolean_value_p)
     : kind(kind_p), shape(ValueShape::SCALAR), element_nullable(false), valid(true), bigint_value(bigint_value_p),
-      varchar_value(std::move(varchar_value_p)), boolean_value(boolean_value_p), double_value(0.0), elements() {
+      varchar_value(std::move(varchar_value_p)), boolean_value(boolean_value_p), double_value(0.0),
+      timestamptz_microseconds(0), elements() {
 }
 
 TypedValue TypedValue::BigInt(int64_t value) {
@@ -631,6 +649,17 @@ TypedValue TypedValue::Double(double value) {
 	// RFC 0020: -0.0 is normalized to 0.0 so every consumer sees one
 	// canonical zero.
 	result.double_value = value == 0.0 ? 0.0 : value;
+	return result;
+}
+
+TypedValue TypedValue::Timestamptz(std::int64_t microseconds) {
+	if (microseconds < -INT64_C(62135596800000000) || microseconds > INT64_C(253402300799999999)) {
+		throw std::invalid_argument("Runtime TIMESTAMPTZ value is outside the CUAC profile");
+	}
+	TypedValue result;
+	result.kind = ValueKind::TIMESTAMPTZ;
+	result.valid = true;
+	result.timestamptz_microseconds = microseconds;
 	return result;
 }
 

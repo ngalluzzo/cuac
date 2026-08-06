@@ -16,17 +16,17 @@ const char FIXTURE_COVERAGE_V1_MAPPING[] =
 #include "assets/fixture-coverage-v1.inc"
     ;
 
-const char *INDEX_DIGEST = "aa3b37992407c32b7731391383dc138d678dae457ac1b90d6e862278a6385bff";
-const char *COVERAGE_DIGEST = "a6f48caba4f51cc0fa2919322bac17025a0576ff797bae0391fd84d692378f06";
+const char *INDEX_DIGEST = "9a6c74b8c4a25d2858187cf1e50f61cd67afa09e544d5a3ba4af6f0deeff93f3";
+const char *COVERAGE_DIGEST = "59230be1cea5832632d7e301fb989406f7455ec6e1ed0349288ba7de08710582";
 
 } // namespace
 
 const char *PackageFixtureIndexV1SchemaDigest() {
-	return "sha256.aa3b37992407c32b7731391383dc138d678dae457ac1b90d6e862278a6385bff";
+	return "sha256.9a6c74b8c4a25d2858187cf1e50f61cd67afa09e544d5a3ba4af6f0deeff93f3";
 }
 
 const char *PackageFixtureCoverageV1MappingDigest() {
-	return "sha256.a6f48caba4f51cc0fa2919322bac17025a0576ff797bae0391fd84d692378f06";
+	return "sha256.59230be1cea5832632d7e301fb989406f7455ec6e1ed0349288ba7de08710582";
 }
 
 bool VerifyPackageFixtureContractAssets() {

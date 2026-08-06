@@ -22,6 +22,82 @@ const InputDeclaration *FindInput(const RelationDeclaration &relation, const std
 	return nullptr;
 }
 
+CompiledScalarType CompileInputType(const InputDeclaration &input) {
+	if (input.type.value == "BOOLEAN") {
+		return CompiledScalarType::BOOLEAN;
+	}
+	if (input.type.value == "BIGINT") {
+		return CompiledScalarType::BIGINT;
+	}
+	if (input.type.value == "DOUBLE") {
+		return CompiledScalarType::DOUBLE;
+	}
+	if (input.type.value == "TIMESTAMPTZ") {
+		return CompiledScalarType::TIMESTAMPTZ;
+	}
+	return CompiledScalarType::VARCHAR;
+}
+
+bool SelectorRequiresInput(const SelectorDeclaration &selector, const std::string &id) {
+	const auto expected = "input." + id;
+	return std::any_of(selector.required_inputs.begin(), selector.required_inputs.end(),
+	                   [&expected](const LocatedText &value) { return value.value == expected; });
+}
+
+std::vector<CompiledRestPathSegment> CompileRestPath(const RelationDeclaration &relation,
+                                                     const OperationDeclaration &operation,
+                                                     PackageDiagnosticSink &diagnostics, std::string &path_snapshot) {
+	std::vector<CompiledRestPathSegment> result;
+	if (!operation.rest.structural_path) {
+		path_snapshot = operation.rest.path.value;
+		std::size_t begin = 1;
+		while (begin < path_snapshot.size()) {
+			const auto end = path_snapshot.find('/', begin);
+			const auto segment_end = end == std::string::npos ? path_snapshot.size() : end;
+			result.push_back({CompiledRestPathSegmentSource::LITERAL, path_snapshot.substr(begin, segment_end - begin),
+			                  CompiledScalarType::VARCHAR, CompiledRestPathSegmentEncoding::LITERAL});
+			begin = segment_end + 1;
+		}
+		return result;
+	}
+
+	std::set<std::string> path_inputs;
+	path_snapshot.clear();
+	for (const auto &source : operation.rest.path_segments) {
+		path_snapshot.push_back('/');
+		if (source.kind == RestPathSegmentKind::LITERAL) {
+			path_snapshot += source.source.value;
+			result.push_back({CompiledRestPathSegmentSource::LITERAL, source.source.value, CompiledScalarType::VARCHAR,
+			                  CompiledRestPathSegmentEncoding::LITERAL});
+			continue;
+		}
+		path_snapshot += "{input." + source.source.value + "}";
+		const auto *input = FindInput(relation, source.source.value);
+		if (input == nullptr) {
+			diagnostics.Add(PackageDiagnosticCode::INVALID_REFERENCE, PackageDiagnosticPhase::REFERENCE,
+			                source.source.mark, "", relation.id.value, operation.id.value);
+			continue;
+		}
+		if (!path_inputs.insert(source.source.value).second) {
+			diagnostics.Add(PackageDiagnosticCode::DUPLICATE_ID, PackageDiagnosticPhase::SCHEMA, source.source.mark, "",
+			                relation.id.value, operation.id.value);
+			continue;
+		}
+		if (operation.selector.fallback || !SelectorRequiresInput(operation.selector, source.source.value)) {
+			diagnostics.Add(PackageDiagnosticCode::INVALID_SELECTOR, PackageDiagnosticPhase::COMPILE,
+			                source.source.mark, "", relation.id.value, operation.id.value);
+			continue;
+		}
+		result.push_back({CompiledRestPathSegmentSource::RELATION_INPUT, source.source.value, CompileInputType(*input),
+		                  CompiledRestPathSegmentEncoding::RFC3986_PERCENT_ENCODED});
+	}
+	if (path_inputs.empty()) {
+		diagnostics.Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::COMPILE,
+		                operation.rest.mark, "", relation.id.value, operation.id.value);
+	}
+	return result;
+}
+
 bool PredicateTargets(const RelationDeclaration &relation, const std::string &operation,
                       const std::string &conditional) {
 	for (const auto &predicate : relation.predicates) {
@@ -192,7 +268,8 @@ std::vector<CompiledQueryParameter> CompileQuery(const RelationDeclaration &rela
 		switch (field.kind) {
 		case QueryFieldKind::LITERAL:
 			if (paginated && field.name.value == pagination.page_size_parameter.value) {
-				if (field.source.value != pagination.page_size.value ||
+				if ((field.literal_type.value != "VARCHAR" && field.literal_type.value != "BIGINT") ||
+				    field.source.value != pagination.page_size.value ||
 				    page_size > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
 					diagnostics.Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::COMPILE,
 					                field.mark, "", relation.id.value, operation.id.value);
@@ -202,7 +279,8 @@ std::vector<CompiledQueryParameter> CompileQuery(const RelationDeclaration &rela
 				    cuac::internal::CompiledModelBuilder::PageSizeQueryParameter(field.name.value, page_size));
 			} else if (paginated && field.name.value == pagination.page_number_parameter.value) {
 				found_page_number = true;
-				if (field.source.value != pagination.first_page.value ||
+				if ((field.literal_type.value != "VARCHAR" && field.literal_type.value != "BIGINT") ||
+				    field.source.value != pagination.first_page.value ||
 				    first_page > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
 					diagnostics.Add(PackageDiagnosticCode::UNSUPPORTED_DECLARATION, PackageDiagnosticPhase::COMPILE,
 					                field.mark, "", relation.id.value, operation.id.value);
@@ -211,7 +289,8 @@ std::vector<CompiledQueryParameter> CompileQuery(const RelationDeclaration &rela
 				result.push_back(
 				    cuac::internal::CompiledModelBuilder::PageNumberQueryParameter(field.name.value, first_page));
 			} else {
-				auto value = cuac::internal::CompiledModelBuilder::Varchar(field.source.value);
+				auto value = CompileConcreteScalar(field.literal_type, field.source, diagnostics, relation.id.value,
+				                                   PackageDiagnosticCode::INVALID_TYPE);
 				try {
 					(void)EncodeCompiledQueryScalar(value);
 					result.push_back(
@@ -277,7 +356,10 @@ bool CompileRestOperation(const RelationDeclaration &relation, const OperationDe
 		                source.response.mark, "", relation.id.value, source.id.value);
 		return false;
 	}
-	CompiledRestRequest request = {CompileOrigin(source.rest.origin), source.rest.path.value,
+	std::string path_snapshot;
+	auto path_segments = CompileRestPath(relation, source, diagnostics, path_snapshot);
+	CompiledRestRequest request = {CompileOrigin(source.rest.origin), std::move(path_snapshot),
+	                               std::move(path_segments),
 	                               CompileQuery(relation, source, source.rest_pagination, diagnostics),
 	                               CompileHeaders(source.rest.headers, false, relation, source, diagnostics)};
 	if (diagnostics.Revision() != revision) {

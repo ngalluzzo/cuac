@@ -214,6 +214,10 @@ bool IsTypedScalar(CompiledScalarType type, const std::string &value) {
 		return value.size() <= 1024ULL * 1024ULL;
 	case CompiledScalarType::DOUBLE:
 		return IsCanonicalDoubleFixture(value);
+	case CompiledScalarType::TIMESTAMPTZ: {
+		std::int64_t microseconds = 0;
+		return ParseTimestamptz(value, microseconds);
+	}
 	}
 	return false;
 }

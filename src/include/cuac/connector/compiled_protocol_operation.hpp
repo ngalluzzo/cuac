@@ -18,6 +18,19 @@ class CompiledModelBuilder;
 
 class CompiledConnector;
 class CompiledScalarValue;
+
+// Closed scalar vocabulary shared by package-declared columns, relation
+// inputs, typed defaults, predicates, and structural request bindings.
+// Consumers switch on this enum; they never parse source logical-type strings
+// to recover authority. DOUBLE is IEEE-754 double precision; construction
+// normalizes -0.0 to 0.0 so every consumer sees one canonical zero value.
+enum class CompiledScalarType { BOOLEAN, BIGINT, VARCHAR, DOUBLE, TIMESTAMPTZ };
+
+const char *CompiledScalarTypeName(CompiledScalarType type);
+bool IsTimestamptzMicroseconds(std::int64_t value) noexcept;
+bool ParseTimestamptz(const std::string &value, std::int64_t &result) noexcept;
+std::string CanonicalTimestamptz(std::int64_t value);
+
 // Source cardinality is a declaration for Relational Semantics to interpret.
 // EXACTLY_ONE_ON_SUCCESS is neither a row estimate nor permission to push a
 // limit; authentication, transport, decode, and schema failures remain errors.
@@ -81,7 +94,7 @@ enum class CompiledGraphqlDocumentIdentity { PACKAGE_QUERY_GENERATOR_V1 };
 enum class CompiledGraphqlDigestAlgorithm { SHA256 };
 enum class CompiledGraphqlVariableType { INT_NON_NULL, STRING_NULLABLE };
 enum class CompiledGraphqlVariableSource { FIXED_PAGE_SIZE, RUNTIME_CURSOR, CALLER_INPUT, LOGICAL_SECRET };
-enum class CompiledGraphqlScalarKind { STRING, INT64, BOOLEAN };
+enum class CompiledGraphqlScalarKind { STRING, INT64, BOOLEAN, TIMESTAMPTZ };
 enum class CompiledResultShape { SCALAR, ARRAY };
 enum class CompiledGraphqlPartialDataPolicy { FAIL_ON_ANY_ERROR };
 enum class CompiledGraphqlCursorDirection { FORWARD };
@@ -257,6 +270,8 @@ enum class CompiledUrlScheme { HTTP, HTTPS };
 
 enum class CompiledQueryValueSource { FIXED, RELATION_INPUT, CONDITIONAL_INPUT, PAGE_SIZE, PAGE_NUMBER };
 enum class CompiledQueryEncoding { FORM_URLENCODED };
+enum class CompiledRestPathSegmentSource { LITERAL, RELATION_INPUT };
+enum class CompiledRestPathSegmentEncoding { LITERAL, RFC3986_PERCENT_ENCODED };
 
 // Canonically encodes one concrete typed value under the closed request
 // encoding carried by a compiled query field. NULL is represented by omission
@@ -322,10 +337,28 @@ struct CompiledHttpOrigin {
 	std::uint16_t port;
 };
 
-// Structural REST request metadata. No field can carry a credential value.
+// One complete package-owned path slot. Literal segments retain exact safe
+// bytes. Relation-input segments retain only the declared source identity,
+// scalar type, and closed encoder; caller values enter only during planning.
+struct CompiledRestPathSegment {
+	CompiledRestPathSegmentSource source;
+	std::string value;
+	CompiledScalarType input_type;
+	CompiledRestPathSegmentEncoding encoding;
+};
+
+// Structural REST request metadata. path is a safe source/explanation mirror;
+// path_segments are the sole request-path authority consumed by Semantics.
+// No field can carry a credential value.
 struct CompiledRestRequest {
+	CompiledRestRequest(CompiledHttpOrigin origin, std::string path,
+	                    std::vector<CompiledQueryParameter> query_parameters, std::vector<CompiledHttpHeader> headers);
+	CompiledRestRequest(CompiledHttpOrigin origin, std::string path, std::vector<CompiledRestPathSegment> path_segments,
+	                    std::vector<CompiledQueryParameter> query_parameters, std::vector<CompiledHttpHeader> headers);
+
 	CompiledHttpOrigin origin;
 	std::string path;
+	std::vector<CompiledRestPathSegment> path_segments;
 	std::vector<CompiledQueryParameter> query_parameters;
 	std::vector<CompiledHttpHeader> headers;
 };

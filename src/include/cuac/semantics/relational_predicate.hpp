@@ -13,7 +13,7 @@ static const std::size_t MAX_REQUESTED_PREDICATE_NODES = 64;
 
 enum class RequestedPredicateKind { UNRESTRICTED, COMPARISON, CONJUNCTION, DISJUNCTION, NEGATION, UNSUPPORTED };
 enum class RequestedPredicateComparisonOperator { EQUALS };
-enum class RequestedPredicateValueKind { BIGINT, VARCHAR, BOOLEAN, DOUBLE };
+enum class RequestedPredicateValueKind { BIGINT, VARCHAR, BOOLEAN, DOUBLE, TIMESTAMPTZ };
 
 // DuckDB's retained local predicate scope. This is supplied by Query beside
 // the candidate tree and remains the authoritative description of which
@@ -30,12 +30,14 @@ public:
 	static RequestedPredicateValue Varchar(std::string value);
 	static RequestedPredicateValue Boolean(bool value);
 	static RequestedPredicateValue Double(double value);
+	static RequestedPredicateValue Timestamptz(std::int64_t microseconds);
 
 	RequestedPredicateValueKind Kind() const noexcept;
 	std::int64_t BigIntValue() const;
 	const std::string &VarcharValue() const;
 	bool BooleanValue() const;
 	double DoubleValue() const;
+	std::int64_t TimestamptzMicroseconds() const;
 
 	bool operator==(const RequestedPredicateValue &other) const noexcept;
 	bool operator!=(const RequestedPredicateValue &other) const noexcept;
@@ -46,12 +48,14 @@ private:
 	explicit RequestedPredicateValue(std::string value);
 	explicit RequestedPredicateValue(bool value);
 	explicit RequestedPredicateValue(double value);
+	RequestedPredicateValue(RequestedPredicateValueKind kind, std::int64_t value);
 
 	RequestedPredicateValueKind kind;
 	std::int64_t bigint_value;
 	std::string varchar_value;
 	bool boolean_value;
 	double double_value;
+	std::int64_t timestamptz_microseconds;
 };
 
 class RequestedPredicateNode;

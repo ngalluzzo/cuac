@@ -24,6 +24,24 @@ void TestCanonicalRequestLiteralGrammar() {
 	        "noncanonical or invalid form-urlencoded values were admitted");
 }
 
+void TestCanonicalStructuralRequestPathGrammar() {
+	using cuac::internal::IsSafeRequestPath;
+	Require(IsSafeRequestPath("/") && IsSafeRequestPath("/repos/open%20ai/cuac%20%CE%B2/issues") &&
+	            IsSafeRequestPath("/projects/-42/issues/7"),
+	        "canonical structural request paths were rejected");
+	const std::vector<std::string> rejected = {
+	    "repos/openai",      "/repos//issues",          "/repos/./issues",
+	    "/repos/../issues",  "/repos/%41/issues",       "/repos/%2D/issues",
+	    "/repos/%2f/issues", "/repos/%2F/issues",       "/repos/%5C/issues",
+	    "/repos/%3F/issues", "/repos/%23/issues",       "/repos/%25/issues",
+	    "/repos/%2E/issues", "/repos/%/issues",         "/repos/%2/issues",
+	    "/repos/%GG/issues", "/repos/raw value/issues", std::string("/repos/raw/\xCE\xB2")};
+	for (std::size_t index = 0; index < rejected.size(); index++) {
+		Require(!IsSafeRequestPath(rejected[index]),
+		        "noncanonical structural request path was admitted at index " + std::to_string(index));
+	}
+}
+
 void TestNumericIpv4AliasesAreNotDnsHosts() {
 	using cuac::internal::IsSafeDnsHost;
 	const char *const numeric_aliases[] = {
@@ -85,6 +103,7 @@ void TestSignedPageSequenceBoundaries() {
 int main() {
 	try {
 		TestCanonicalRequestLiteralGrammar();
+		TestCanonicalStructuralRequestPathGrammar();
 		TestNumericIpv4AliasesAreNotDnsHosts();
 		TestStructuralPathBoundaries();
 		TestSignedPageSequenceBoundaries();

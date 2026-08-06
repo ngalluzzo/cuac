@@ -107,7 +107,9 @@ void TestBearerGraphqlExecutesSequentialPagesAndRedactsRequests() {
 	Require(result.succeeded && !result.has_runtime_error && result.rows.size() == 2 &&
 	            result.rows[0].values[0].varchar_value == "R1" && !result.rows[0].values[4].valid &&
 	            result.rows[1].values[0].varchar_value == "R2" && result.rows[1].values[4].valid &&
-	            result.rows[1].values[4].varchar_value == "C++",
+	            result.rows[1].values[4].varchar_value == "C++" &&
+	            result.rows[0].values[7].kind == cuac::ValueKind::TIMESTAMPTZ &&
+	            result.rows[0].values[7].timestamptz_microseconds == INT64_C(1782864000000000),
 	        "GraphQL fixture execution lost page order, nullable conversion, or typed rows");
 	Require(result.transport_observed && result.request_count == 2 && result.requests.size() == 2 &&
 	            result.requests[0].method == "POST" && result.requests[0].target == "/graphql" &&

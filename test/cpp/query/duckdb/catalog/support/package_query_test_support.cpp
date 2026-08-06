@@ -31,6 +31,8 @@ cuac::ValueKind ValueKindFor(cuac::PlannedColumnScalarKind kind) {
 		return cuac::ValueKind::BOOLEAN;
 	case cuac::PlannedColumnScalarKind::DOUBLE:
 		return cuac::ValueKind::DOUBLE;
+	case cuac::PlannedColumnScalarKind::TIMESTAMPTZ:
+		return cuac::ValueKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("Query package test executor received an unsupported planned scalar type");
 }
@@ -45,6 +47,8 @@ cuac::TypedScalarValue MarkerElement(cuac::ValueKind kind, const std::string &ma
 		return cuac::TypedScalarValue::Boolean(marker != "old");
 	case cuac::ValueKind::DOUBLE:
 		return cuac::TypedScalarValue::Double(marker == "old" ? 1.5 : 2.5);
+	case cuac::ValueKind::TIMESTAMPTZ:
+		return cuac::TypedScalarValue::Timestamptz(marker == "old" ? 0 : INT64_C(1000000));
 	}
 	throw std::logic_error("Query package test executor received an unsupported ARRAY element type");
 }
@@ -169,6 +173,9 @@ public:
 				break;
 			case cuac::ValueKind::DOUBLE:
 				row.values.push_back(cuac::TypedValue::Double(marker == "old" ? 1.5 : 2.5));
+				break;
+			case cuac::ValueKind::TIMESTAMPTZ:
+				row.values.push_back(cuac::TypedValue::Timestamptz(marker == "old" ? 0 : INT64_C(1000000)));
 				break;
 			}
 		}

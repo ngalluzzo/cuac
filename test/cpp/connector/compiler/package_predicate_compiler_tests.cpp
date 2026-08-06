@@ -1,5 +1,6 @@
 #include "compiler_test_support.hpp"
 
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 
@@ -93,11 +94,14 @@ network_policy:
   link_local_addresses: deny
   loopback_addresses: deny
   max_response_bytes: 4096
-relations: [boolean_values, bigint_values, varchar_values]
+relations: [boolean_values, bigint_values, varchar_values, double_values, timestamptz_values]
 )YAML");
 	package.Write("relations/boolean_values.yaml", PredicateRelation("boolean_values", "BOOLEAN", "true"));
 	package.Write("relations/bigint_values.yaml", PredicateRelation("bigint_values", "BIGINT", "42"));
 	package.Write("relations/varchar_values.yaml", PredicateRelation("varchar_values", "VARCHAR", "\"\""));
+	package.Write("relations/double_values.yaml", PredicateRelation("double_values", "DOUBLE", "3.5"));
+	package.Write("relations/timestamptz_values.yaml",
+	              PredicateRelation("timestamptz_values", "TIMESTAMPTZ", "\"2026-07-01T01:30:00+01:30\""));
 }
 
 void TestTypedPredicateCompilation() {
@@ -105,18 +109,25 @@ void TestTypedPredicateCompilation() {
 	WriteTypedPredicatePackage(package);
 	NeverCancel cancellation;
 	const auto result = cuac_test::CompileRoot(package.Root(), cancellation);
-	Require(result.Succeeded() && result.Generation()->Connector().Relations().size() == 3,
+	Require(result.Succeeded() && result.Generation()->Connector().Relations().size() == 5,
 	        "independent typed predicate package did not compile");
 	const auto &boolean = result.Generation()->Connector().Relations()[0].PredicateMappings()[0];
 	const auto &bigint = result.Generation()->Connector().Relations()[1].PredicateMappings()[0];
 	const auto &varchar = result.Generation()->Connector().Relations()[2].PredicateMappings()[0];
+	const auto &double_value = result.Generation()->Connector().Relations()[3].PredicateMappings()[0];
+	const auto &timestamptz = result.Generation()->Connector().Relations()[4].PredicateMappings()[0];
 	Require(boolean.TypedLiteral().Type() == cuac::CompiledScalarType::BOOLEAN && boolean.TypedLiteral().Boolean() &&
 	            boolean.EncodedRemoteValue() == "true" &&
 	            bigint.TypedLiteral().Type() == cuac::CompiledScalarType::BIGINT &&
 	            bigint.TypedLiteral().Bigint() == 42 && bigint.EncodedRemoteValue() == "42" &&
 	            varchar.TypedLiteral().Type() == cuac::CompiledScalarType::VARCHAR &&
-	            varchar.TypedLiteral().Varchar().empty() && varchar.EncodedRemoteValue().empty(),
-	        "compiler collapsed BOOLEAN, BIGINT, or empty VARCHAR predicate values");
+	            varchar.TypedLiteral().Varchar().empty() && varchar.EncodedRemoteValue().empty() &&
+	            double_value.TypedLiteral().Type() == cuac::CompiledScalarType::DOUBLE &&
+	            double_value.TypedLiteral().Double() == 3.5 && double_value.EncodedRemoteValue() == "3.5" &&
+	            timestamptz.TypedLiteral().Type() == cuac::CompiledScalarType::TIMESTAMPTZ &&
+	            timestamptz.TypedLiteral().TimestamptzMicroseconds() == INT64_C(1782864000000000) &&
+	            timestamptz.EncodedRemoteValue() == "2026-07-01T00%3A00%3A00.000000Z",
+	        "compiler collapsed a typed BOOLEAN, BIGINT, VARCHAR, DOUBLE, or TIMESTAMPTZ predicate value");
 	for (const auto &relation : result.Generation()->Connector().Relations()) {
 		const auto &mapping = relation.PredicateMappings()[0];
 		Require(mapping.ProofIdentity() == cuac::CompiledPredicateProofIdentity::PACKAGE_DECLARED_V1 &&

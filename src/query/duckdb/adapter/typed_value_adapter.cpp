@@ -1,6 +1,7 @@
 #include "cuac/internal/query/adapter/typed_value_adapter.hpp"
 
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <limits>
 #include <stdexcept>
@@ -19,6 +20,8 @@ LogicalType LogicalTypeForKind(cuac::ValueKind kind) {
 		return LogicalType::BOOLEAN;
 	case cuac::ValueKind::DOUBLE:
 		return LogicalType::DOUBLE;
+	case cuac::ValueKind::TIMESTAMPTZ:
+		return LogicalType::TIMESTAMP_TZ;
 	}
 	throw std::logic_error("runtime value contract contains an unknown scalar kind");
 }
@@ -36,6 +39,8 @@ cuac::ValueKind ValueKindForScalarKind(cuac::PlannedColumnScalarKind kind) {
 		return cuac::ValueKind::BOOLEAN;
 	case cuac::PlannedColumnScalarKind::DOUBLE:
 		return cuac::ValueKind::DOUBLE;
+	case cuac::PlannedColumnScalarKind::TIMESTAMPTZ:
+		return cuac::ValueKind::TIMESTAMPTZ;
 	}
 	throw std::logic_error("planned column contains an unknown scalar kind");
 }
@@ -53,6 +58,8 @@ Value DuckdbScalarValue(const cuac::TypedValue &value, const PlannedValueColumn 
 		return Value::BOOLEAN(value.boolean_value);
 	case cuac::ValueKind::DOUBLE:
 		return Value::DOUBLE(value.double_value);
+	case cuac::ValueKind::TIMESTAMPTZ:
+		return Value::TIMESTAMPTZ(timestamp_tz_t(value.timestamptz_microseconds));
 	}
 	throw std::logic_error("runtime value contract contains an unknown scalar kind");
 }
@@ -70,6 +77,8 @@ Value DuckdbElementValue(const cuac::TypedScalarValue &value, cuac::ValueKind ki
 		return Value::BOOLEAN(value.boolean_value);
 	case cuac::ValueKind::DOUBLE:
 		return Value::DOUBLE(value.double_value);
+	case cuac::ValueKind::TIMESTAMPTZ:
+		return Value::TIMESTAMPTZ(timestamp_tz_t(value.timestamptz_microseconds));
 	}
 	throw std::logic_error("runtime value contract contains an unknown array element kind");
 }
@@ -157,7 +166,10 @@ PlannedValueColumn::PlannedValueColumn(cuac::OutputValueType type_p, bool nullab
 
 LogicalType PlannedLogicalType(const cuac::PlannedColumn &column) {
 	const auto child = LogicalTypeForKind(ValueKindForScalarKind(column.ElementKind()));
-	const auto expected_name = child.ToString() + (column.shape == cuac::PlannedColumnShape::ARRAY ? "[]" : "");
+	const auto scalar_name = column.ElementKind() == cuac::PlannedColumnScalarKind::TIMESTAMPTZ
+	                             ? std::string("TIMESTAMPTZ")
+	                             : child.ToString();
+	const auto expected_name = scalar_name + (column.shape == cuac::PlannedColumnShape::ARRAY ? "[]" : "");
 	if (column.logical_type != expected_name ||
 	    (column.shape == cuac::PlannedColumnShape::SCALAR && column.element_nullable)) {
 		throw std::logic_error("planned column contains a contradictory structural type");
